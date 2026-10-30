@@ -68,6 +68,11 @@ object VideoRepository {
         if (result.items.isEmpty() && result.errors.isNotEmpty()) error(result.errors.first().message ?: "Komentar gagal dimuat")
         CommentsPage(result.items, result.nextPage)
     }
+    suspend fun replies(info: CommentsInfo, page: Page): CommentsPage = withContext(Dispatchers.IO) {
+        val result = CommentsInfo.getMoreItems(info, page)
+        if (result.items.isEmpty() && result.errors.isNotEmpty()) error(result.errors.first().message ?: "Balasan gagal dimuat")
+        CommentsPage(result.items, result.nextPage)
+    }
     suspend fun searchPage(query: String, filter: String = "all"): SearchPage = withContext(Dispatchers.IO) {
         val service = NewPipe.getService("YouTube")
         val extractor = if (filter == "all") service.getSearchExtractor(query) else service.getSearchExtractor(query, listOf(filter), "")

@@ -22,6 +22,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.calculateZoom
@@ -87,8 +88,8 @@ import org.schabi.newpipe.extractor.stream.VideoStream
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.AudioTrackType
 
-private val Background = Color(0xFF0F0F0F)
-private val Surface = Color(0xFF272727)
+internal val Background = Color(0xFF0F0F0F)
+internal val Surface = Color(0xFF272727)
 private val Accent = Color(0xFFFF3B30)
 
 class MainActivity : ComponentActivity() {
@@ -339,12 +340,12 @@ class MainActivity : ComponentActivity() {
             finally { loading = false }
         }
     }
-    fun open(item: StreamInfoItem) {
+    fun openUrl(url: String) {
         if (loading) return
         loading = true; error = null
         scope.launch {
             try {
-                val info = VideoRepository.resolve(item.url)
+                val info = VideoRepository.resolve(url)
                 val options = qualityOptions(info)
                 val initial = options.firstOrNull()
                 if (initial == null && info.hlsUrl.isNullOrBlank()) error("Format video yang bisa diputar tidak tersedia.")
@@ -355,6 +356,18 @@ class MainActivity : ComponentActivity() {
                 minimized = false
             } catch (e: Exception) { error = "Video gagal dibuka: ${e.message ?: "coba lagi"}" }
             finally { loading = false }
+        }
+    }
+    fun open(item: StreamInfoItem) = openUrl(item.url)
+    fun openLink(info: StreamInfo, url: String) {
+        timestampSeconds(url, info.id)?.let { seconds -> player.seekTo(seconds * 1000L); player.play(); return }
+        val uri = runCatching { Uri.parse(if (url.startsWith("/")) "https://www.youtube.com$url" else url) }.getOrNull() ?: return
+        val host = uri.host.orEmpty()
+        val path = uri.path.orEmpty()
+        when {
+            host.endsWith("youtu.be") || (host.contains("youtube.com") && (path == "/watch" || path.startsWith("/shorts/"))) -> openUrl(uri.toString())
+            host.contains("youtube.com") && (path.startsWith("/@") || path.startsWith("/channel/") || path.startsWith("/c/") || path.startsWith("/user/")) -> openChannel(uri.toString())
+            else -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
         }
     }
     Surface(modifier = Modifier.fillMaxSize(), color = Background) {
@@ -509,11 +522,11 @@ class MainActivity : ComponentActivity() {
             } else {
                 var showComments by remember(info.url) { mutableStateOf(false) }
                 var showDescription by remember(info.url) { mutableStateOf(false) }
-                WatchScreen(showDescription = showDescription, showComments = showComments, onClosePanel = { showDescription = false; showComments = false }, watchAlpha = (1f - (dragProgress ?: 0f) * .3f).coerceIn(0f, 1f), info = info, onComments = { showDescription = false; showComments = true }, onDescription = { showComments = false; showDescription = true }, onShare = { shareVideo(info) }, onCopy = { copyVideoLink(info) }, player = player, fullscreen = fullscreen, onFullscreen = { setFullscreen(!fullscreen) }, recommendations = info.relatedItems.filterIsInstance<StreamInfoItem>().filter { it.url != info.url }.distinctBy { it.url }, error = error,
+                val comments = rememberComments(info.url)
+                WatchScreen(showDescription = showDescription, showComments = showComments, onClosePanel = { showDescription = false; showComments = false }, watchAlpha = (1f - (dragProgress ?: 0f) * .3f).coerceIn(0f, 1f), info = info, comments = comments, onComments = { showDescription = false; showComments = true }, onDescription = { showComments = false; showDescription = true },
+                    onLink = { openLink(info, it) }, onSeek = { player.seekTo(it * 1000L); player.play() }, onShare = { shareVideo(info) }, onCopy = { copyVideoLink(info) }, player = player, fullscreen = fullscreen, onFullscreen = { setFullscreen(!fullscreen) }, recommendations = info.relatedItems.filterIsInstance<StreamInfoItem>().filter { it.url != info.url }.distinctBy { it.url }, error = error,
                     onBack = { back() }, onSettings = { showQuality = true }, onDownload = { showDownloads = true },
-                    onChannel = { openChannel(info.uploaderUrl ?: "") }, onVideo = { open(it) })
-                if (showDescription && !wideWatch) DescriptionSheet(info, onDismiss = { showDescription = false })
-                if (showComments && !wideWatch) CommentsSheet(info.url, onDismiss = { showComments = false })
+                    onChannel = { openChannel(info.uploaderUrl ?: "") }, onOpenChannel = { openChannel(it) }, onVideo = { open(it) })
                 if (showQuality) QualityDialog(info, quality, selectedAudio, player, onDismiss = { showQuality = false }, onSelect = { stream ->
                     if (stream != quality) {
                         val position = player.currentPosition.coerceAtLeast(0L)
@@ -592,9 +605,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun WatchScreen(showDescription: Boolean, showComments: Boolean, onClosePanel: () -> Unit, watchAlpha: Float, info: StreamInfo, onComments: () -> Unit, onDescription: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit, player: ExoPlayer, fullscreen: Boolean, onFullscreen: () -> Unit, recommendations: List<StreamInfoItem>, error: String?, onBack: () -> Unit, onSettings: () -> Unit, onDownload: () -> Unit, onChannel: () -> Unit, onVideo: (StreamInfoItem) -> Unit) {
+@Composable private fun WatchScreen(showDescription: Boolean, showComments: Boolean, onClosePanel: () -> Unit, watchAlpha: Float, info: StreamInfo, comments: CommentsState, onComments: () -> Unit, onDescription: () -> Unit, onLink: (String) -> Unit, onSeek: (Int) -> Unit, onShare: () -> Unit, onCopy: () -> Unit, player: ExoPlayer, fullscreen: Boolean, onFullscreen: () -> Unit, recommendations: List<StreamInfoItem>, error: String?, onBack: () -> Unit, onSettings: () -> Unit, onDownload: () -> Unit, onChannel: () -> Unit, onOpenChannel: (String) -> Unit, onVideo: (StreamInfoItem) -> Unit) {
     if (fullscreen) {
         return
+    }
+    val panel = when { showDescription -> "description"; showComments -> "comments"; else -> null }
+    BackHandler(panel != null) { onClosePanel() }
+    @Composable fun Panel(kind: String, draggable: Boolean, modifier: Modifier) {
+        if (kind == "description") DescriptionPanel(info, draggable, onClosePanel, onLink, onSeek, onChannel, modifier)
+        else CommentsPanel(comments, info, draggable, onClosePanel, onLink, onOpenChannel, modifier)
     }
     BoxWithConstraints(Modifier.fillMaxSize().graphicsLayer { alpha = watchAlpha }) {
         val wide = maxWidth >= 840.dp
@@ -602,16 +621,14 @@ class MainActivity : ComponentActivity() {
             Row(Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     Spacer(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
-                    VideoDetails(info, error, onDownload, onChannel, onComments, onDescription, onShare, onCopy)
+                    VideoDetails(info, comments, error, onDownload, onChannel, onComments, onDescription, onShare, onCopy)
                 }
-                BackHandler(showDescription || showComments) { onClosePanel() }
-                if (showDescription || showComments) {
-                    Column(Modifier.widthIn(min = 260.dp, max = 360.dp).weight(.48f).fillMaxHeight().padding(vertical = 8.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF212121))) {
-                        if (showDescription) DescriptionPanelContent(info, onClosePanel, Modifier.fillMaxSize())
-                        else CommentsPanelContent(info.url, onClosePanel, Modifier.fillMaxSize())
+                if (panel != null) {
+                    Box(Modifier.widthIn(min = 300.dp, max = 400.dp).weight(.5f).fillMaxHeight().padding(vertical = 8.dp).border(1.dp, Color(0xFF303030), RoundedCornerShape(12.dp))) {
+                        Panel(panel, false, Modifier.fillMaxSize())
                     }
                 } else {
-                    LazyColumn(Modifier.widthIn(min = 260.dp, max = 360.dp).weight(.48f), verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+                    LazyColumn(Modifier.widthIn(min = 260.dp, max = 400.dp).weight(.5f), verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                         item { Text("Video lainnya", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
                         items(recommendations) { item -> CompactVideoCard(item) { onVideo(item) } }
                     }
@@ -620,10 +637,20 @@ class MainActivity : ComponentActivity() {
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
                 item { Spacer(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) }
-                item { VideoDetails(info, error, onDownload, onChannel, onComments, onDescription, onShare, onCopy) }
-                item { HorizontalDivider(color = Surface); Text("Video lainnya", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                item { VideoDetails(info, comments, error, onDownload, onChannel, onComments, onDescription, onShare, onCopy) }
                 if (recommendations.isEmpty()) item { Text("Video terkait tidak tersedia.", color = Color.LightGray, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                 items(recommendations) { item -> VideoCard(item, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { onVideo(item) } }
+            }
+            // Like YouTube, the panel slides up from the bottom and covers everything below the player, which keeps playing.
+            androidx.compose.animation.AnimatedContent(targetState = panel, modifier = Modifier.fillMaxSize(), label = "watch panel", transitionSpec = {
+                val enter = if (targetState != null) androidx.compose.animation.slideInVertically(tween(250, easing = FastOutSlowInEasing)) { it } else androidx.compose.animation.EnterTransition.None
+                val exit = if (targetState == null) androidx.compose.animation.slideOutVertically(tween(200)) { it } else androidx.compose.animation.fadeOut(tween(120))
+                enter togetherWith exit
+            }) { kind ->
+                if (kind != null) Column(Modifier.fillMaxSize()) {
+                    Spacer(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                    Panel(kind, true, Modifier.fillMaxWidth().weight(1f))
+                }
             }
         }
     }
@@ -797,20 +824,15 @@ private fun playerTime(millis: Long): String {
     }
 }
 
-@Composable private fun VideoDetails(info: StreamInfo, error: String?, onDownload: () -> Unit, onChannel: () -> Unit, onComments: () -> Unit, onDescription: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onDescription)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                Text(info.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("⌄", modifier = Modifier.padding(start = 12.dp), color = Color.LightGray, style = MaterialTheme.typography.titleLarge)
-            }
-            val meta = listOfNotNull(info.viewCount.takeIf { it >= 0 }?.let { "${formatCount(it)} kali ditonton" }, info.textualUploadDate?.takeIf { it.isNotBlank() }).joinToString(" · ")
-            Text(listOfNotNull(meta.takeIf { it.isNotBlank() }, "selengkapnya").joinToString("  "), modifier = Modifier.padding(top = 6.dp), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(12.dp)).clickable(enabled = !info.uploaderUrl.isNullOrBlank(), onClick = onChannel).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(model = info.uploaderAvatars.lastOrNull()?.url, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(50)).background(Surface))
-            Text(info.uploaderName ?: "Channel", modifier = Modifier.padding(start = 12.dp).weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text("Lihat channel  ›", style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
+@Composable private fun VideoDetails(info: StreamInfo, comments: CommentsState, error: String?, onDownload: () -> Unit, onChannel: () -> Unit, onComments: () -> Unit, onDescription: () -> Unit, onShare: () -> Unit, onCopy: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp)) {
+        DescriptionTeaser(info, onDescription)
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp).clip(RoundedCornerShape(12.dp)).clickable(enabled = !info.uploaderUrl.isNullOrBlank(), onClick = onChannel).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Avatar(info.uploaderAvatars.lastOrNull()?.url, info.uploaderName, 36)
+            Text(info.uploaderName ?: "Channel", modifier = Modifier.padding(start = 12.dp).weight(1f, fill = false), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            info.uploaderSubscriberCount.takeIf { it >= 0 }?.let { Text(formatCount(it), color = Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp)) }
+            Spacer(Modifier.weight(1f))
+            Text("Lihat channel", color = Color.Black, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 14.dp, vertical = 8.dp))
         }
         Row(Modifier.fillMaxWidth().padding(top = 14.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (info.likeCount >= 0) Row(Modifier.height(36.dp).clip(RoundedCornerShape(50)).background(Surface).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -821,10 +843,7 @@ private fun playerTime(millis: Long): String {
             WatchAction("download", "Unduh", onDownload)
             WatchAction("copy", "Salin link", onCopy)
         }
-        Row(Modifier.fillMaxWidth().padding(top = 16.dp).clip(RoundedCornerShape(12.dp)).background(Surface).clickable(onClick = onComments).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Komentar", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            Text("Lihat semua  ›", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-        }
+        Box(Modifier.padding(top = 16.dp)) { CommentsTeaser(comments, onClick = { if (comments.error != null && comments.info == null) comments.retry(); onComments() }) }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
     }
 }
@@ -849,9 +868,11 @@ private fun playerTime(millis: Long): String {
     }
 }
 
-private fun formatCount(count: Long): String = when {
-    count >= 1_000_000 -> String.format(java.util.Locale("id", "ID"), "%.1f jt", count / 1_000_000.0)
-    count >= 1_000 -> String.format(java.util.Locale("id", "ID"), "%.1f rb", count / 1_000.0)
+internal fun formatCount(count: Long): String = when {
+    count >= 1_000_000_000 -> String.format(java.util.Locale("id", "ID"), "%.1f M", count / 1_000_000_000.0).replace(",0 ", " ")
+    count >= 1_000_000 -> String.format(java.util.Locale("id", "ID"), "%.1f jt", count / 1_000_000.0).replace(",0 ", " ")
+    count >= 10_000 -> "${count / 1_000} rb"
+    count >= 1_000 -> String.format(java.util.Locale("id", "ID"), "%.1f rb", count / 1_000.0).replace(",0 ", " ")
     else -> count.toString()
 }
 
@@ -941,126 +962,6 @@ private fun formatCount(count: Long): String = when {
     Text(label, modifier = modifier.padding(6.dp).background(Color.Black.copy(alpha = .85f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = Color.White)
 }
 private fun Modifier.clipCard(): Modifier = this.clip(RoundedCornerShape(16.dp)).background(Surface)
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun DescriptionSheet(info: StreamInfo, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF212121), shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
-        DescriptionPanelContent(info, onDismiss, Modifier.fillMaxWidth().navigationBarsPadding().heightIn(max = 650.dp))
-    }
-}
-
-@Composable private fun DescriptionPanelContent(info: StreamInfo, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Deskripsi", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Tutup deskripsi") }
-        }
-        HorizontalDivider(color = Color.White.copy(alpha = .08f))
-        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text(info.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                if (info.likeCount >= 0) Column(Modifier.weight(1f)) { Text(formatCount(info.likeCount), fontWeight = FontWeight.Bold); Text("Suka", color = Color.LightGray, style = MaterialTheme.typography.bodySmall) }
-                if (info.viewCount >= 0) Column(Modifier.weight(1f)) { Text(formatCount(info.viewCount), fontWeight = FontWeight.Bold); Text("Penayangan", color = Color.LightGray, style = MaterialTheme.typography.bodySmall) }
-                info.textualUploadDate?.takeIf { it.isNotBlank() }?.let { Column(Modifier.weight(1f)) { Text(it, fontWeight = FontWeight.Bold, maxLines = 2); Text("Tanggal", color = Color.LightGray, style = MaterialTheme.typography.bodySmall) } }
-            }
-            val description = info.description
-            val content = description?.content.orEmpty()
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xFF303030)).padding(12.dp)) {
-                if (content.isBlank()) Text("Deskripsi tidak tersedia.", color = Color.LightGray)
-                else AndroidView(factory = { context -> android.widget.TextView(context).apply {
-                    setTextColor(android.graphics.Color.WHITE); setLinkTextColor(android.graphics.Color.rgb(100, 181, 246)); textSize = 14f
-                    setLineSpacing(0f, 1.25f); movementMethod = android.text.method.LinkMovementMethod.getInstance()
-                } }, update = { view ->
-                    view.text = if (description?.type == Description.HTML) android.text.Html.fromHtml(content, android.text.Html.FROM_HTML_MODE_COMPACT) else content
-                    android.text.util.Linkify.addLinks(view, android.text.util.Linkify.WEB_URLS)
-                }, modifier = Modifier.fillMaxWidth())
-            }
-            info.category?.takeIf { it.isNotBlank() }?.let { Text("Kategori: $it", modifier = Modifier.padding(top = 20.dp), color = Color.LightGray, style = MaterialTheme.typography.bodySmall) }
-            Spacer(Modifier.height(20.dp))
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun CommentsSheet(url: String, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF212121), shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
-        CommentsPanelContent(url, onDismiss, Modifier.fillMaxWidth().navigationBarsPadding().heightIn(max = 650.dp))
-    }
-}
-
-@Composable private fun CommentsPanelContent(url: String, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-    val scope = rememberCoroutineScope()
-    var info by remember(url) { mutableStateOf<org.schabi.newpipe.extractor.comments.CommentsInfo?>(null) }
-    var comments by remember(url) { mutableStateOf<List<CommentsInfoItem>>(emptyList()) }
-    var next by remember(url) { mutableStateOf<org.schabi.newpipe.extractor.Page?>(null) }
-    var loading by remember(url) { mutableStateOf(true) }
-    var error by remember(url) { mutableStateOf<String?>(null) }
-    var attempt by remember(url) { mutableIntStateOf(0) }
-    LaunchedEffect(url, attempt) {
-        loading = true; error = null
-        try {
-            val result = VideoRepository.comments(url)
-            info = result; comments = result.relatedItems; next = result.nextPage
-        } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error = "Komentar gagal dimuat: ${e.message ?: "coba lagi"}" }
-        finally { loading = false }
-    }
-    fun loadMore() {
-        val source = info ?: return
-        val page = next ?: return
-        if (loading) return
-        loading = true; error = null
-        scope.launch {
-            try {
-                val result = VideoRepository.moreComments(source, page)
-                val updated = (comments + result.items).distinctBy { it.commentId ?: "${it.uploaderName}:${it.commentText?.content}" }
-                next = if (updated.size == comments.size) null else result.next
-                comments = updated
-            } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = "Komentar berikutnya gagal dimuat: ${e.message ?: "coba lagi"}" }
-            finally { loading = false }
-        }
-    }
-    Column(modifier) {
-            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                val count = info?.commentsCount?.takeIf { it >= 0 }
-                Text(if (count == null) "Komentar" else "Komentar · ${formatCount(count.toLong())}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Tutup komentar") }
-            }
-            HorizontalDivider(color = Color(0xFF3A3A3A))
-            LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                if (info?.isCommentsDisabled == true) item { Text("Komentar dinonaktifkan untuk video ini.", color = Color.LightGray) }
-                items(comments) { comment -> CommentRow(comment) }
-                if (!loading && info != null && !info!!.isCommentsDisabled && comments.isEmpty() && error == null) item { Text("Belum ada komentar yang tersedia.", color = Color.LightGray) }
-                if (loading) item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
-                if (error != null) item {
-                    Column { Text(error ?: "", color = Color.LightGray); TextButton(onClick = { if (info == null) attempt++ else loadMore() }) { Text("Coba lagi") } }
-                }
-                if (!loading && error == null && next != null) item { TextButton(onClick = { loadMore() }) { Text("Muat komentar lainnya") } }
-            }
-    }
-}
-
-@Composable private fun CommentRow(comment: CommentsInfoItem) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(36.dp).clip(RoundedCornerShape(50)).background(Surface), contentAlignment = Alignment.Center) {
-            Text(comment.uploaderName?.firstOrNull()?.uppercase() ?: "•", style = MaterialTheme.typography.labelLarge)
-            comment.uploaderAvatars.lastOrNull()?.url?.let { image -> AsyncImage(model = image, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-        }
-        Column(Modifier.weight(1f)) {
-            val date = comment.textualUploadDate?.takeIf { it.isNotBlank() }
-            Text(listOfNotNull(comment.uploaderName, date).joinToString(" · "), style = MaterialTheme.typography.labelMedium, color = Color.LightGray)
-            val description = comment.commentText
-            val raw = description?.content.orEmpty()
-            val text = remember(raw, description?.type) { if (description?.type == Description.HTML) android.text.Html.fromHtml(raw, android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim() else raw }
-            Text(text, modifier = Modifier.padding(top = 5.dp), style = MaterialTheme.typography.bodyMedium)
-            val like = comment.textualLikeCount?.takeIf { it.isNotBlank() } ?: comment.likeCount.takeIf { it >= 0 }?.let { formatCount(it.toLong()) }
-            val reply = comment.replyCount.takeIf { it > 0 }
-            val details = listOfNotNull(like?.let { "♥ $it" }, if (comment.isPinned) "Disematkan" else null, reply?.let { "$it balasan" })
-            if (details.isNotEmpty()) Text(details.joinToString("   ·   "), color = Color.LightGray, modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelSmall)
-        }
-    }
-}
 
 private data class DownloadChoice(val url: String, val height: Int, val audio: Boolean)
 
