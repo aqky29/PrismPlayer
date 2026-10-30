@@ -589,8 +589,9 @@ class MainActivity : ComponentActivity() {
                 val endY = (maxHeight - miniHeight - bottomGap).coerceAtLeast(0.dp)
                 val x = startX + (endX - startX) * progress
                 val y = endY * progress
-                FloatingPlayer(player = player, fullscreen = fullscreen, minimized = minimized, progress = progress, travelDistance = endY.coerceAtLeast(180.dp),
+                FloatingPlayer(player = player, title = playing.name, fullscreen = fullscreen, minimized = minimized, progress = progress, travelDistance = endY.coerceAtLeast(180.dp),
                     modifier = Modifier.offset(x = x, y = y).size(width, height),
+                    onNext = playing.relatedItems.filterIsInstance<StreamInfoItem>().firstOrNull { it.url != playing.url }?.let { next -> { open(next) } },
                     onBack = { back() }, onSettings = { showQuality = true }, onShare = { shareVideo(playing) }, onFullscreen = { setFullscreen(!fullscreen) },
                     onExpand = { minimized = false }, onClose = { closePlayer() },
                     onResize = { scale -> miniPlayerWidth = (miniWidth * scale).coerceIn(minMiniWidth, maxMiniWidth) },
@@ -657,8 +658,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable private fun FloatingPlayer(
-    player: ExoPlayer, fullscreen: Boolean, minimized: Boolean, progress: Float, travelDistance: androidx.compose.ui.unit.Dp,
-    modifier: Modifier, onBack: () -> Unit, onSettings: () -> Unit, onShare: () -> Unit, onFullscreen: () -> Unit,
+    player: ExoPlayer, title: String, fullscreen: Boolean, minimized: Boolean, progress: Float, travelDistance: androidx.compose.ui.unit.Dp,
+    modifier: Modifier, onNext: (() -> Unit)?, onBack: () -> Unit, onSettings: () -> Unit, onShare: () -> Unit, onFullscreen: () -> Unit,
     onExpand: () -> Unit, onClose: () -> Unit, onResize: (Float) -> Unit, onToggleSize: () -> Unit, onDrag: (Float) -> Unit, onCancelDrag: () -> Unit, onRelease: (Float, Float) -> Unit
 ) {
     val currentDrag by rememberUpdatedState(onDrag)
@@ -713,14 +714,6 @@ class MainActivity : ComponentActivity() {
     }
     var playing by remember { mutableStateOf(player.isPlaying) }
     var buffering by remember { mutableStateOf(player.playbackState == androidx.media3.common.Player.STATE_BUFFERING) }
-    var controlsVisible by remember { mutableStateOf(true) }
-    var interaction by remember { mutableIntStateOf(0) }
-    var position by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
-    var scrubbing by remember { mutableStateOf(false) }
-    var scrubPosition by remember { mutableFloatStateOf(0f) }
-    var seekFeedback by remember { mutableStateOf<String?>(null) }
-    var seekSequence by remember { mutableIntStateOf(0) }
     DisposableEffect(player) {
         val listener = object : androidx.media3.common.Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
@@ -728,25 +721,6 @@ class MainActivity : ComponentActivity() {
         }
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
-    }
-    LaunchedEffect(player) {
-        while (true) {
-            position = player.currentPosition.coerceAtLeast(0L)
-            duration = player.duration.takeIf { it > 0 && it != androidx.media3.common.C.TIME_UNSET } ?: 0L
-            delay(500)
-        }
-    }
-    LaunchedEffect(controlsVisible, playing, interaction, minimized, scrubbing) {
-        if (controlsVisible && playing && !minimized && !scrubbing) { delay(4000); controlsVisible = false }
-    }
-    LaunchedEffect(seekSequence) { if (seekFeedback != null) { delay(800); seekFeedback = null } }
-    fun seekBy(delta: Long) {
-        if (!player.isCurrentMediaItemSeekable) return
-        val end = player.duration.takeIf { it > 0 && it != androidx.media3.common.C.TIME_UNSET }
-        val destination = (player.currentPosition + delta).coerceAtLeast(0L).let { if (end != null) it.coerceAtMost(end) else it }
-        player.seekTo(destination); position = destination
-        seekFeedback = if (delta < 0) "⏪ 10 detik" else "10 detik ⏩"
-        seekSequence++; interaction++
     }
     val corner = 8.dp * progress
     Box(modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(swipeModifier).shadow(2.dp * progress, RoundedCornerShape(corner)).clip(RoundedCornerShape(corner)).background(Color.Black)) {
@@ -764,56 +738,13 @@ class MainActivity : ComponentActivity() {
                     Text("⤧", color = Color.White, style = MaterialTheme.typography.titleLarge)
                 }
                 IconButton(onClick = { if (playing) player.pause() else player.play() }, modifier = Modifier.align(Alignment.Center).size(48.dp).background(Color.Black.copy(alpha = .4f), RoundedCornerShape(50))) {
-                    Text(if (playing) "Ⅱ" else "▶", color = Color.White, style = MaterialTheme.typography.titleLarge)
+                    PlayerGlyph(if (playing) "pause" else "play", Modifier.size(22.dp))
                 }
             }
         } else if (progress < .1f) {
-            Box(Modifier.fillMaxSize().pointerInput(player) {
-                detectTapGestures(
-                    onTap = { controlsVisible = !controlsVisible; interaction++ },
-                    onDoubleTap = { tap -> seekBy(if (tap.x < size.width / 2f) -10_000L else 10_000L) }
-                )
-            })
-            if (controlsVisible) {
-                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .34f)))
-                Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { interaction++; onBack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, if (fullscreen) "Keluar fullscreen" else "Minimalkan video", tint = Color.White) }
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = { interaction++; onShare() }, modifier = Modifier.semantics { contentDescription = "Bagikan video" }) { ActionGlyph("share", Modifier.size(22.dp)) }
-                    IconButton(onClick = { interaction++; onSettings() }) { Icon(Icons.Default.Settings, "Pengaturan video", tint = Color.White) }
-                }
-                Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    IconButton(onClick = { seekBy(-10_000L) }, enabled = player.isCurrentMediaItemSeekable) { Text("↶¹⁰", color = Color.White, style = MaterialTheme.typography.titleLarge) }
-                    IconButton(onClick = {
-                        interaction++
-                        if (player.playbackState == androidx.media3.common.Player.STATE_ENDED) { player.seekTo(0); player.play() }
-                        else if (playing) player.pause() else player.play()
-                    }, modifier = Modifier.size(58.dp)) {
-                        if (playing) Text("Ⅱ", color = Color.White, style = MaterialTheme.typography.headlineMedium)
-                        else Icon(Icons.Default.PlayArrow, "Putar video", tint = Color.White, modifier = Modifier.size(42.dp))
-                    }
-                    IconButton(onClick = { seekBy(10_000L) }, enabled = player.isCurrentMediaItemSeekable) { Text("¹⁰↷", color = Color.White, style = MaterialTheme.typography.titleLarge) }
-                }
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 10.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("${playerTime(if (scrubbing) scrubPosition.toLong() else position)} / ${if (duration > 0) playerTime(duration) else "--:--"}", color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-                        IconButton(onClick = { interaction++; onFullscreen() }, modifier = Modifier.size(42.dp)) { Text(if (fullscreen) "⤡" else "⛶", color = Color.White, style = MaterialTheme.typography.headlineSmall) }
-                    }
-                    Slider(value = if (scrubbing) scrubPosition else position.coerceAtMost(duration).toFloat(), onValueChange = { scrubbing = true; scrubPosition = it; interaction++ }, onValueChangeFinished = {
-                        if (player.isCurrentMediaItemSeekable) player.seekTo(scrubPosition.toLong()); scrubbing = false; interaction++
-                    }, valueRange = 0f..duration.coerceAtLeast(1L).toFloat(), enabled = duration > 0 && player.isCurrentMediaItemSeekable,
-                        colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = Color.White.copy(alpha = .35f)), modifier = Modifier.fillMaxWidth().height(24.dp))
-                }
-            }
-            if (buffering) CircularProgressIndicator(Modifier.align(Alignment.Center).size(36.dp), color = Color.White, strokeWidth = 3.dp)
-            seekFeedback?.let { Text(it, Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = .65f), RoundedCornerShape(50)).padding(horizontal = 14.dp, vertical = 8.dp), color = Color.White) }
+            PlayerControlsOverlay(player, playing, buffering, fullscreen, title, onBack, onSettings, onShare, onFullscreen, onNext)
         }
     }
-}
-
-private fun playerTime(millis: Long): String {
-    val seconds = millis.coerceAtLeast(0) / 1000
-    return if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, seconds / 60 % 60, seconds % 60) else "%d:%02d".format(seconds / 60, seconds % 60)
 }
 
 @Composable private fun HomeNavigation(onHome: () -> Unit, onDownloads: () -> Unit) {
