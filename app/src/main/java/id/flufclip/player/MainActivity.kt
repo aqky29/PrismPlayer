@@ -26,6 +26,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -101,6 +103,7 @@ class MainActivity : ComponentActivity() {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val preferences = remember { context.getSharedPreferences("search_history", Context.MODE_PRIVATE) }
+    remember { PlayerSettings.load(context) }
     var history by remember { mutableStateOf(runCatching {
         val json = org.json.JSONArray(preferences.getString("recent", "[]"))
         (0 until json.length()).map { json.getString(it) }
@@ -133,7 +136,7 @@ class MainActivity : ComponentActivity() {
     var playlist by remember { mutableStateOf<PlaylistInfo?>(null) }
     var selected by remember { mutableStateOf<StreamInfo?>(null) }
     var minimized by remember { mutableStateOf(false) }
-    var miniPlayerWidth by remember { mutableStateOf(220.dp) }
+    val miniState = remember { MiniPlayerState(scope) }
     var fullscreen by remember { mutableStateOf(false) }
     var dragProgress by remember { mutableStateOf<Float?>(null) }
     var category by remember { mutableStateOf("Semua") }
@@ -576,30 +579,31 @@ class MainActivity : ComponentActivity() {
                 val fullWidth = if (fullscreen) maxWidth else if (wide) (maxWidth - 72.dp) / 1.48f else maxWidth
                 val fullHeight = if (fullscreen) maxHeight else fullWidth * 9f / 16f
                 val startX = if (wide && !fullscreen) 24.dp else 0.dp
-                val maxMiniWidth = minOf(360.dp, (maxWidth - 16.dp).coerceAtLeast(80.dp), (maxHeight - 96.dp).coerceAtLeast(80.dp) * 16f / 9f)
-                val minMiniWidth = minOf(160.dp, maxMiniWidth)
-                val miniWidth = miniPlayerWidth.coerceIn(minMiniWidth, maxMiniWidth)
+                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchActive || fullscreen) 0.dp else 56.dp)
+                miniState.limits = limits
+                LaunchedEffect(limits) { miniState.settle(animate = minimized) }
+                LaunchedEffect(minimized) { if (minimized) miniState.show() }
+                val miniWidth = miniState.width.value.dp
                 val miniHeight = miniWidth * 9f / 16f
                 val target = if (fullscreen) 0f else dragProgress ?: if (minimized) 1f else 0f
                 val progress by animateFloatAsState(targetValue = target, animationSpec = tween(if (dragProgress == null) 300 else 0, easing = FastOutSlowInEasing), label = "player transition")
                 val width = fullWidth + (miniWidth - fullWidth) * progress
                 val height = fullHeight + (miniHeight - fullHeight) * progress
-                val endX = (maxWidth - miniWidth - 8.dp).coerceAtLeast(0.dp)
-                val bottomGap = if (searchActive) 8.dp else 64.dp
-                val endY = (maxHeight - miniHeight - bottomGap).coerceAtLeast(0.dp)
-                val x = startX + (endX - startX) * progress
-                val y = endY * progress
-                FloatingPlayer(player = player, title = playing.name, previewFrames = playing.previewFrames, fullscreen = fullscreen, minimized = minimized, progress = progress, travelDistance = endY.coerceAtLeast(180.dp),
-                    modifier = Modifier.offset(x = x, y = y).size(width, height),
+                val miniPosition = miniState.position.value
+                val x = startX + (miniPosition.x.dp - startX) * progress
+                val y = miniPosition.y.dp * progress
+                val travel = (limits.areaHeight - limits.bottomBar - limits.inset).dp - miniHeight
+                FloatingPlayer(player = player, title = playing.name, previewFrames = playing.previewFrames, segments = playing.streamSegments.orEmpty(), fullscreen = fullscreen, minimized = minimized, progress = progress, travelDistance = travel.coerceAtLeast(180.dp),
+                    miniState = miniState, modifier = Modifier.offset(x = x, y = y).size(width, height),
                     onNext = playing.relatedItems.filterIsInstance<StreamInfoItem>().firstOrNull { it.url != playing.url }?.let { next -> { open(next) } },
                     onBack = { back() }, onSettings = { showQuality = true }, onShare = { shareVideo(playing) }, onFullscreen = { setFullscreen(!fullscreen) },
                     onExpand = { minimized = false }, onClose = { closePlayer() },
-                    onResize = { scale -> miniPlayerWidth = (miniWidth * scale).coerceIn(minMiniWidth, maxMiniWidth) },
-                    onToggleSize = { miniPlayerWidth = if (miniWidth < (minMiniWidth + maxMiniWidth) / 2f) maxMiniWidth else minMiniWidth },
                     onDrag = { dragProgress = it }, onCancelDrag = { dragProgress = null }, onRelease = { value, velocity ->
-                        minimized = when { velocity > 800f -> true; velocity < -800f -> false; minimized -> value >= .65f; else -> value >= .35f }
+                        minimized = when { velocity > 800f -> true; velocity < -800f -> false; else -> value >= .35f }
                         dragProgress = null
                     })
+                if (minimized && miniState.stashed != 0 && progress > .9f) MiniPlayerHandle(miniState.stashed, wide,
+                    Modifier.align(if (miniState.stashed < 0) Alignment.TopStart else Alignment.TopEnd).offset(y = (miniPosition.y.dp + miniHeight / 2 - 54.dp).coerceAtLeast(0.dp))) { miniState.unstash() }
             }
         }
       }
@@ -658,57 +662,80 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable private fun FloatingPlayer(
-    player: ExoPlayer, title: String, previewFrames: List<org.schabi.newpipe.extractor.stream.Frameset>, fullscreen: Boolean, minimized: Boolean, progress: Float, travelDistance: androidx.compose.ui.unit.Dp,
+    player: ExoPlayer, title: String, previewFrames: List<org.schabi.newpipe.extractor.stream.Frameset>, segments: List<org.schabi.newpipe.extractor.stream.StreamSegment>,
+    fullscreen: Boolean, minimized: Boolean, progress: Float, travelDistance: androidx.compose.ui.unit.Dp, miniState: MiniPlayerState,
     modifier: Modifier, onNext: (() -> Unit)?, onBack: () -> Unit, onSettings: () -> Unit, onShare: () -> Unit, onFullscreen: () -> Unit,
-    onExpand: () -> Unit, onClose: () -> Unit, onResize: (Float) -> Unit, onToggleSize: () -> Unit, onDrag: (Float) -> Unit, onCancelDrag: () -> Unit, onRelease: (Float, Float) -> Unit
+    onExpand: () -> Unit, onClose: () -> Unit, onDrag: (Float) -> Unit, onCancelDrag: () -> Unit, onRelease: (Float, Float) -> Unit
 ) {
     val currentDrag by rememberUpdatedState(onDrag)
     val currentRelease by rememberUpdatedState(onRelease)
     val currentCancel by rememberUpdatedState(onCancelDrag)
-    val currentResize by rememberUpdatedState(onResize)
     val currentTravelDistance by rememberUpdatedState(travelDistance)
     var origin by remember { mutableStateOf(Offset.Zero) }
-    val swipeModifier = if (fullscreen) Modifier else Modifier.pointerInput(minimized) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            val startPosition = down.position + origin
-            val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, startPosition) }
-            val startProgress = if (minimized) 1f else 0f
-            var dragging = false
-            var rejected = false
-            var completed = false
-            var resizing = false
-            var fraction = startProgress
-            try {
+    val swipeModifier = when {
+        fullscreen -> Modifier
+        // Mini player: drag anywhere (snaps to the nearest corner or stashes at a side edge), pinch to resize around the fingers.
+        minimized -> Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, Offset.Zero) }
+                var total = Offset.Zero
+                var dragging = false
+                var pinching = false
                 do {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    if (minimized && event.changes.count { it.pressed } >= 2) {
-                        if (dragging) { currentCancel(); dragging = false }
-                        resizing = true; rejected = true
-                        val scale = event.calculateZoom()
-                        if (scale.isFinite() && scale > 0f && scale != 1f) currentResize(scale)
+                    val event = awaitPointerEvent()
+                    if (event.changes.count { it.pressed } >= 2) {
+                        if (!pinching) { pinching = true; miniState.pinchStart() }
+                        val zoom = event.calculateZoom()
+                        val focus = event.calculateCentroid(useCurrent = true)
+                        if (zoom.isFinite() && zoom > 0f && focus != Offset.Unspecified) miniState.pinch(zoom, focus / density)
                         event.changes.forEach { it.consume() }
+                    } else if (!pinching) {
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        val delta = change.positionChange()
+                        total += delta
+                        tracker.addPosition(change.uptimeMillis, total)
+                        if (!dragging && total.getDistance() > viewConfiguration.touchSlop) dragging = true
+                        if (dragging) { change.consume(); miniState.drag(delta / density) }
                     }
-                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    val currentPosition = change.position + origin
-                    tracker.addPosition(change.uptimeMillis, currentPosition)
-                    val dx = currentPosition.x - startPosition.x
-                    val dy = currentPosition.y - startPosition.y
-                    if (!resizing && !dragging && !rejected && (kotlin.math.abs(dx) > viewConfiguration.touchSlop || kotlin.math.abs(dy) > viewConfiguration.touchSlop)) {
-                        dragging = kotlin.math.abs(dy) > kotlin.math.abs(dx) && (if (minimized) dy < 0 else dy > 0)
-                        rejected = !dragging
-                    }
-                    if (dragging) {
-                        change.consume()
-                        fraction = (startProgress + dy / currentTravelDistance.toPx()).coerceIn(0f, 1f)
-                        if (change.pressed) currentDrag(fraction) else {
-                            completed = true
-                            currentRelease(fraction, tracker.calculateVelocity().y / density)
+                } while (event.changes.any { it.pressed })
+                if (pinching) miniState.pinchEnd()
+                else if (dragging) tracker.calculateVelocity().let { miniState.release(Offset(it.x, it.y) / density) }
+            }
+        }
+        // Full player: swipe down to minimize.
+        else -> Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                val startPosition = down.position + origin
+                val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, startPosition) }
+                var dragging = false
+                var rejected = false
+                var completed = false
+                try {
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        val currentPosition = change.position + origin
+                        tracker.addPosition(change.uptimeMillis, currentPosition)
+                        val dx = currentPosition.x - startPosition.x
+                        val dy = currentPosition.y - startPosition.y
+                        if (!dragging && !rejected && (kotlin.math.abs(dx) > viewConfiguration.touchSlop || kotlin.math.abs(dy) > viewConfiguration.touchSlop)) {
+                            dragging = kotlin.math.abs(dy) > kotlin.math.abs(dx) && dy > 0
+                            rejected = !dragging
                         }
-                    }
-                } while (change.pressed)
-            } finally {
-                if (dragging && !completed) currentCancel()
+                        if (dragging) {
+                            change.consume()
+                            val fraction = (dy / currentTravelDistance.toPx()).coerceIn(0f, 1f)
+                            if (change.pressed) currentDrag(fraction) else {
+                                completed = true
+                                currentRelease(fraction, tracker.calculateVelocity().y / density)
+                            }
+                        }
+                    } while (change.pressed)
+                } finally {
+                    if (dragging && !completed) currentCancel()
+                }
             }
         }
     }
@@ -722,8 +749,8 @@ class MainActivity : ComponentActivity() {
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    val corner = 8.dp * progress
-    Box(modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(swipeModifier).shadow(2.dp * progress, RoundedCornerShape(corner)).clip(RoundedCornerShape(corner)).background(Color.Black)) {
+    val corner = 12.dp * progress
+    Box(modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(swipeModifier).shadow(6.dp * progress, RoundedCornerShape(corner)).clip(RoundedCornerShape(corner)).background(Color.Black)) {
         AndroidView(factory = { context ->
             android.view.LayoutInflater.from(context).inflate(R.layout.floating_player, null, false) as PlayerView
         }, update = { view ->
@@ -731,18 +758,9 @@ class MainActivity : ComponentActivity() {
             view.useController = false
         }, onRelease = { it.player = null }, modifier = Modifier.fillMaxSize())
         if (minimized && progress > .9f) {
-            Box(Modifier.fillMaxSize().clickable(onClick = onExpand).background(Color.Black.copy(alpha = .16f))) {
-                IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).size(40.dp)) { Icon(Icons.Default.Close, "Tutup video", tint = Color.White) }
-                IconButton(onClick = onExpand, modifier = Modifier.align(Alignment.TopStart).size(40.dp)) { Text("⤢", color = Color.White, style = MaterialTheme.typography.titleLarge) }
-                IconButton(onClick = onToggleSize, modifier = Modifier.align(Alignment.BottomEnd).size(40.dp).semantics { contentDescription = "Ubah ukuran mini player" }) {
-                    Text("⤧", color = Color.White, style = MaterialTheme.typography.titleLarge)
-                }
-                IconButton(onClick = { if (playing) player.pause() else player.play() }, modifier = Modifier.align(Alignment.Center).size(48.dp).background(Color.Black.copy(alpha = .4f), RoundedCornerShape(50))) {
-                    PlayerGlyph(if (playing) "pause" else "play", Modifier.size(22.dp))
-                }
-            }
+            MiniPlayerControls(player, playing, buffering, miniState.width.value.dp, miniState.large, onExpand = onExpand, onClose = onClose, onToggleSize = { miniState.toggleSize() })
         } else if (progress < .1f) {
-            PlayerControlsOverlay(player, playing, buffering, fullscreen, title, previewFrames, onBack, onSettings, onShare, onFullscreen, onNext)
+            PlayerControlsOverlay(player, playing, buffering, fullscreen, title, previewFrames, segments, onBack, onSettings, onShare, onFullscreen, onNext)
         }
     }
 }
@@ -973,7 +991,7 @@ private fun qualityOptions(info: StreamInfo): List<VideoStream> {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = if (page == "menu") 20.dp else 4.dp, end = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (page != "menu") IconButton(onClick = { page = "menu" }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali") }
-                Text(when (page) { "quality" -> "Kualitas"; "speed" -> "Kecepatan pemutaran"; "audio" -> "Trek audio"; else -> "Pengaturan" }, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                Text(when (page) { "quality" -> "Kualitas"; "speed" -> "Kecepatan pemutaran"; "audio" -> "Trek audio"; "doubletap" -> "Ketuk dua kali untuk mencari"; else -> "Pengaturan" }, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Tutup") }
             }
             HorizontalDivider(color = Color.White.copy(alpha = .08f))
@@ -983,6 +1001,10 @@ private fun qualityOptions(info: StreamInfo): List<VideoStream> {
                         SettingsRow("▣", "Kualitas", selected?.resolution ?: "Otomatis") { page = "quality" }
                         SettingsRow("◷", "Kecepatan pemutaran", if (speed == 1f) "Normal" else "${speed}x") { page = "speed" }
                         if (tracks.size > 1 && canSelectAudio) SettingsRow("♫", "Trek audio", if (selected?.isVideoOnly == true) selectedAudio?.let { audioLabel(it) } ?: "Default" else "Audio bawaan") { page = "audio" }
+                        SettingsRow("»", "Ketuk dua kali untuk mencari", "${PlayerSettings.doubleTapSeconds} detik") { page = "doubletap" }
+                    }
+                    "doubletap" -> PlayerSettings.doubleTapChoices.forEach { seconds ->
+                        PlayerChoiceRow("$seconds detik", selected = seconds == PlayerSettings.doubleTapSeconds) { PlayerSettings.updateDoubleTap(seconds); page = "menu" }
                     }
                     "quality" -> {
                         if (options.isEmpty()) Text("Kualitas diatur otomatis oleh stream.", modifier = Modifier.padding(20.dp), color = Color.LightGray)
