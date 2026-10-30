@@ -19,6 +19,7 @@ import android.os.Environment
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -35,6 +36,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.focus.FocusRequester
@@ -76,6 +79,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.comments.CommentsInfoItem
@@ -96,6 +100,12 @@ private val Accent = Color(0xFFFF3B30)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Background, surface = Surface)) { App() } } }
+}
+
+/** Status bar height from framework resources, so it stays the same while the bar is hidden in fullscreen. */
+private fun statusBarPixels(context: Context): Int {
+    val id = context.resources.getIdentifier("status_bar_height", "dimen", "android")
+    return if (id > 0) context.resources.getDimensionPixelSize(id) else 0
 }
 
 @Composable private fun App() {
@@ -171,8 +181,16 @@ class MainActivity : ComponentActivity() {
     var selectedAudio by remember { mutableStateOf<AudioStream?>(null) }
     val player = remember { ExoPlayer.Builder(context).build() }
     DisposableEffect(Unit) { onDispose { player.release() } }
+    val density = LocalDensity.current
+    val statusBarHeight = remember(density) { with(density) { statusBarPixels(context).toDp() } }
+    /** 0 = fullscreen, 1 = watch layout. A swipe down in fullscreen drives it, and leaving fullscreen animates it to 1. */
+    val exitProgress = remember { Animatable(1f) }
+    var exitDragging by remember { mutableStateOf(false) }
     fun setFullscreen(value: Boolean) {
         fullscreen = value
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            if (value) exitProgress.snapTo(0f) else exitProgress.animateTo(1f, tween(300, easing = FastOutSlowInEasing))
+        }
         (context as? Activity)?.let { activity ->
             val controller = WindowInsetsControllerCompat(activity.window, activity.window.decorView)
             if (value) {
@@ -184,6 +202,17 @@ class MainActivity : ComponentActivity() {
                 activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             }
         }
+    }
+    /** Release decision for a swipe down: a fling decides, otherwise the finger must travel 35% of the way. */
+    fun swipeCommits(value: Float, velocity: Float) = when { velocity > 800f -> true; velocity < -800f -> false; else -> value >= .35f }
+    fun dragFullscreenExit(fraction: Float) {
+        exitDragging = true
+        scope.launch(start = CoroutineStart.UNDISPATCHED) { exitProgress.snapTo(fraction) }
+    }
+    fun settleFullscreenExit(leave: Boolean) {
+        exitDragging = false
+        if (leave) setFullscreen(false)
+        else scope.launch(start = CoroutineStart.UNDISPATCHED) { exitProgress.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
     }
     fun shareVideo(info: StreamInfo) {
         val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, info.url)
@@ -373,11 +402,19 @@ class MainActivity : ComponentActivity() {
             else -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
         }
     }
+    // The feed stays under the watch page while the player moves, so the mini player lands on the feed it returns to.
+    val gridState = rememberLazyGridState()
+    val target = if (fullscreen) 0f else dragProgress ?: if (minimized) 1f else 0f
+    val progress by animateFloatAsState(targetValue = target, animationSpec = tween(if (dragProgress == null) 300 else 0, easing = FastOutSlowInEasing), label = "player transition")
+    val info = selected?.takeUnless { minimized && progress > .999f }
+    val showFeed = selected == null || minimized || progress > 0f
     Surface(modifier = Modifier.fillMaxSize(), color = Background) {
       BoxWithConstraints(Modifier.fillMaxSize()) {
         val wideWatch = maxWidth >= 840.dp
+        val screenWidth = maxWidth
+        val screenHeight = maxHeight
         Column(if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            if (selected == null || minimized) {
+            if (showFeed) {
                 if (searchActive) {
                     val focusRequester = remember { FocusRequester() }
                     LaunchedEffect(Unit) { focusRequester.requestFocus(); keyboard?.show() }
@@ -415,7 +452,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            if (downloadState.message.isNotBlank() && (selected == null || minimized)) {
+            if (downloadState.message.isNotBlank() && showFeed) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(downloadState.message, style = MaterialTheme.typography.bodySmall)
@@ -429,9 +466,8 @@ class MainActivity : ComponentActivity() {
                     else TextButton(onClick = { DownloadStatus.state.value = DownloadState() }) { Text("Tutup") }
                 }
             }
-            if (loading && (selected == null || minimized)) LinearProgressIndicator(Modifier.fillMaxWidth())
-            val info = selected?.takeUnless { minimized }
-            if (info == null && searchActive) {
+            if (loading && showFeed) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (showFeed && searchActive) {
                 val recent = history.filter { query.isBlank() || it.contains(query, ignoreCase = true) }
                 val online = suggestions.filterNot { suggestion -> recent.any { it.equals(suggestion, ignoreCase = true) } }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp)) {
@@ -450,7 +486,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-            } else if (info == null) {
+            } else if (showFeed) {
                 error?.let { message ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
@@ -460,7 +496,6 @@ class MainActivity : ComponentActivity() {
                 val page = channel
                 val currentPlaylist = playlist
                 val visibleItems: List<InfoItem> = if (currentPlaylist != null) currentPlaylist.relatedItems else if (page != null) channelItems else if (searchMode) results else if (category == "Semua") home else categoryItems
-                val gridState = rememberLazyGridState()
                 val isFeed = currentPlaylist == null && page == null && !searchMode
                 LaunchedEffect(gridState, isFeed, category, visibleItems.size, feedLoading, feedError, feedEnd, loading) {
                     if (isFeed && !feedLoading && feedError == null && !feedEnd && !loading && visibleItems.isNotEmpty()) {
@@ -522,85 +557,100 @@ class MainActivity : ComponentActivity() {
                     if (isFeed && feedError != null) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(feedError ?: "", Modifier.weight(1f), color = Color.LightGray); TextButton(onClick = { loadMoreFeed() }) { Text("Coba lagi") } } }
                     if (!loading && error == null && visibleItems.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text(if (page != null) "Belum ada video yang tersedia." else "Tidak ada hasil.", color = Color.LightGray) }
                 }
-            } else {
-                var showComments by remember(info.url) { mutableStateOf(false) }
-                var showDescription by remember(info.url) { mutableStateOf(false) }
-                val comments = rememberComments(info.url)
-                WatchScreen(showDescription = showDescription, showComments = showComments, onClosePanel = { showDescription = false; showComments = false }, watchAlpha = (1f - (dragProgress ?: 0f) * .3f).coerceIn(0f, 1f), info = info, comments = comments, onComments = { showDescription = false; showComments = true }, onDescription = { showComments = false; showDescription = true },
-                    onLink = { openLink(info, it) }, onSeek = { player.seekTo(it * 1000L); player.play() }, onShare = { shareVideo(info) }, onCopy = { copyVideoLink(info) }, player = player, fullscreen = fullscreen, onFullscreen = { setFullscreen(!fullscreen) }, recommendations = info.relatedItems.filterIsInstance<StreamInfoItem>().filter { it.url != info.url }.distinctBy { it.url }, error = error,
-                    onBack = { back() }, onSettings = { showQuality = true }, onDownload = { showDownloads = true },
-                    onChannel = { openChannel(info.uploaderUrl ?: "") }, onOpenChannel = { openChannel(it) }, onVideo = { open(it) })
-                if (showQuality) QualityDialog(info, quality, selectedAudio, player, onDismiss = { showQuality = false }, onSelect = { stream ->
-                    if (stream != quality) {
-                        val position = player.currentPosition.coerceAtLeast(0L)
-                        val playing = player.playWhenReady
-                        try { playQuality(info, stream, selectedAudio, position, playing) }
-                        catch (e: Exception) { android.widget.Toast.makeText(context, "Gagal mengganti kualitas: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
-                    }
-                    showQuality = false
-                }, onSelectAudio = { audio ->
-                    if (audio != selectedAudio || quality?.isVideoOnly != true) {
-                        val separate = VideoRepository.videos(info)
-                        val currentHeight = quality?.height ?: 0
-                        val video = if (quality?.isVideoOnly == true) quality else separate.minByOrNull { kotlin.math.abs(it.height - currentHeight) }
-                        if (video == null) {
-                            android.widget.Toast.makeText(context, "Pilihan audio tidak tersedia untuk format video ini", android.widget.Toast.LENGTH_LONG).show()
-                        } else {
-                            try {
-                                playQuality(info, video, audio, player.currentPosition.coerceAtLeast(0L), player.playWhenReady)
-                                selectedAudio = audio
-                            } catch (e: Exception) { android.widget.Toast.makeText(context, "Gagal mengganti audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
-                        }
-                    }
-                    showQuality = false
-                })
-                if (showDownloads) DownloadDialog(info, onDismiss = { showDownloads = false }) { height, audio ->
-                    showDownloads = false
-                    if (downloadState.running) {
-                        android.widget.Toast.makeText(context, "Tunggu unduhan yang sedang berjalan", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            if (showFeed && !searchActive) {
+                HomeNavigation(onHome = { searchMode = false; searchActive = false; channel = null; playlist = null; category = "Semua" }, onDownloads = { context.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)) })
+            }
+        }
+        // The watch page sits over the feed and fades out as the player moves, so the mini player lands on the feed.
+        if (info != null) Box(if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            var showComments by remember(info.url) { mutableStateOf(false) }
+            var showDescription by remember(info.url) { mutableStateOf(false) }
+            val comments = rememberComments(info.url)
+            val channelUploads = rememberChannelUploads(info.uploaderUrl)
+            WatchScreen(showDescription = showDescription, showComments = showComments, onClosePanel = { showDescription = false; showComments = false }, watchAlpha = (1f - progress).coerceIn(0f, 1f), info = info, comments = comments, onComments = { showDescription = false; showComments = true }, onDescription = { showComments = false; showDescription = true },
+                onLink = { openLink(info, it) }, onSeek = { player.seekTo(it * 1000L); player.play() }, onShare = { shareVideo(info) }, onCopy = { copyVideoLink(info) }, player = player, hidden = fullscreen && !exitDragging, onFullscreen = { setFullscreen(!fullscreen) }, recommendations = info.relatedItems.filterIsInstance<StreamInfoItem>().filter { it.url != info.url }.distinctBy { it.url }, channelVideos = channelUploads.filter { it.url != info.url }.take(6), error = error,
+                onBack = { back() }, onSettings = { showQuality = true }, onDownload = { showDownloads = true },
+                onChannel = { openChannel(info.uploaderUrl ?: "") }, onOpenChannel = { openChannel(it) }, onVideo = { open(it) })
+            if (showQuality) QualityDialog(info, quality, selectedAudio, player, onDismiss = { showQuality = false }, onSelect = { stream ->
+                if (stream != quality) {
+                    val position = player.currentPosition.coerceAtLeast(0L)
+                    val playing = player.playWhenReady
+                    try { playQuality(info, stream, selectedAudio, position, playing) }
+                    catch (e: Exception) { android.widget.Toast.makeText(context, "Gagal mengganti kualitas: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
+                }
+                showQuality = false
+            }, onSelectAudio = { audio ->
+                if (audio != selectedAudio || quality?.isVideoOnly != true) {
+                    val separate = VideoRepository.videos(info)
+                    val currentHeight = quality?.height ?: 0
+                    val video = if (quality?.isVideoOnly == true) quality else separate.minByOrNull { kotlin.math.abs(it.height - currentHeight) }
+                    if (video == null) {
+                        android.widget.Toast.makeText(context, "Pilihan audio tidak tersedia untuk format video ini", android.widget.Toast.LENGTH_LONG).show()
                     } else {
-                        val safeTitle = info.name.replace(Regex("[^\\p{L}\\p{N} ._-]"), "_").take(90).ifBlank { "video" }
-                        pendingDownload = DownloadChoice(info.url, height, audio)
-                        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-                            .setType(if (audio) "audio/mpeg" else "video/mp4")
-                            .putExtra(Intent.EXTRA_TITLE, "$safeTitle.${if (audio) "mp3" else "mp4"}")
-                        saveFile.launch(intent)
+                        try {
+                            playQuality(info, video, audio, player.currentPosition.coerceAtLeast(0L), player.playWhenReady)
+                            selectedAudio = audio
+                        } catch (e: Exception) { android.widget.Toast.makeText(context, "Gagal mengganti audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
                     }
                 }
-            }
-            if (info == null && !searchActive) {
-                HomeNavigation(onHome = { searchMode = false; searchActive = false; channel = null; playlist = null; category = "Semua" }, onDownloads = { context.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)) })
+                showQuality = false
+            })
+            if (showDownloads) DownloadDialog(info, onDismiss = { showDownloads = false }) { height, audio ->
+                showDownloads = false
+                if (downloadState.running) {
+                    android.widget.Toast.makeText(context, "Tunggu unduhan yang sedang berjalan", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    val safeTitle = info.name.replace(Regex("[^\\p{L}\\p{N} ._-]"), "_").take(90).ifBlank { "video" }
+                    pendingDownload = DownloadChoice(info.url, height, audio)
+                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType(if (audio) "audio/mpeg" else "video/mp4")
+                        .putExtra(Intent.EXTRA_TITLE, "$safeTitle.${if (audio) "mp3" else "mp4"}")
+                    saveFile.launch(intent)
+                }
             }
         }
         selected?.let { playing ->
             val insets = if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             BoxWithConstraints(insets) {
                 val wide = maxWidth >= 840.dp
-                val fullWidth = if (fullscreen) maxWidth else if (wide) (maxWidth - 72.dp) / 1.48f else maxWidth
-                val fullHeight = if (fullscreen) maxHeight else fullWidth * 9f / 16f
-                val startX = if (wide && !fullscreen) 24.dp else 0.dp
+                // Size and position of the watch layout (exitProgress 1). Fullscreen is the whole screen (exitProgress 0).
+                val inlineWidth = if (wide) (maxWidth - 72.dp) / 1.48f else maxWidth
+                val inlineHeight = inlineWidth * 9f / 16f
+                val startX = if (wide) 24.dp else 0.dp
                 val limits = MiniLimits.of(maxWidth, maxHeight, if (searchActive || fullscreen) 0.dp else 56.dp)
                 miniState.limits = limits
                 LaunchedEffect(limits) { miniState.settle(animate = minimized) }
                 LaunchedEffect(minimized) { if (minimized) miniState.show() }
                 val miniWidth = miniState.width.value.dp
                 val miniHeight = miniWidth * 9f / 16f
-                val target = if (fullscreen) 0f else dragProgress ?: if (minimized) 1f else 0f
-                val progress by animateFloatAsState(targetValue = target, animationSpec = tween(if (dragProgress == null) 300 else 0, easing = FastOutSlowInEasing), label = "player transition")
-                val width = fullWidth + (miniWidth - fullWidth) * progress
-                val height = fullHeight + (miniHeight - fullHeight) * progress
+                // Each edge lerps linearly from the screen to the watch layout. The box is inset by the status bar unless fullscreen.
+                val exit = exitProgress.value
+                val boxTop = if (fullscreen) 0.dp else statusBarHeight
+                val baseX = startX * exit
+                val baseY = statusBarHeight * exit - boxTop
+                val baseWidth = screenWidth + (inlineWidth - screenWidth) * exit
+                val baseHeight = screenHeight + (inlineHeight - screenHeight) * exit
+                val width = baseWidth + (miniWidth - inlineWidth) * progress
+                val height = baseHeight + (miniHeight - inlineHeight) * progress
                 val miniPosition = miniState.position.value
-                val x = startX + (miniPosition.x.dp - startX) * progress
-                val y = miniPosition.y.dp * progress
+                val x = baseX + (miniPosition.x.dp - startX) * progress
+                val y = baseY + miniPosition.y.dp * progress
                 val travel = (limits.areaHeight - limits.bottomBar - limits.inset).dp - miniHeight
-                FloatingPlayer(player = player, title = playing.name, previewFrames = playing.previewFrames, segments = playing.streamSegments.orEmpty(), fullscreen = fullscreen, minimized = minimized, progress = progress, travelDistance = travel.coerceAtLeast(180.dp),
+                val dragTravel = if (fullscreen) inlineHeight else travel
+                FloatingPlayer(player = player, title = playing.name, previewFrames = playing.previewFrames, segments = playing.streamSegments.orEmpty(), fullscreen = fullscreen, minimized = minimized, progress = progress, travelDistance = dragTravel.coerceAtLeast(180.dp),
                     miniState = miniState, modifier = Modifier.offset(x = x, y = y).size(width, height),
                     onNext = playing.relatedItems.filterIsInstance<StreamInfoItem>().firstOrNull { it.url != playing.url }?.let { next -> { open(next) } },
                     onBack = { back() }, onSettings = { showQuality = true }, onShare = { shareVideo(playing) }, onFullscreen = { setFullscreen(!fullscreen) },
                     onExpand = { minimized = false }, onClose = { closePlayer() },
-                    onDrag = { dragProgress = it }, onCancelDrag = { dragProgress = null }, onRelease = { value, velocity ->
-                        minimized = when { velocity > 800f -> true; velocity < -800f -> false; else -> value >= .35f }
-                        dragProgress = null
+                    onDrag = { if (fullscreen) dragFullscreenExit(it) else { dragProgress = it } },
+                    onCancelDrag = { if (fullscreen) settleFullscreenExit(leave = false) else { dragProgress = null } },
+                    onRelease = { value, velocity ->
+                        if (fullscreen) settleFullscreenExit(leave = swipeCommits(value, velocity))
+                        else {
+                            minimized = swipeCommits(value, velocity)
+                            dragProgress = null
+                        }
                     })
                 if (minimized && miniState.stashed != 0 && progress > .9f) MiniPlayerHandle(miniState.stashed, wide,
                     Modifier.align(if (miniState.stashed < 0) Alignment.TopStart else Alignment.TopEnd).offset(y = (miniPosition.y.dp + miniHeight / 2 - 54.dp).coerceAtLeast(0.dp))) { miniState.unstash() }
@@ -610,8 +660,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun WatchScreen(showDescription: Boolean, showComments: Boolean, onClosePanel: () -> Unit, watchAlpha: Float, info: StreamInfo, comments: CommentsState, onComments: () -> Unit, onDescription: () -> Unit, onLink: (String) -> Unit, onSeek: (Int) -> Unit, onShare: () -> Unit, onCopy: () -> Unit, player: ExoPlayer, fullscreen: Boolean, onFullscreen: () -> Unit, recommendations: List<StreamInfoItem>, error: String?, onBack: () -> Unit, onSettings: () -> Unit, onDownload: () -> Unit, onChannel: () -> Unit, onOpenChannel: (String) -> Unit, onVideo: (StreamInfoItem) -> Unit) {
-    if (fullscreen) {
+/** Video terbaru dari channel yang sedang ditonton; kosong sampai dimuat atau kalau channel gagal dibaca. */
+@Composable private fun rememberChannelUploads(channelUrl: String?): List<StreamInfoItem> {
+    var uploads by remember(channelUrl) { mutableStateOf<List<StreamInfoItem>>(emptyList()) }
+    LaunchedEffect(channelUrl) {
+        uploads = if (channelUrl.isNullOrBlank()) emptyList() else runCatching { VideoRepository.channelUploads(channelUrl) }.getOrDefault(emptyList())
+    }
+    return uploads
+}
+
+@Composable private fun WatchScreen(showDescription: Boolean, showComments: Boolean, onClosePanel: () -> Unit, watchAlpha: Float, info: StreamInfo, comments: CommentsState, onComments: () -> Unit, onDescription: () -> Unit, onLink: (String) -> Unit, onSeek: (Int) -> Unit, onShare: () -> Unit, onCopy: () -> Unit, player: ExoPlayer, hidden: Boolean, onFullscreen: () -> Unit, recommendations: List<StreamInfoItem>, channelVideos: List<StreamInfoItem>, error: String?, onBack: () -> Unit, onSettings: () -> Unit, onDownload: () -> Unit, onChannel: () -> Unit, onOpenChannel: (String) -> Unit, onVideo: (StreamInfoItem) -> Unit) {
+    if (hidden) {
         return
     }
     val panel = when { showDescription -> "description"; showComments -> "comments"; else -> null }
@@ -622,6 +681,7 @@ class MainActivity : ComponentActivity() {
     }
     BoxWithConstraints(Modifier.fillMaxSize().graphicsLayer { alpha = watchAlpha }) {
         val wide = maxWidth >= 840.dp
+        val related = recommendations.filter { item -> channelVideos.none { it.url == item.url } }
         if (wide) {
             Row(Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
@@ -634,8 +694,12 @@ class MainActivity : ComponentActivity() {
                     }
                 } else {
                     LazyColumn(Modifier.widthIn(min = 260.dp, max = 400.dp).weight(.5f), verticalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+                        if (channelVideos.isNotEmpty()) {
+                            item { Text("Dari ${info.uploaderName ?: "channel ini"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
+                            items(channelVideos) { item -> CompactVideoCard(item) { onVideo(item) } }
+                        }
                         item { Text("Video lainnya", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp)) }
-                        items(recommendations) { item -> CompactVideoCard(item) { onVideo(item) } }
+                        items(related) { item -> CompactVideoCard(item) { onVideo(item) } }
                     }
                 }
             }
@@ -643,8 +707,16 @@ class MainActivity : ComponentActivity() {
             LazyColumn(Modifier.fillMaxSize()) {
                 item { Spacer(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) }
                 item { VideoDetails(info, comments, error, onDownload, onChannel, onComments, onDescription, onShare, onCopy) }
+                if (channelVideos.isNotEmpty()) item {
+                    Column {
+                        Text("Dari ${info.uploaderName ?: "channel ini"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(channelVideos) { item -> VideoCard(item, Modifier.width(240.dp)) { onVideo(item) } }
+                        }
+                    }
+                }
                 if (recommendations.isEmpty()) item { Text("Video terkait tidak tersedia.", color = Color.LightGray, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
-                items(recommendations) { item -> VideoCard(item, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { onVideo(item) } }
+                items(related) { item -> VideoCard(item, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { onVideo(item) } }
             }
             // Like YouTube, the panel slides up from the bottom and covers everything below the player, which keeps playing.
             androidx.compose.animation.AnimatedContent(targetState = panel, modifier = Modifier.fillMaxSize(), label = "watch panel", transitionSpec = {
@@ -673,9 +745,9 @@ class MainActivity : ComponentActivity() {
     val currentTravelDistance by rememberUpdatedState(travelDistance)
     var origin by remember { mutableStateOf(Offset.Zero) }
     val swipeModifier = when {
-        fullscreen -> Modifier
         // Mini player: drag anywhere (snaps to the nearest corner or stashes at a side edge), pinch to resize around the fingers.
-        minimized -> Modifier.pointerInput(Unit) {
+        // Keyed on minimized: a pointerInput keeps its first lambda until its key changes, so without this the full-player swipe would keep running here.
+        minimized -> Modifier.pointerInput(minimized) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, Offset.Zero) }
@@ -703,14 +775,15 @@ class MainActivity : ComponentActivity() {
                 else if (dragging) tracker.calculateVelocity().let { miniState.release(Offset(it.x, it.y) / density) }
             }
         }
-        // Full player: swipe down to minimize.
-        else -> Modifier.pointerInput(Unit) {
+        // Full player: swipe down to minimize, following YouTube's WatchTransitionBehavior. Only vertical movement counts and sideways
+        // movement is ignored. A downward move past the slop starts the drag, measured from that point. Upward moves never start it.
+        // In fullscreen the same swipe leaves fullscreen (see App's onRelease).
+        else -> Modifier.pointerInput(minimized) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                val startPosition = down.position + origin
-                val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, startPosition) }
+                var anchor = down.position + origin
+                val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, anchor) }
                 var dragging = false
-                var rejected = false
                 var completed = false
                 try {
                     do {
@@ -718,15 +791,14 @@ class MainActivity : ComponentActivity() {
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
                         val currentPosition = change.position + origin
                         tracker.addPosition(change.uptimeMillis, currentPosition)
-                        val dx = currentPosition.x - startPosition.x
-                        val dy = currentPosition.y - startPosition.y
-                        if (!dragging && !rejected && (kotlin.math.abs(dx) > viewConfiguration.touchSlop || kotlin.math.abs(dy) > viewConfiguration.touchSlop)) {
-                            dragging = kotlin.math.abs(dy) > kotlin.math.abs(dx) && dy > 0
-                            rejected = !dragging
+                        // Checked on every move until the drag starts, so an earlier sideways or upward move does not block a later downward one.
+                        if (!dragging && currentPosition.y - anchor.y > viewConfiguration.touchSlop) {
+                            dragging = true
+                            anchor = currentPosition
                         }
                         if (dragging) {
                             change.consume()
-                            val fraction = (dy / currentTravelDistance.toPx()).coerceIn(0f, 1f)
+                            val fraction = ((currentPosition.y - anchor.y) / currentTravelDistance.toPx()).coerceIn(0f, 1f)
                             if (change.pressed) currentDrag(fraction) else {
                                 completed = true
                                 currentRelease(fraction, tracker.calculateVelocity().y / density)
@@ -758,7 +830,7 @@ class MainActivity : ComponentActivity() {
             view.useController = false
         }, onRelease = { it.player = null }, modifier = Modifier.fillMaxSize())
         if (minimized && progress > .9f) {
-            MiniPlayerControls(player, playing, buffering, miniState.width.value.dp, miniState.large, onExpand = onExpand, onClose = onClose, onToggleSize = { miniState.toggleSize() })
+            MiniPlayerControls(player, playing, buffering, miniState.width.value.dp, onExpand = onExpand, onClose = onClose)
         } else if (progress < .1f) {
             PlayerControlsOverlay(player, playing, buffering, fullscreen, title, previewFrames, segments, onBack, onSettings, onShare, onFullscreen, onNext)
         }

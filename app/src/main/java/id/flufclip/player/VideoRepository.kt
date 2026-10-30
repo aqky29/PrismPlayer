@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit
 object VideoRepository {
     private val avatarCache = ConcurrentHashMap<String, String>()
     private val avatarRequests = Semaphore(3)
+    private val uploadsCache = ConcurrentHashMap<String, List<StreamInfoItem>>()
     private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(25, TimeUnit.SECONDS).build()
     init {
         NewPipe.init(object : Downloader() {
@@ -114,6 +115,18 @@ object VideoRepository {
             result.relatedItems.filterIsInstance<StreamInfoItem>()
         }
         ChannelPage(info, videos)
+    }
+    /** Video dari tab Video channel untuk bagian "Dari channel ini"; hasil yang berhasil disimpan di memori selama aplikasi berjalan. */
+    suspend fun channelUploads(url: String): List<StreamInfoItem> = withContext(Dispatchers.IO) {
+        uploadsCache[url]?.let { return@withContext it }
+        val service = NewPipe.getService("YouTube")
+        val tab = ChannelInfo.getInfo(service, url).tabs.firstOrNull { ChannelTabs.VIDEOS in it.contentFilters }
+        val items = if (tab == null) emptyList() else {
+            val result = ChannelTabInfo.getInfo(service, tab)
+            if (result.relatedItems.isEmpty() && result.errors.isNotEmpty()) error("Gagal membaca video channel: ${result.errors.first().message}")
+            result.relatedItems.filterIsInstance<StreamInfoItem>()
+        }
+        items.also { uploadsCache[url] = it }
     }
     suspend fun channelTab(page: ChannelPage, filter: String): List<InfoItem> = withContext(Dispatchers.IO) {
         val tab = page.info.tabs.firstOrNull { filter in it.contentFilters } ?: return@withContext emptyList()

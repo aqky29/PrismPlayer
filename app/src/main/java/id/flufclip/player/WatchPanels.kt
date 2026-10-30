@@ -287,8 +287,9 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 @Composable private fun CommentRow(comment: CommentsInfoItem, info: StreamInfo, creatorAvatar: String?, avatarSize: Int, onLink: (String) -> Unit, onChannel: (String) -> Unit,
     onReplies: (() -> Unit)?, modifier: Modifier = Modifier, expandedByDefault: Boolean = false) {
     val channelUrl = comment.uploaderUrl?.takeIf { it.isNotBlank() }
+    val avatarUrl = rememberAvatarUrl(comment.uploaderAvatars.lastOrNull()?.url, channelUrl)
     Row(modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp)) {
-        Box(Modifier.clickable(enabled = channelUrl != null) { channelUrl?.let(onChannel) }) { Avatar(comment.uploaderAvatars.lastOrNull()?.url, comment.uploaderName, avatarSize) }
+        Box(Modifier.clickable(enabled = channelUrl != null) { channelUrl?.let(onChannel) }) { Avatar(avatarUrl, comment.uploaderName, avatarSize) }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             if (comment.isPinned) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
                 PinGlyph(Modifier.size(12.dp))
@@ -407,10 +408,20 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 }
 
 @Composable internal fun Avatar(url: String?, name: String?, size: Int, modifier: Modifier = Modifier) {
+    var failed by remember(url) { mutableStateOf(false) }
     Box(modifier.size(size.dp).clip(RoundedCornerShape(50)).background(Color(0xFF5F5F5F)), contentAlignment = Alignment.Center) {
-        Text(name?.trimStart('@')?.firstOrNull()?.uppercase() ?: "", fontSize = (size * .45f).sp, color = Color.White)
-        url?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+        if (url == null || failed) Text(name?.trimStart('@')?.firstOrNull()?.uppercase() ?: "", fontSize = (size * .45f).sp, color = Color.White)
+        url?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), onError = { failed = true }) }
     }
+}
+
+/** Foto profil komentar; kalau kosong, pakai foto channel penulisnya (hasilnya di-cache di VideoRepository). */
+@Composable private fun rememberAvatarUrl(suppliedUrl: String?, channelUrl: String?): String? {
+    var avatar by remember(channelUrl, suppliedUrl) { mutableStateOf(suppliedUrl?.takeIf { it.isNotBlank() }) }
+    LaunchedEffect(channelUrl, suppliedUrl) {
+        if (suppliedUrl.isNullOrBlank() && !channelUrl.isNullOrBlank()) avatar = VideoRepository.channelAvatar(channelUrl)
+    }
+    return avatar
 }
 
 @Composable private fun PanelMessage(text: String) { Text(text, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(16.dp)) }

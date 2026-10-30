@@ -51,7 +51,7 @@ private val snapSpec = tween<Float>(500, easing = OvershootEasing)
 private val snapOffsetSpec = tween<Offset>(500, easing = OvershootEasing)
 
 /** Size limits for the floating mini player, all in dp, following YouTube's `qxo` formulas. */
-internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val bottomBar: Float, val inset: Float, val min: Float, val max: Float, val default: Float, val large: Float) {
+internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val bottomBar: Float, val inset: Float, val min: Float, val max: Float, val default: Float) {
     companion object {
         fun of(maxWidth: Dp, maxHeight: Dp, bottomBar: Dp): MiniLimits {
             val w = maxWidth.value; val h = maxHeight.value; val bar = bottomBar.value
@@ -60,7 +60,7 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
             val usableHeight = (h - bar - 2 * inset).coerceAtLeast(60f)
             val max = minOf(if (w >= 1024f) 720f else 640f, shortSide - 2 * inset, usableHeight * 16f / 9f).coerceAtLeast(100f)
             val min = minOf(192f, max)
-            return MiniLimits(w, h, bar, inset, min, max, (shortSide / 2f - inset).coerceIn(min, max), minOf(shortSide - 2 * inset, max))
+            return MiniLimits(w, h, bar, inset, min, max, (shortSide / 2f - inset).coerceIn(min, max))
         }
     }
 }
@@ -70,7 +70,7 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
  * pinched around the fingers' focal point with a rubber band past its limits, and can be stashed off the left/right edge.
  */
 @Stable internal class MiniPlayerState(private val scope: CoroutineScope) {
-    var limits = MiniLimits(360f, 640f, 56f, 8f, 192f, 344f, 192f, 344f)
+    var limits = MiniLimits(360f, 640f, 56f, 8f, 192f, 344f, 192f)
     /** Bit 0 = right, bit 1 = bottom. YouTube starts bottom right. */
     var corner by mutableIntStateOf(3)
     /** -1 stashed off the left edge, 1 off the right edge, 0 visible. */
@@ -80,7 +80,6 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
     val width = Animatable(0f)
     val position = Animatable(Offset.Zero, Offset.VectorConverter)
     val height get() = width.value * 9f / 16f
-    val large get() = width.value >= limits.large * .8f
 
     private fun target() = (preferred ?: limits.default).coerceIn(limits.min, limits.max)
     private fun top() = limits.inset
@@ -101,7 +100,6 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
 
     fun show() { stashed = 0; settle(animate = false) }
     fun unstash() { stashed = 0; settle(animate = true) }
-    fun toggleSize() { preferred = if (large) limits.default else limits.large; settle(animate = true) }
 
     fun drag(delta: Offset) { launchNow { position.snapTo(position.value + delta) } }
 
@@ -139,7 +137,7 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
 }
 
 /** Overlay of the floating mini player: close, maximize, ±10 s, centre play/pause with buffering ring, 2 dp time bar. */
-@Composable internal fun MiniPlayerControls(player: ExoPlayer, playing: Boolean, buffering: Boolean, width: Dp, large: Boolean, onExpand: () -> Unit, onClose: () -> Unit, onToggleSize: () -> Unit) {
+@Composable internal fun MiniPlayerControls(player: ExoPlayer, playing: Boolean, buffering: Boolean, width: Dp, onExpand: () -> Unit, onClose: () -> Unit) {
     var visible by remember { mutableStateOf(true) }
     var interaction by remember { mutableIntStateOf(0) }
     var fraction by remember { mutableFloatStateOf(0f) }
@@ -162,9 +160,6 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .4f))) {
                 MiniButton("Buka pemutar", { onExpand() }, Modifier.align(Alignment.TopStart)) { MiniGlyph("maximize", Modifier.size(20.dp)) }
                 MiniButton("Tutup video", onClose, Modifier.align(Alignment.TopEnd)) { Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(22.dp)) }
-                MiniButton(if (large) "Perkecil mini player" else "Perbesar mini player", { touch(); onToggleSize() }, Modifier.align(Alignment.BottomEnd).padding(bottom = 2.dp)) {
-                    MiniGlyph(if (large) "shrink" else "grow", Modifier.size(18.dp))
-                }
                 Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (width >= 300.dp) 24.dp else 8.dp)) {
                     if (width >= 240.dp) MiniButton("Mundur 10 detik", { skip(-10_000) }) { SkipGlyph(forward = false) }
                     Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = .35f)).clickable { touch(); if (playing) player.pause() else player.play() }
@@ -227,8 +222,6 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
                 drawRect(white, Offset(w * .3f, w * .3f), Size(w * .62f, w * .62f), style = Stroke(stroke))
                 arrow(Offset(w * .62f, w * .62f), Offset(w * .08f, w * .08f))
             }
-            "grow" -> { arrow(Offset(w * .55f, w * .45f), Offset(w * .92f, w * .08f)); arrow(Offset(w * .45f, w * .55f), Offset(w * .08f, w * .92f)) }
-            "shrink" -> { arrow(Offset(w * .92f, w * .08f), Offset(w * .58f, w * .42f)); arrow(Offset(w * .08f, w * .92f), Offset(w * .42f, w * .58f)) }
         }
     }
 }
