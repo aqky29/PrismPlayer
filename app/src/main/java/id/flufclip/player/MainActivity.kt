@@ -589,7 +589,7 @@ class MainActivity : ComponentActivity() {
                 val endY = (maxHeight - miniHeight - bottomGap).coerceAtLeast(0.dp)
                 val x = startX + (endX - startX) * progress
                 val y = endY * progress
-                FloatingPlayer(player = player, title = playing.name, fullscreen = fullscreen, minimized = minimized, progress = progress, travelDistance = endY.coerceAtLeast(180.dp),
+                FloatingPlayer(player = player, title = playing.name, previewFrames = playing.previewFrames, fullscreen = fullscreen, minimized = minimized, progress = progress, travelDistance = endY.coerceAtLeast(180.dp),
                     modifier = Modifier.offset(x = x, y = y).size(width, height),
                     onNext = playing.relatedItems.filterIsInstance<StreamInfoItem>().firstOrNull { it.url != playing.url }?.let { next -> { open(next) } },
                     onBack = { back() }, onSettings = { showQuality = true }, onShare = { shareVideo(playing) }, onFullscreen = { setFullscreen(!fullscreen) },
@@ -658,7 +658,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable private fun FloatingPlayer(
-    player: ExoPlayer, title: String, fullscreen: Boolean, minimized: Boolean, progress: Float, travelDistance: androidx.compose.ui.unit.Dp,
+    player: ExoPlayer, title: String, previewFrames: List<org.schabi.newpipe.extractor.stream.Frameset>, fullscreen: Boolean, minimized: Boolean, progress: Float, travelDistance: androidx.compose.ui.unit.Dp,
     modifier: Modifier, onNext: (() -> Unit)?, onBack: () -> Unit, onSettings: () -> Unit, onShare: () -> Unit, onFullscreen: () -> Unit,
     onExpand: () -> Unit, onClose: () -> Unit, onResize: (Float) -> Unit, onToggleSize: () -> Unit, onDrag: (Float) -> Unit, onCancelDrag: () -> Unit, onRelease: (Float, Float) -> Unit
 ) {
@@ -742,7 +742,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         } else if (progress < .1f) {
-            PlayerControlsOverlay(player, playing, buffering, fullscreen, title, onBack, onSettings, onShare, onFullscreen, onNext)
+            PlayerControlsOverlay(player, playing, buffering, fullscreen, title, previewFrames, onBack, onSettings, onShare, onFullscreen, onNext)
         }
     }
 }

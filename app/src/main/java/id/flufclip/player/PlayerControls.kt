@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -28,22 +29,32 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import org.schabi.newpipe.extractor.stream.Frameset
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -53,7 +64,7 @@ private val PlayedRed = Color(0xFFFF0033)
  * YouTube-like controls on top of the inline/fullscreen video: tap toggles, double tap seeks 10s (further taps on the
  * same side keep adding), long press plays at 2x, centre previous/play/next, red time bar with scrubber.
  */
-@Composable internal fun PlayerControlsOverlay(player: ExoPlayer, playing: Boolean, buffering: Boolean, fullscreen: Boolean, title: String,
+@Composable internal fun PlayerControlsOverlay(player: ExoPlayer, playing: Boolean, buffering: Boolean, fullscreen: Boolean, title: String, previewFrames: List<Frameset>,
     onBack: () -> Unit, onSettings: () -> Unit, onShare: () -> Unit, onFullscreen: () -> Unit, onNext: (() -> Unit)?, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     var controlsVisible by remember { mutableStateOf(true) }
@@ -101,7 +112,7 @@ private val PlayedRed = Color(0xFFFF0033)
         }
     }
     val scrim by animateFloatAsState(if (controlsVisible && !fastForward) .45f else 0f, tween(200), label = "scrim")
-    Box(modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = scrim)).pointerInput(player) {
             detectTapGestures(
                 onTap = { tap ->
@@ -142,8 +153,6 @@ private val PlayedRed = Color(0xFFFF0033)
                     }
                     CircleButton("Video berikutnya", 44, enabled = onNext != null, onClick = { interaction++; onNext?.invoke() }) { PlayerGlyph("next", Modifier.size(20.dp)) }
                 }
-                if (scrubbing) Text(playerClock(scrubPosition), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Medium,
-                    modifier = Modifier.align(Alignment.Center).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = .6f)).padding(horizontal = 14.dp, vertical = 6.dp))
                 Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 12.dp, end = 4.dp, bottom = if (fullscreen) 40.dp else 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(playerClock(if (scrubbing) scrubPosition else position), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     Text(" / ${if (duration > 0) playerClock(duration) else "--:--"}", color = Color.White.copy(alpha = .7f), fontSize = 12.sp)
@@ -158,6 +167,39 @@ private val PlayedRed = Color(0xFFFF0033)
             onScrubEnd = { player.seekTo(scrubPosition); position = scrubPosition; scrubbing = false; interaction++ },
             onTap = { if (!controlsVisible) { controlsVisible = true; interaction++ } else scope.launch { player.seekTo(it); position = it; interaction++ } },
             modifier = Modifier.align(Alignment.BottomCenter))
+        if (scrubbing) ScrubPreview(previewFrames, scrubPosition, duration, maxWidth, maxHeight, fullscreen)
+    }
+}
+
+/** Storyboard frame (when YouTube provides one) and time above the scrubber, following the finger like YouTube. */
+@Composable private fun BoxScope.ScrubPreview(framesets: List<Frameset>, position: Long, duration: Long, maxWidth: Dp, maxHeight: Dp, fullscreen: Boolean) {
+    val frameset = remember(framesets) { framesets.filter { it.frameWidth <= 320 }.maxByOrNull { it.frameWidth } ?: framesets.minByOrNull { it.frameWidth } }
+    val bounds = remember(frameset, position) { frameset?.let { runCatching { it.getFrameBoundsAt(position) }.getOrNull() } }
+    val sheetUrl = bounds?.let { frameset?.urls?.getOrNull(it[0]) }
+    val context = LocalContext.current
+    var sheet by remember { mutableStateOf<Pair<String, ImageBitmap>?>(null) }
+    LaunchedEffect(sheetUrl) {
+        if (sheetUrl == null || sheet?.first == sheetUrl) return@LaunchedEffect
+        val result = context.imageLoader.execute(ImageRequest.Builder(context).data(sheetUrl).allowHardware(false).build())
+        val bitmap = (result as? SuccessResult)?.drawable?.let { (it as? android.graphics.drawable.BitmapDrawable)?.bitmap }
+        if (bitmap != null) sheet = sheetUrl to bitmap.asImageBitmap()
+    }
+    val image = sheet?.takeIf { it.first == sheetUrl }?.second
+    val previewWidth = if (fullscreen) 200.dp else minOf(150.dp, maxWidth * .4f)
+    val previewHeight = if (frameset != null && frameset.frameWidth > 0) previewWidth * (frameset.frameHeight.toFloat() / frameset.frameWidth) else previewWidth * 9f / 16f
+    val fraction = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
+    val x = (maxWidth * fraction - previewWidth / 2).coerceIn(8.dp, (maxWidth - previewWidth - 8.dp).coerceAtLeast(8.dp))
+    val bottom = if (fullscreen) 64.dp else 26.dp
+    val showImage = bounds != null && (previewHeight + 28.dp + bottom) < maxHeight
+    Column(Modifier.align(Alignment.BottomStart).offset(x = x).padding(bottom = bottom).width(previewWidth), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (showImage) Box(Modifier.size(previewWidth, previewHeight).clip(RoundedCornerShape(8.dp)).background(Color(0xFF202020)).border(1.5.dp, Color.White, RoundedCornerShape(8.dp))) {
+            if (image != null && bounds != null) Canvas(Modifier.fillMaxSize()) {
+                drawImage(image, srcOffset = IntOffset(bounds[1], bounds[2]), srcSize = IntSize(bounds[3] - bounds[1], bounds[4] - bounds[2]),
+                    dstSize = IntSize(size.width.toInt(), size.height.toInt()))
+            }
+        }
+        Text(playerClock(position), color = Color.White, fontSize = if (showImage) 14.sp else 22.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = .6f)).padding(horizontal = 8.dp, vertical = 2.dp))
     }
 }
 
