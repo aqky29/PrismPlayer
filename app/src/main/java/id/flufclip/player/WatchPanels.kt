@@ -2,6 +2,7 @@ package id.flufclip.player
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -51,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.comments.CommentsInfo
@@ -171,13 +174,21 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
     navigation: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     val scope = rememberCoroutineScope()
     val offset = remember { Animatable(0f) }
+    var panelHeight by remember { mutableIntStateOf(0) }
     val dismissDistance = with(LocalDensity.current) { 120.dp.toPx() }
     val drag = if (!draggable) Modifier else Modifier.draggable(orientation = Orientation.Vertical,
-        state = rememberDraggableState { delta -> scope.launch { offset.snapTo((offset.value + delta).coerceAtLeast(0f)) } },
-        onDragStopped = { velocity -> if (offset.value > dismissDistance || velocity > 1500f) onDismiss() else scope.launch { offset.animateTo(0f) } })
-    Column(modifier.offset { IntOffset(0, offset.value.roundToInt()) }.clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(Background)) {
+        state = rememberDraggableState { delta -> scope.launch(start = CoroutineStart.UNDISPATCHED) { offset.snapTo((offset.value + delta).coerceAtLeast(0f)) } },
+        onDragStopped = { velocity ->
+            scope.launch {
+                if (offset.value > dismissDistance || velocity > 1500f) {
+                    offset.animateTo(panelHeight.toFloat().coerceAtLeast(offset.value), tween(200))
+                    onDismiss()
+                } else offset.animateTo(0f)
+            }
+        })
+    Column(modifier.onSizeChanged { panelHeight = it.height }.offset { IntOffset(0, offset.value.roundToInt()) }.clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(Background)) {
         Column(drag) {
-            if (draggable) Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(40.dp, 4.dp).clip(RoundedCornerShape(50)).background(Color(0xFF606060))) }
+            Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(40.dp, 4.dp).clip(RoundedCornerShape(50)).background(Color(0xFF606060))) }
             Row(Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 navigation?.invoke()
                 Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -216,7 +227,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
     }
 }
 
-@Composable internal fun CommentsPanel(state: CommentsState, info: StreamInfo, draggable: Boolean, onDismiss: () -> Unit, onLink: (String) -> Unit, onChannel: (String) -> Unit, modifier: Modifier = Modifier) {
+@Composable internal fun CommentsPanel(state: CommentsState, info: StreamInfo, draggable: Boolean, onDismiss: () -> Unit, onLink: (String) -> Unit, onChannel: (String) -> Unit, modifier: Modifier = Modifier, showCount: Boolean = true) {
     var thread by remember(state) { mutableStateOf<CommentsInfoItem?>(null) }
     BackHandler(thread != null) { thread = null }
     val creatorAvatar = info.uploaderAvatars.lastOrNull()?.url
@@ -228,14 +239,14 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
         return
     }
     val count = state.info?.commentsCount?.takeIf { it >= 0 }
-    EngagementPanel("Komentar", count?.let { formatCount(it.toLong()) }, draggable, onDismiss, modifier) {
+    EngagementPanel("Komentar", if (showCount) count?.let { formatCount(it.toLong()) } else null, draggable, onDismiss, modifier) {
         val listState = rememberLazyListState()
         val nearEnd by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index?.let { it >= listState.layoutInfo.totalItemsCount - 3 } == true } }
         LaunchedEffect(nearEnd, state.next) { if (nearEnd && state.next != null && state.error == null) state.loadMore() }
         LazyColumn(Modifier.fillMaxWidth().weight(1f), state = listState, contentPadding = PaddingValues(vertical = 8.dp)) {
             if (state.info?.isCommentsDisabled == true) item { PanelMessage("Komentar dinonaktifkan.") }
             items(state.items, key = { it.commentId ?: it.hashCode().toString() }) { comment ->
-                CommentRow(comment, info, creatorAvatar, avatarSize = 32, onLink = onLink, onChannel = onChannel, onReplies = { thread = comment })
+                CommentRow(comment, info, creatorAvatar, avatarSize = 24, onLink = onLink, onChannel = onChannel, onReplies = { thread = comment })
             }
             if (!state.loading && state.info?.isCommentsDisabled == false && state.items.isEmpty() && state.error == null) item { PanelMessage("Belum ada komentar.") }
             if (state.loading) item { PanelSpinner() }
@@ -272,7 +283,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
     LaunchedEffect(nearEnd, next) { if (nearEnd && next != null && error == null && replies.isNotEmpty()) load() }
     LazyColumn(Modifier.fillMaxWidth(), state = listState, contentPadding = PaddingValues(vertical = 8.dp)) {
         item {
-            Column(Modifier.background(Color(0xFF1A1A1A))) { CommentRow(parent, info, creatorAvatar, avatarSize = 32, onLink = onLink, onChannel = onChannel, onReplies = null, expandedByDefault = true) }
+            Column(Modifier.background(Color(0xFF1A1A1A))) { CommentRow(parent, info, creatorAvatar, avatarSize = 24, onLink = onLink, onChannel = onChannel, onReplies = null, expandedByDefault = true) }
             HorizontalDivider(color = PanelLine)
         }
         items(replies, key = { it.commentId ?: it.hashCode().toString() }) { reply ->
@@ -318,8 +329,8 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
             if (onReplies != null && comment.replies != null && replyCount != 0) {
                 Row(Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onReplies).padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (comment.hasCreatorReply()) Avatar(creatorAvatar, info.uploaderName, 20, Modifier.padding(end = 6.dp))
-                    else Icon(Icons.Default.KeyboardArrowDown, null, tint = LinkBlue, modifier = Modifier.size(18.dp))
-                    Text(if (replyCount > 0) "$replyCount balasan" else "Lihat balasan", color = LinkBlue, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 4.dp))
+                    Text(if (replyCount > 0) "$replyCount balasan" else "Lihat balasan", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 4.dp))
+                    Text(" ›", color = Color.White, fontSize = 18.sp)
                 }
             }
         }
@@ -329,28 +340,40 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 // ---------- description ----------
 
 @Composable internal fun DescriptionTeaser(info: StreamInfo, onClick: () -> Unit) {
+    val isLive = info.isOngoingLive()
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Text(info.name, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(info.name, fontSize = 18.sp, lineHeight = 24.sp, fontFamily = YouTubeSansBold, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         val tags = info.tags.take(2).map { "#" + it.replace(" ", "") }
-        val meta = listOfNotNull(info.viewCount.takeIf { it >= 0 }?.let { "${formatCount(it)} x ditonton" }, relativeTime(info.uploadDate, info.textualUploadDate)) + tags
+        val meta = if (isLive) {
+            val viewers = info.viewCount.takeIf { it >= 0 }?.let { "${formatCount(it)} sedang menonton" } ?: "Siaran langsung"
+            listOf(viewers, "LIVE") + tags
+        } else {
+            listOfNotNull(info.viewCount.takeIf { it >= 0 }?.let { "${formatCount(it)} x ditonton" }, relativeTime(info.uploadDate, info.textualUploadDate)) + tags
+        }
         Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(meta.joinToString("  "), color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(meta.joinToString("  ·  "), color = if (isLive) Color(0xFFFF5252) else Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Text("  ...selengkapnya", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         }
     }
 }
 
 @Composable internal fun DescriptionPanel(info: StreamInfo, draggable: Boolean, onDismiss: () -> Unit, onLink: (String) -> Unit, onSeek: (Int) -> Unit, onChannel: () -> Unit, modifier: Modifier = Modifier) {
+    val isLive = info.isOngoingLive()
     EngagementPanel("Deskripsi", null, draggable, onDismiss, modifier) {
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text(info.name, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold)
+            Text(info.name, fontSize = 18.sp, lineHeight = 24.sp, fontFamily = YouTubeSansBold, fontWeight = FontWeight.Bold)
             Row(Modifier.fillMaxWidth().padding(vertical = 20.dp)) {
                 val date = info.uploadDate?.offsetDateTime()
                 val locale = java.util.Locale("id", "ID")
                 DescriptionStat(if (info.likeCount >= 0) fullCount(info.likeCount) else "–", "Suka")
-                DescriptionStat(if (info.viewCount >= 0) fullCount(info.viewCount) else "–", "Penayangan")
-                if (date != null) DescriptionStat(date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", locale)), date.year.toString())
-                else DescriptionStat(info.textualUploadDate?.takeIf { it.isNotBlank() } ?: "–", "Diunggah")
+                DescriptionStat(if (info.viewCount >= 0) fullCount(info.viewCount) else "–", if (isLive) "Menonton" else "Penayangan")
+                if (isLive) {
+                    DescriptionStat("LIVE", "Status")
+                } else if (date != null) {
+                    DescriptionStat(date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", locale)), date.year.toString())
+                } else {
+                    DescriptionStat(info.textualUploadDate?.takeIf { it.isNotBlank() } ?: "–", "Diunggah")
+                }
             }
             val html = richHtml(info.description)
             if (info.description?.content.isNullOrBlank()) Text("Tidak ada deskripsi.", color = Muted, fontSize = 14.sp)

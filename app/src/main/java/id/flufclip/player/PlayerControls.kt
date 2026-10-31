@@ -18,6 +18,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -40,6 +42,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
@@ -69,7 +72,7 @@ import org.schabi.newpipe.extractor.stream.Frameset
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val PlayedRed = Color(0xFFFF0033)
+private val PlayedRed = Color(0xFFFF0000) // YouTube Red (#FF0000)
 
 /** Player preferences that YouTube exposes in its settings (currently the double-tap seek length). */
 internal object PlayerSettings {
@@ -89,8 +92,9 @@ internal object PlayerSettings {
  * side keep adding), holding plays at 2x (or rewinds at 2x on the left third), centre previous/play/next, chaptered
  * red time bar whose scrubber can be pulled up for precise seeking.
  */
-@Composable internal fun PlayerControlsOverlay(player: ExoPlayer, playing: Boolean, buffering: Boolean, fullscreen: Boolean, title: String, previewFrames: List<Frameset>, segments: List<StreamSegment>,
-    onBack: () -> Unit, onSettings: () -> Unit, onShare: () -> Unit, onFullscreen: () -> Unit, onNext: (() -> Unit)?, modifier: Modifier = Modifier) {
+@Composable internal fun PlayerControlsOverlay(player: ExoPlayer, playing: Boolean, buffering: Boolean, fullscreen: Boolean, title: String, isLive: Boolean, autoplay: Boolean, hasSubtitles: Boolean, subtitlesEnabled: Boolean, previewFrames: List<Frameset>, segments: List<StreamSegment>,
+    onBack: () -> Unit, onSettings: () -> Unit, onAutoplay: () -> Unit, onSubtitles: () -> Unit, onFullscreen: () -> Unit, onPrevious: (() -> Unit)?, onNext: (() -> Unit)?,
+    hasChat: Boolean = isLive, showChatOverlay: Boolean = false, onToggleChatOverlay: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     remember { PlayerSettings.load(context) }
@@ -193,32 +197,54 @@ internal object PlayerSettings {
         AnimatedVisibility(controlsVisible && speedHold == 0, enter = fadeIn(tween(150)), exit = fadeOut(tween(200)), modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize()) {
                 if (!scrubbing) Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(horizontal = 4.dp, vertical = if (fullscreen) 12.dp else 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ControlButton("Minimalkan video", { interaction++; onBack() }) { Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
-                    if (fullscreen) Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 4.dp))
+                    ControlButton("Minimalkan video", { interaction++; onBack() }) { Image(painterResource(R.drawable.yt_chevron_down), null, modifier = Modifier.size(24.dp), colorFilter = ColorFilter.tint(Color.White)) }
+                    if (fullscreen) Text(title, color = Color.White, fontSize = 16.sp, fontFamily = YouTubeSansBold, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 4.dp))
                     else Spacer(Modifier.weight(1f))
-                    ControlButton("Bagikan video", { interaction++; onShare() }) { PlayerGlyph("share", Modifier.size(22.dp)) }
-                    ControlButton("Pengaturan video", { interaction++; onSettings() }) { Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(22.dp)) }
+                    if (fullscreen && hasChat && onToggleChatOverlay != null) {
+                        ControlButton(if (showChatOverlay) "Sembunyikan chat" else "Tampilkan chat", { interaction++; onToggleChatOverlay() }) {
+                            Image(painterResource(if (showChatOverlay) R.drawable.yt_chat_on else R.drawable.yt_chat_off), contentDescription = "Chat", modifier = Modifier.size(24.dp))
+                        }
+                    }
+                    ControlButton(if (autoplay) "Nonaktifkan putar otomatis" else "Aktifkan putar otomatis", { interaction++; onAutoplay() }) {
+                        Box(Modifier.size(width = 42.dp, height = 24.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = .28f)), contentAlignment = if (autoplay) Alignment.CenterEnd else Alignment.CenterStart) {
+                            Box(Modifier.padding(2.dp).size(20.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+                                Image(painterResource(if (autoplay) R.drawable.yt_autoplay_play else R.drawable.yt_autoplay_pause), null, modifier = Modifier.size(18.dp), colorFilter = ColorFilter.tint(Color.Black))
+                            }
+                        }
+                    }
+                    ControlButton(if (subtitlesEnabled) "Subtitle aktif" else "Subtitle", { interaction++; if (hasSubtitles) onSubtitles() }) {
+                        Image(painterResource(if (subtitlesEnabled) R.drawable.yt_cc_active else R.drawable.yt_cc), contentDescription = null, modifier = Modifier.size(24.dp).graphicsLayer { alpha = if (hasSubtitles) 1f else .4f })
+                    }
+                    ControlButton("Pengaturan video", { interaction++; onSettings() }) { Image(painterResource(R.drawable.yt_settings), null, modifier = Modifier.size(24.dp)) }
                 }
                 // YouTube: 56 dp play/pause in an 80 dp touch area, 40 dp previous/next in 48 dp, 24 dp apart (40 dp fullscreen).
                 if (!scrubbing) Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (fullscreen) 40.dp else 24.dp)) {
-                    val canRestart = position > 3_000L
-                    CircleButton("Video sebelumnya", 40, 48, enabled = canRestart, onClick = { interaction++; player.seekTo(0) }) { PlayerGlyph("previous", Modifier.size(18.dp)) }
+                    val canRestart = position > 3_000L && !isLive
+                    CircleButton("Video sebelumnya", 40, 48, enabled = canRestart || onPrevious != null, onClick = { interaction++; if (canRestart) player.seekTo(0) else onPrevious?.invoke() }) { Image(painterResource(R.drawable.yt_previous), null, Modifier.size(24.dp)) }
                     if (buffering && !ended) Box(Modifier.size(80.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(44.dp), color = Color.White, strokeWidth = 3.dp) }
                     else CircleButton(if (ended) "Putar ulang" else if (playing) "Jeda" else "Putar", 56, 80, onClick = { togglePlay() }) {
-                        PlayerGlyph(if (ended) "replay" else if (playing) "pause" else "play", Modifier.size(26.dp))
+                        Image(painterResource(if (ended) R.drawable.yt_replay else if (playing) R.drawable.yt_pause else R.drawable.yt_play), null, Modifier.size(36.dp))
                     }
-                    CircleButton("Video berikutnya", 40, 48, enabled = onNext != null, onClick = { interaction++; onNext?.invoke() }) { PlayerGlyph("next", Modifier.size(18.dp)) }
+                    CircleButton("Video berikutnya", 40, 48, enabled = onNext != null, onClick = { interaction++; onNext?.invoke() }) { Image(painterResource(R.drawable.yt_next), null, Modifier.size(24.dp)) }
                 }
                 Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = if (fullscreen) 16.dp else 12.dp, end = 4.dp, bottom = if (fullscreen) 40.dp else 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(playerClock(if (scrubbing) scrubPosition else position), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                    Text(" / ${if (duration > 0) playerClock(duration) else "--:--"}", color = Color.White.copy(alpha = .7f), fontSize = 12.sp)
+                    if (isLive && !scrubbing) {
+                        Row(Modifier.clip(RoundedCornerShape(50)).clickable(enabled = player.isCurrentMediaItemSeekable) { player.seekToDefaultPosition(); interaction++ }.padding(horizontal = 4.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(7.dp).clip(CircleShape).background(PlayedRed))
+                            Spacer(Modifier.width(5.dp))
+                            Text("LIVE", color = Color.White, fontSize = 12.sp, fontFamily = YouTubeSansBold, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Text(playerClock(if (scrubbing) scrubPosition else position), color = Color.White, fontSize = 12.sp, fontFamily = YouTubeSansBold, fontWeight = FontWeight.Medium)
+                        Text(" / ${if (duration > 0) playerClock(duration) else "--:--"}", color = Color.White.copy(alpha = .7f), fontSize = 12.sp, fontFamily = YouTubeSansBold)
+                    }
                     if (chapter != null && !scrubbing) Text("  •  $chapter  ›", color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.weight(1f))
-                    ControlButton(if (fullscreen) "Keluar layar penuh" else "Layar penuh", { interaction++; onFullscreen() }) { PlayerGlyph(if (fullscreen) "exitFullscreen" else "fullscreen", Modifier.size(20.dp)) }
+                    ControlButton(if (fullscreen) "Keluar layar penuh" else "Layar penuh", { interaction++; onFullscreen() }) { Image(painterResource(if (fullscreen) R.drawable.yt_fullscreen_exit else R.drawable.yt_fullscreen), null, Modifier.size(24.dp)) }
                 }
             }
         }
-        if (speedHold == 0) TimeBar(position = if (scrubbing) scrubPosition else position, buffered = buffered, duration = duration, segments = segments, expanded = controlsVisible, fullscreen = fullscreen,
+        if (speedHold == 0) TimeBar(position = if (isLive && duration == 0L) 1L else if (scrubbing) scrubPosition else position, buffered = buffered, duration = if (isLive && duration == 0L) 1L else duration, segments = segments, expanded = controlsVisible, fullscreen = fullscreen,
             enabled = duration > 0 && player.isCurrentMediaItemSeekable,
             onScrub = { value, fine -> scrubbing = true; fineScrub = fine; scrubPosition = value; controlsVisible = true; interaction++ },
             onScrubEnd = { player.seekTo(scrubPosition); position = scrubPosition; scrubbing = false; fineScrub = false; interaction++ },
@@ -271,7 +297,7 @@ internal object PlayerSettings {
     val label: @Composable (Boolean) -> Unit = { big ->
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = .6f)).padding(horizontal = 8.dp, vertical = 2.dp)) {
             if (chapter != null) Text(chapter, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(playerClock(position), color = Color.White, fontSize = if (big) 22.sp else 14.sp, fontWeight = FontWeight.Medium)
+            Text(playerClock(position), color = Color.White, fontSize = if (big) 22.sp else 14.sp, fontFamily = YouTubeSansBold, fontWeight = FontWeight.Medium)
         }
     }
     if (!fine && maxHeight >= 150.dp) Text("Tarik ke atas untuk pencarian presisi", color = Color.White, fontSize = 12.sp,
@@ -311,15 +337,16 @@ internal object PlayerSettings {
     var width by remember { mutableIntStateOf(1) }
     var dragging by remember { mutableStateOf(false) }
     val dot by animateDpAsState(if (dragging) 20.dp else if (expanded) 12.dp else 0.dp, tween(150), label = "scrubber")
-    val thickness = if (expanded || dragging) 3.dp else 2.dp
-    val side = with(LocalDensity.current) { (if (fullscreen) 16.dp else 0.dp).toPx() }
+    val thickness = if (dragging) 4.dp else if (expanded) 3.dp else 2.dp
+    val sideDp by animateDpAsState(if (fullscreen) 16.dp else if (expanded || dragging) 12.dp else 0.dp, tween(150), label = "timeBarSide")
+    val side = with(LocalDensity.current) { sideDp.toPx() }
     val currentScrub by rememberUpdatedState(onScrub)
     val currentEnd by rememberUpdatedState(onScrubEnd)
     val currentTap by rememberUpdatedState(onTap)
     fun span() = (width - 2 * side).coerceAtLeast(1f)
     fun at(x: Float): Long = if (duration <= 0) 0L else (((x - side) / span()).coerceIn(0f, 1f) * duration).toLong()
     val chapterStarts = remember(segments, duration) { if (duration <= 0) emptyList() else segments.map { it.startTimeSeconds * 1000f / duration }.filter { it > 0f && it < 1f } }
-    Box(modifier.fillMaxWidth().height(if (fullscreen) 56.dp else 22.dp).padding(bottom = if (fullscreen) 24.dp else 0.dp).onSizeChanged { width = it.width }
+    Box(modifier.fillMaxWidth().height(if (fullscreen) 56.dp else if (expanded || dragging) 28.dp else 16.dp).padding(bottom = if (fullscreen) 24.dp else 0.dp).onSizeChanged { width = it.width }
         .pointerInput(enabled, duration) {
             if (!enabled) return@pointerInput
             awaitEachGesture {
@@ -352,23 +379,27 @@ internal object PlayerSettings {
             }
         }) {
         Canvas(Modifier.fillMaxSize()) {
-            val y = if (fullscreen) size.height / 2f else size.height - thickness.toPx() / 2f
+            val y = if (fullscreen || expanded || dragging) size.height / 2f else size.height - thickness.toPx() / 2f
             val left = side; val right = size.width - side; val span = right - left
             fun x(value: Long) = left + if (duration > 0) span * (value.toFloat() / duration).coerceIn(0f, 1f) else 0f
             val h = thickness.toPx()
             val gap = (if (dragging) 3.dp else 2.dp).toPx()
+            val corner = CornerRadius(h / 2f, h / 2f)
             val edges = listOf(left) + chapterStarts.map { left + span * it } + right
             fun piece(color: Color, until: Float) {
                 for (i in 0 until edges.size - 1) {
                     val a = edges[i] + if (i > 0) gap / 2 else 0f
                     val b = minOf(edges[i + 1] - if (i < edges.size - 2) gap / 2 else 0f, until)
-                    if (b > a) drawRect(color, Offset(a, y - h / 2), Size(b - a, h))
+                    if (b > a) drawRoundRect(color, Offset(a, y - h / 2), Size(b - a, h), corner)
                 }
             }
-            piece(Color.White.copy(alpha = .3f), right)
-            piece(Color.White.copy(alpha = .5f), x(buffered))
+            piece(Color.White.copy(alpha = .20f), right)
+            piece(Color.White.copy(alpha = .70f), x(buffered))
             piece(PlayedRed, x(position))
-            if (dot > 0.dp) drawCircle(PlayedRed, radius = dot.toPx() / 2, center = Offset(x(position), if (fullscreen) y else y - dot.toPx() / 2 + h / 2))
+            if (dot > 0.dp) {
+                drawCircle(Color.Black.copy(alpha = .35f), radius = dot.toPx() / 2 + 1.dp.toPx(), center = Offset(x(position), y))
+                drawCircle(PlayedRed, radius = dot.toPx() / 2, center = Offset(x(position), y))
+            }
         }
     }
 }
@@ -393,7 +424,7 @@ private fun seekArcShape(side: Int) = GenericShape { size, _ ->
             }, contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(Modifier.graphicsLayer { scaleX = if (side < 0) -1f else 1f }) { repeat(3) { PlayerGlyph("play", Modifier.size(12.dp)) } }
-                Text("$seconds detik", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp))
+                Text("$seconds detik", color = Color.White, fontSize = 13.sp, fontFamily = YouTubeSansBold, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp))
             }
         }
     }

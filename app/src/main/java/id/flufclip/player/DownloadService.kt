@@ -50,6 +50,7 @@ class DownloadService : Service() {
         startForeground(NOTIFICATION, notification("Menyiapkan unduhan…", null))
         scope.launch {
             val temp = File(cacheDir, "download-${UUID.randomUUID()}")
+            var cookieFile: File? = null
             try {
                 check(temp.mkdirs()) { "Tidak bisa membuat folder sementara" }
                 YoutubeDL.init(applicationContext)
@@ -57,10 +58,16 @@ class DownloadService : Service() {
                 if (cancelled) throw CancellationException()
                 val id = UUID.randomUUID().toString()
                 activeId = id
+                if (YouTubeAuth.isLoggedIn) {
+                    cookieFile = YouTubeAuth.writeNetscapeCookiesFile(cacheDir)
+                }
                 val request = YoutubeDLRequest(url).apply {
                     addOption("--no-playlist")
                     addOption("--no-mtime")
                     addOption("--no-overwrites")
+                    if (cookieFile != null && cookieFile.exists()) {
+                        addOption("--cookies", cookieFile.absolutePath)
+                    }
                     addOption("-o", File(temp, "result.%(ext)s").absolutePath)
                     if (audioOnly) {
                         addOption("-f", "bestaudio/best")
@@ -88,6 +95,7 @@ class DownloadService : Service() {
                 DownloadStatus.state.value = DownloadState(message = if (cancelled || e is CancellationException) "Unduhan dibatalkan." else "Unduhan gagal: ${e.message ?: e.javaClass.simpleName}")
             } finally {
                 activeId = null
+                cookieFile?.delete()
                 temp.deleteRecursively()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 val summary = DownloadStatus.state.value.message

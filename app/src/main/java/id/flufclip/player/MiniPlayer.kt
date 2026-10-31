@@ -8,6 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -165,14 +167,14 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
                     Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = .35f)).clickable { touch(); if (playing) player.pause() else player.play() }
                         .semantics { contentDescription = if (playing) "Jeda" else "Putar" }, contentAlignment = Alignment.Center) {
                         if (buffering) CircularProgressIndicator(Modifier.fillMaxSize(), color = Color.White, strokeWidth = 2.dp)
-                        PlayerGlyph(if (playing) "pause" else "play", Modifier.size(20.dp))
+                        Image(painterResource(if (playing) R.drawable.yt_pause else R.drawable.yt_play), null, Modifier.size(36.dp))
                     }
                     if (width >= 240.dp) MiniButton("Maju 10 detik", { skip(10_000) }) { SkipGlyph(forward = true) }
                 }
             }
         }
-        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = .3f))) {
-            Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(Color(0xFFFF0033)))
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = .20f))) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(Color(0xFFFF0000)))
         }
     }
 }
