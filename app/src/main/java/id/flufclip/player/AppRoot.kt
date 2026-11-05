@@ -2443,33 +2443,31 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             val playingChatState = activeChatState ?: rememberLiveChat(playing.url, isPlayingLive, playingPostLive, player)
             val insets = if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             BoxWithConstraints(insets) {
-                val wide = isWideWatchLayout(maxWidth, maxHeight)
-                val rawVideoAspect = videoAspectOf(player.videoSize)
-                val currentAspect = if (rawVideoAspect > 0f) rawVideoAspect else (16f / 9f)
-                val watchAspect = if (wide) (16f / 9f) else currentAspect.coerceIn(4f / 3f, 21f / 9f)
-                // Size and position of the watch layout (exitProgress 1). Fullscreen is the whole screen (exitProgress 0).
-                val inlineWidth = if (wide) wideWatchPlayerWidth(maxWidth) else maxWidth
-                val inlineHeight = inlineWidth / watchAspect
-                val startX = 0.dp
                 val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active || fullscreen) 0.dp else 78.dp)
                 miniState.limits = limits
                 LaunchedEffect(limits) { miniState.settle(animate = minimized) }
                 val miniWidth = miniState.width.value.dp
                 val miniHeight = miniWidth * 9f / 16f
-                // Each edge lerps linearly from the screen to the watch layout. The box is inset by the status bar unless fullscreen.
-                val exit = exitProgress.value
-                val boxTop = if (fullscreen) 0.dp else statusBarHeight
-                val baseX = startX * exit
-                val baseY = statusBarHeight * exit - boxTop
-                val baseWidth = screenWidth + (inlineWidth - screenWidth) * exit
-                val baseHeight = screenHeight + (inlineHeight - screenHeight) * exit
-                val width = baseWidth + (miniWidth - inlineWidth) * collapse
-                val height = baseHeight + (miniHeight - inlineHeight) * collapse
                 val miniPosition = miniState.position.value
-                val x = baseX + (miniPosition.x.dp - startX) * collapse
-                val y = baseY + miniPosition.y.dp * verticalProgress
-                val travel = (limits.areaHeight - limits.bottomBar - limits.inset).dp - miniHeight
-                val dragTravel = if (fullscreen) inlineHeight else travel
+                val frame = PlayerFrameLayout.calculate(
+                    maxWidth = maxWidth, maxHeight = maxHeight,
+                    screenWidth = screenWidth, screenHeight = screenHeight,
+                    statusBarHeight = statusBarHeight,
+                    rawVideoAspect = videoAspectOf(player.videoSize),
+                    fullscreen = fullscreen,
+                    exitProgress = exitProgress.value,
+                    collapse = collapse,
+                    verticalProgress = verticalProgress,
+                    miniWidth = miniWidth, miniHeight = miniHeight,
+                    miniPositionX = miniPosition.x, miniPositionY = miniPosition.y,
+                    limits = limits,
+                )
+                val wide = frame.isWide
+                val width = frame.width
+                val height = frame.height
+                val x = frame.x
+                val y = frame.y
+                val dragTravel = frame.dragTravel
                 var fsComments by remember(playing.url) { mutableStateOf(false) }
                 LaunchedEffect(fullscreen) { if (!fullscreen) fsComments = false }
                 BackHandler(fullscreen && (fsComments || (chaptersOpen && playing.streamSegments.isNotEmpty()))) {
@@ -2532,20 +2530,25 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             BackHandler(enabled = !minimized) { dragProgress = null; minimized = true }
             if (watchFade < 1f) PendingWatchScreen(pending, watchAlpha = 1f - watchFade, watchOffset = verticalProgress)
             BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                val wide = isWideWatchLayout(maxWidth, maxHeight)
-                val inlineWidth = if (wide) wideWatchPlayerWidth(maxWidth) else maxWidth
-                val inlineHeight = inlineWidth * 9f / 16f
                 val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active) 0.dp else 78.dp)
                 miniState.limits = limits
                 LaunchedEffect(limits) { miniState.settle(animate = minimized) }
                 val miniWidth = (miniState.width.value.takeIf { it > 0f } ?: limits.default).dp
                 val miniHeight = miniWidth * 9f / 16f
                 val miniPosition = miniState.position.value
-                val width = inlineWidth + (miniWidth - inlineWidth) * collapse
-                val height = inlineHeight + (miniHeight - inlineHeight) * collapse
-                val x = miniPosition.x.dp * collapse
-                val y = miniPosition.y.dp * verticalProgress
-                val travel = ((limits.areaHeight - limits.bottomBar - limits.inset).dp - miniHeight).coerceAtLeast(180.dp)
+                val frame = PlayerFrameLayout.calculatePending(
+                    maxWidth = maxWidth, maxHeight = maxHeight,
+                    collapse = collapse, verticalProgress = verticalProgress,
+                    miniWidth = miniWidth, miniHeight = miniHeight,
+                    miniPositionX = miniPosition.x, miniPositionY = miniPosition.y,
+                    limits = limits,
+                )
+                val wide = frame.isWide
+                val width = frame.width
+                val height = frame.height
+                val x = frame.x
+                val y = frame.y
+                val travel = frame.dragTravel
                 PendingFloatingPlayer(
                     pending = pending, minimized = minimized, progress = collapse, miniState = miniState,
                     travelDistance = travel,
