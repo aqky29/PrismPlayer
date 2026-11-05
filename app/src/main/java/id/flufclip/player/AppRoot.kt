@@ -206,58 +206,52 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     var watchHistory by remember { mutableStateOf(WatchHistory.read(watchPrefs)) }
     val accountHistorySession = YouTubeAuth.sessionRevision
     val accountHistoryLoggedIn = YouTubeAuth.isLoggedIn
-    var accountEntries by remember(accountHistorySession, accountHistoryLoggedIn) { mutableStateOf<List<AccountHistoryEntry>>(emptyList()) }
-    var accountContinuation by remember(accountHistorySession, accountHistoryLoggedIn) { mutableStateOf<String?>(null) }
-    var accountLoading by remember(accountHistorySession, accountHistoryLoggedIn) { mutableStateOf(accountHistoryLoggedIn) }
-    var accountError by remember(accountHistorySession, accountHistoryLoggedIn) { mutableStateOf<String?>(null) }
-    var accountRequest by remember(accountHistorySession, accountHistoryLoggedIn) { mutableIntStateOf(0) }
-    var accountNextRequest by remember(accountHistorySession, accountHistoryLoggedIn) { mutableIntStateOf(0) }
-    var deviceHistory by remember(accountHistorySession, accountHistoryLoggedIn) { mutableStateOf(false) }
+    val accountHistory = remember(accountHistorySession, accountHistoryLoggedIn) { AccountHistoryState(accountHistoryLoggedIn) }
     val hidden = remember { HiddenFeedItems(context.getSharedPreferences("home_recommendations", Context.MODE_PRIVATE)) }
     var showHistory by remember { mutableStateOf(false) }
     var mainTab by remember { mutableStateOf("home") }
-    LaunchedEffect(accountHistorySession, accountHistoryLoggedIn, mainTab, showHistory, accountRequest) {
+    LaunchedEffect(accountHistorySession, accountHistoryLoggedIn, mainTab, showHistory, accountHistory.request) {
         if (!accountHistoryLoggedIn || (mainTab != "you" && !showHistory)) return@LaunchedEffect
-        accountLoading = true
-        accountError = null
+        accountHistory.loading = true
+        accountHistory.error = null
         try {
             val page = AccountHistory.load()
             if (YouTubeAuth.sessionRevision == accountHistorySession && YouTubeAuth.isLoggedIn) {
-                accountEntries = WatchHistory.enrichAccountEntries(page.entries, watchPrefs)
-                accountContinuation = page.continuation
+                accountHistory.entries = WatchHistory.enrichAccountEntries(page.entries, watchPrefs)
+                accountHistory.continuation = page.continuation
             }
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) {
-            if (YouTubeAuth.sessionRevision == accountHistorySession) accountError = "Couldn't load account history. Check your connection or sign in again."
+            if (YouTubeAuth.sessionRevision == accountHistorySession) accountHistory.error = "Couldn't load account history. Check your connection or sign in again."
         } finally {
-            if (YouTubeAuth.sessionRevision == accountHistorySession) accountLoading = false
+            if (YouTubeAuth.sessionRevision == accountHistorySession) accountHistory.loading = false
         }
     }
-    LaunchedEffect(accountHistorySession, accountRequest, accountNextRequest) {
-        val token = accountContinuation
-        if (accountNextRequest == 0 || token == null || !accountHistoryLoggedIn || accountLoading) return@LaunchedEffect
-        accountLoading = true
+    LaunchedEffect(accountHistorySession, accountHistory.request, accountHistory.nextRequest) {
+        val token = accountHistory.continuation
+        if (accountHistory.nextRequest == 0 || token == null || !accountHistoryLoggedIn || accountHistory.loading) return@LaunchedEffect
+        accountHistory.loading = true
         try {
             val page = AccountHistory.load(token)
-            if (YouTubeAuth.sessionRevision == accountHistorySession && accountContinuation == token) {
-                accountEntries = WatchHistory.enrichAccountEntries(accountEntries + page.entries, watchPrefs)
-                accountContinuation = page.continuation?.takeUnless { it == token }
-                accountError = null
+            if (YouTubeAuth.sessionRevision == accountHistorySession && accountHistory.continuation == token) {
+                accountHistory.entries = WatchHistory.enrichAccountEntries(accountHistory.entries + page.entries, watchPrefs)
+                accountHistory.continuation = page.continuation?.takeUnless { it == token }
+                accountHistory.error = null
             }
         } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { if (YouTubeAuth.sessionRevision == accountHistorySession) accountError = "Couldn't load the next page. Try again." }
-        finally { if (YouTubeAuth.sessionRevision == accountHistorySession) accountLoading = false }
+        catch (_: Exception) { if (YouTubeAuth.sessionRevision == accountHistorySession) accountHistory.error = "Couldn't load the next page. Try again." }
+        finally { if (YouTubeAuth.sessionRevision == accountHistorySession) accountHistory.loading = false }
     }
     // Enrich recent history items with playlist associations from their channels' playlist shelves.
-    LaunchedEffect(accountEntries.size, watchHistory.size, home.size) {
-        if (accountEntries.isNotEmpty()) {
-            val reEnriched = WatchHistory.enrichAccountEntries(accountEntries, watchPrefs)
-            if (reEnriched != accountEntries) accountEntries = reEnriched
+    LaunchedEffect(accountHistory.entries.size, watchHistory.size, home.size) {
+        if (accountHistory.entries.isNotEmpty()) {
+            val reEnriched = WatchHistory.enrichAccountEntries(accountHistory.entries, watchPrefs)
+            if (reEnriched != accountHistory.entries) accountHistory.entries = reEnriched
         }
         val refreshedLocal = WatchHistory.read(watchPrefs)
         if (refreshedLocal != watchHistory) watchHistory = refreshedLocal
 
-        val candidateChannels = (accountEntries.take(12).map { it.video } + watchHistory.take(12))
+        val candidateChannels = (accountHistory.entries.take(12).map { it.video } + watchHistory.take(12))
             .filter { !it.isShort && it.playlistId.isNullOrBlank() && !it.channelUrl.isNullOrBlank() }
             .mapNotNull { HomeFeed.channelIdOf(it.channelUrl) }
             .distinct()
@@ -271,8 +265,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
         if (discoveredAny) {
             watchHistory = WatchHistory.read(watchPrefs)
-            if (accountEntries.isNotEmpty()) {
-                accountEntries = WatchHistory.enrichAccountEntries(accountEntries, watchPrefs)
+            if (accountHistory.entries.isNotEmpty()) {
+                accountHistory.entries = WatchHistory.enrichAccountEntries(accountHistory.entries, watchPrefs)
             }
         }
     }
@@ -632,8 +626,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 playlistVideoCount = pcount
             )
             watchHistory = WatchHistory.read(watchPrefs)
-            if (pid != null && accountEntries.isNotEmpty()) {
-                accountEntries = WatchHistory.enrichAccountEntries(accountEntries, watchPrefs)
+            if (pid != null && accountHistory.entries.isNotEmpty()) {
+                accountHistory.entries = WatchHistory.enrichAccountEntries(accountHistory.entries, watchPrefs)
             }
         }
     }
@@ -1506,7 +1500,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     page.videos.map { it.url }
                 )
                 watchHistory = WatchHistory.read(watchPrefs)
-                if (accountEntries.isNotEmpty()) accountEntries = WatchHistory.enrichAccountEntries(accountEntries, watchPrefs)
+                if (accountHistory.entries.isNotEmpty()) accountHistory.entries = WatchHistory.enrichAccountEntries(accountHistory.entries, watchPrefs)
                 if (initialVideoUrl == null) {
                     val first = page.videos.first()
                     openUrl(first.url, PendingVideo(first.url, first.title, first.uploader, first.thumbnail.ifBlank { null }), resumeLocal = resumeLocal)
@@ -1570,7 +1564,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             entries.map { it.url }
         )
         watchHistory = WatchHistory.read(watchPrefs)
-        if (accountEntries.isNotEmpty()) accountEntries = WatchHistory.enrichAccountEntries(accountEntries, watchPrefs)
+        if (accountHistory.entries.isNotEmpty()) accountHistory.entries = WatchHistory.enrichAccountEntries(accountHistory.entries, watchPrefs)
         if (shortsAsHistory && video.isShort) {
             openHistoryEntry(video)
             return
@@ -1620,14 +1614,14 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             if (!accountHistoryLoggedIn) {
                 WatchHistory.remove(watchPrefs, video.url); watchHistory = WatchHistory.read(watchPrefs)
             } else {
-                val matching = accountEntries.filter { it.video == video }
+                val matching = accountHistory.entries.filter { it.video == video }
                 val entry = matching.singleOrNull()
                 val token = entry?.removeToken
                 if (token == null) android.widget.Toast.makeText(context, "YouTube did not provide a history removal action", android.widget.Toast.LENGTH_LONG).show()
                 else scope.launch {
                     try {
                         AccountHistory.remove(token, accountHistorySession)
-                        if (YouTubeAuth.sessionRevision == accountHistorySession) accountEntries = accountEntries.filterNot { it === entry }
+                        if (YouTubeAuth.sessionRevision == accountHistorySession) accountHistory.entries = accountHistory.entries.filterNot { it === entry }
                     } catch (e: CancellationException) { throw e }
                     catch (_: Exception) { android.widget.Toast.makeText(context, "Couldn't remove from YouTube history", android.widget.Toast.LENGTH_LONG).show() }
                 }
@@ -2082,12 +2076,12 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 )
             } else if (showFeed && mainTab != "home" && channel == null && playlist == null && !searchMode) {
                 LibraryTab(
-                    modifier = Modifier.weight(1f), tab = mainTab, videos = if (accountHistoryLoggedIn) accountHistoryPreview(accountEntries) else watchHistory,
+                    modifier = Modifier.weight(1f), tab = mainTab, videos = if (accountHistoryLoggedIn) accountHistoryPreview(accountHistory.entries) else watchHistory,
                     historySource = if (accountHistoryLoggedIn) "From your YouTube account" else "Watched on this device",
-                    historyLoading = accountHistoryLoggedIn && accountLoading,
-                    historyError = if (accountHistoryLoggedIn) accountError else null,
-                    onRetryHistory = { accountRequest++ },
-                    onHistory = { deviceHistory = false; showHistory = true },
+                    historyLoading = accountHistoryLoggedIn && accountHistory.loading,
+                    historyError = if (accountHistoryLoggedIn) accountHistory.error else null,
+                    onRetryHistory = { accountHistory.request++ },
+                    onHistory = { accountHistory.deviceHistory = false; showHistory = true },
                     onOpenVideo = { entry -> if (accountHistoryLoggedIn) openAccountHistoryEntry(entry) else openHistoryEntry(entry) },
                     onOpenPlaylist = { accountPlaylist = it }, historyActions = historyActions,
                     onDownloads = { player.pause(); SavedDownloads.open(context) },
@@ -2281,13 +2275,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
           }
         }
         if (showHistory && (selected == null || minimized)) {
-            if (accountHistoryLoggedIn && !deviceHistory) AccountHistoryScreen(
-                entries = accountEntries, loading = accountLoading, error = accountError, hasMore = accountContinuation != null,
+            if (accountHistoryLoggedIn && !accountHistory.deviceHistory) AccountHistoryScreen(
+                entries = accountHistory.entries, loading = accountHistory.loading, error = accountHistory.error, hasMore = accountHistory.continuation != null,
                 onBack = { showHistory = false }, onOpen = { entry -> openAccountHistoryEntry(entry) },
-                onRefresh = { accountRequest++ }, onMore = { accountNextRequest++ }, onDeviceHistory = { deviceHistory = true },
+                onRefresh = { accountHistory.request++ }, onMore = { accountHistory.nextRequest++ }, onDeviceHistory = { accountHistory.deviceHistory = true },
                 onManage = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/feed/history"))) } },
                 onNavigate = { selectTab(it) }, historyActions = historyActions,
-            ) else WatchHistoryScreen(watchHistory, onBack = { if (accountHistoryLoggedIn && deviceHistory) deviceHistory = false else showHistory = false }, onOpen = { entry -> openHistoryEntry(entry) }, onClear = { WatchHistory.clear(watchPrefs); watchHistory = emptyList() }, onRemove = { entry -> WatchHistory.remove(watchPrefs, entry.url); watchHistory = WatchHistory.read(watchPrefs) }, historyActions = historyActions, onResetRecommendations = if (hidden.videos.isNotEmpty() || hidden.channels.isNotEmpty()) {{ hidden.reset() }} else null)
+            ) else WatchHistoryScreen(watchHistory, onBack = { if (accountHistoryLoggedIn && accountHistory.deviceHistory) accountHistory.deviceHistory = false else showHistory = false }, onOpen = { entry -> openHistoryEntry(entry) }, onClear = { WatchHistory.clear(watchPrefs); watchHistory = emptyList() }, onRemove = { entry -> WatchHistory.remove(watchPrefs, entry.url); watchHistory = WatchHistory.read(watchPrefs) }, historyActions = historyActions, onResetRecommendations = if (hidden.videos.isNotEmpty() || hidden.channels.isNotEmpty()) {{ hidden.reset() }} else null)
         }
         accountPlaylist?.takeIf { !showHistory && !shortsMode && (selected == null || minimized) }?.let { collection ->
             AccountPlaylistScreen(collection, onBack = { accountPlaylist = null }, onNavigate = selectTab,
