@@ -274,21 +274,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     LaunchedEffect(mainTab, YouTubeAuth.sessionRevision, YouTubeAuth.isLoggedIn) {
         if (mainTab == "subscriptions" && YouTubeAuth.isLoggedIn) subs.onTabOpened()
     }
-    var shortsRequest by remember { mutableIntStateOf(0) }
-    var shortsLoading by remember { mutableStateOf(false) }
-    var shortsError by remember { mutableStateOf<String?>(null) }
-    var shortsPage by remember { mutableStateOf<SearchPage?>(null) }
-    var shortsMoreLoading by remember { mutableStateOf(false) }
-    var shortsMoreError by remember { mutableStateOf<String?>(null) }
-    var shortsMoreRequest by remember { mutableIntStateOf(0) }
-    var shortsTopicIndex by remember { mutableIntStateOf(0) }
-    var shortsIndex by remember { mutableIntStateOf(0) }
-    var shortsRetry by remember { mutableIntStateOf(0) }
-    var shortsGeneration by remember { mutableIntStateOf(0) }
-    var shortsTabQueue by remember { mutableStateOf(false) }
+    val shorts = remember { ShortsFeedState() }
     val shortsResolver = remember(YouTubeAuth.sessionRevision) { ShortsResolver(scope, context) }
-    var shortsSeqNext by remember { mutableStateOf<String?>(null) }
-    var shortsFromFeed by remember { mutableStateOf(false) }
     var autoplay by remember { mutableStateOf(watchPrefs.getBoolean("autoplay", true)) }
     var maxVideoHeight by remember { mutableIntStateOf(watchPrefs.getInt("max_video_height", 720)) }
     var queue by remember { mutableStateOf<List<StreamInfoItem>>(emptyList()) }
@@ -352,8 +339,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         if (granted && choice != null) launchDownload(choice)
         else if (choice != null) android.widget.Toast.makeText(context, "Storage permission is required to save to the Download folder", android.widget.Toast.LENGTH_LONG).show()
     }
-    // Unduhan dari layar tonton dan dari layar Shorts (tombol unduh saat jeda) memakai alur yang sama.
-    var shortsDownloadInfo by remember { mutableStateOf<StreamInfo?>(null) }
     // Status suka/simpan/subscribe dimiliki Engagement dan dipisahkan menurut sesi akun, bukan map lokal per layar.
     val rateWatch: (StreamInfo, Int) -> Unit = { target, direction ->
         if (!YouTubeAuth.isLoggedIn) { android.widget.Toast.makeText(context, "Sign in to rate videos", android.widget.Toast.LENGTH_SHORT).show(); showLoginDialog = true }
@@ -653,13 +638,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     fun back() {
         when {
             fullscreen -> setFullscreen(false)
-            shortsMode && !minimized -> { closePlayer(); if (shortsTabQueue && mainTab == "shorts") mainTab = "home" }
+            shortsMode && !minimized -> { closePlayer(); if (shorts.tabQueue && mainTab == "shorts") mainTab = "home" }
             searchActive -> { searchActive = false; keyboard?.hide() }
             showHistory -> showHistory = false
             selected != null && !minimized -> minimized = true
             accountPlaylist != null -> accountPlaylist = null
             playlist != null -> playlist = null
-            channel != null -> { channel = null; if (mainTab == "shorts" && shortsTabQueue && queue.isNotEmpty()) shortsMode = true }
+            channel != null -> { channel = null; if (mainTab == "shorts" && shorts.tabQueue && queue.isNotEmpty()) shortsMode = true }
             searchMode -> { searchMode = false; query = "" }
             mainTab != "home" -> mainTab = "home"
         }
@@ -1519,7 +1504,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 uploaderName = entry.uploader
                 if (entry.thumbnail.isNotBlank()) thumbnails = listOf(org.schabi.newpipe.extractor.Image(entry.thumbnail, 720, 1280, org.schabi.newpipe.extractor.Image.ResolutionLevel.HIGH))
             }
-            queue = listOf(item); shortsIndex = 0; shortsGeneration++; shortsTabQueue = false; shortsMoreError = null; minimized = false; shortsMode = true
+            queue = listOf(item); shorts.index = 0; shorts.generation++; shorts.tabQueue = false; shorts.moreError = null; minimized = false; shortsMode = true
         } else if (!entry.playlistId.isNullOrBlank()) {
             playPlaylistContext(
                 playlistId = entry.playlistId,
@@ -1671,10 +1656,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             // Shorts tidak lewat openUrl: pager menampilkan poster seketika, lalu ShortsResolver memuat dan memutar halaman yang aktif.
             val index = list.indexOfFirst { videoKey(it.url) == videoKey(item.url) }
             queue = if (index >= 0) list else listOf(item)
-            shortsIndex = index.coerceAtLeast(0)
-            shortsGeneration++
-            shortsTabQueue = false
-            shortsMoreError = null
+            shorts.index = index.coerceAtLeast(0)
+            shorts.generation++
+            shorts.tabQueue = false
+            shorts.moreError = null
             minimized = false
             shortsMode = true
         } else {
@@ -1714,22 +1699,22 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         if (items.isEmpty()) return
         if (pendingVideo != null) closePlayer()
         queue = items
-        shortsIndex = index.coerceIn(0, items.size - 1)
-        shortsGeneration++
-        shortsTabQueue = false
-        shortsMoreError = null
+        shorts.index = index.coerceIn(0, items.size - 1)
+        shorts.generation++
+        shorts.tabQueue = false
+        shorts.moreError = null
         minimized = false
         shortsMode = true
     }
     // Menekan tab Shorts langsung membuka layar Shorts (kosong + spinner); antrean diisi dari feed begitu siap.
-    LaunchedEffect(mainTab, shortsRequest, YouTubeAuth.sessionRevision) {
+    LaunchedEffect(mainTab, shorts.request, YouTubeAuth.sessionRevision) {
         if (mainTab != "shorts") return@LaunchedEffect
         minimized = false
-        shortsMode = true; shortsTabQueue = true
-        queue = emptyList(); shortsIndex = 0; shortsGeneration++
-        shortsLoading = true
-        shortsError = null
-        shortsPage = null; shortsMoreError = null; shortsTopicIndex = 0; shortsSeqNext = null; shortsFromFeed = false
+        shortsMode = true; shorts.tabQueue = true
+        queue = emptyList(); shorts.index = 0; shorts.generation++
+        shorts.loading = true
+        shorts.error = null
+        shorts.page = null; shorts.moreError = null; shorts.topicIndex = 0; shorts.seqNext = null; shorts.fromFeed = false
         try {
             // Sumber utama: urutan Shorts YouTube (reel_watch_sequence). Urutan dari server dipertahankan; pencarian "shorts" hanya cadangan.
             // Short pembuka ditampilkan dan mulai di-resolve begitu diketahui, paralel dengan permintaan urutan.
@@ -1739,11 +1724,11 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
             val feedItems = feed?.items.orEmpty().filter { it.url !in hidden.videos }.distinctBy { videoKey(it.url) }
             if (feedItems.isNotEmpty()) {
-                shortsFromFeed = true
-                shortsSeqNext = feed?.next
+                shorts.fromFeed = true
+                shorts.seqNext = feed?.next
                 queue = feedItems
             } else if (seedShown) {
-                shortsFromFeed = false // pertahankan Short pembuka; antrean diisi dari pencarian saat tinggal sedikit
+                shorts.fromFeed = false // pertahankan Short pembuka; antrean diisi dari pencarian saat tinggal sedikit
             } else {
                 var page = VideoRepository.searchPage("shorts")
                 val found = mutableListOf<StreamInfoItem>()
@@ -1754,13 +1739,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     if (found.size >= 10 || page.next == null || attempts >= 3) break
                     page = VideoRepository.moreSearch(page)
                 }
-                shortsPage = page
+                shorts.page = page
                 queue = HomeRecommendations.rank(found.distinctBy { videoKey(it.url) }, watchHistory, hidden.videos, hidden.channels)
             }
-            if (queue.isEmpty()) shortsError = "Shorts are unavailable. Try again."
+            if (queue.isEmpty()) shorts.error = "Shorts are unavailable. Try again."
         } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { shortsError = "Failed to load Shorts: ${e.message ?: "try again"}" }
-        finally { shortsLoading = false }
+        catch (e: Exception) { shorts.error = "Failed to load Shorts: ${e.message ?: "try again"}" }
+        finally { shorts.loading = false }
     }
     // Siapkan halaman pertama Shorts selagi pengguna di beranda, supaya menekan tab Shorts tidak menunggu jaringan.
     LaunchedEffect(Unit) {
@@ -1769,14 +1754,14 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         ShortsFeed.warm()?.items?.firstOrNull()?.let { shortsResolver.prefetch(it.url) }
     }
     // Memutar halaman yang sedang aktif di pager. Resolve diambil dari cache bila sudah di-prefetch, jadi geser tidak menunggu jaringan.
-    LaunchedEffect(shortsMode, shortsIndex, shortsGeneration, shortsRetry, queue.firstOrNull()?.url) {
+    LaunchedEffect(shortsMode, shorts.index, shorts.generation, shorts.retry, queue.firstOrNull()?.url) {
         if (!shortsMode) return@LaunchedEffect
-        val item = queue.getOrNull(shortsIndex) ?: return@LaunchedEffect
+        val item = queue.getOrNull(shorts.index) ?: return@LaunchedEffect
         if (selected?.let { videoKey(it.url) } == videoKey(item.url)) { player.playWhenReady = true; return@LaunchedEffect }
         if (shortsResolver.info(item.url) == null) player.pause()
         try {
             val info = shortsResolver.await(item.url)
-            if (shortsMode && queue.getOrNull(shortsIndex)?.let { videoKey(it.url) } == videoKey(item.url)) {
+            if (shortsMode && queue.getOrNull(shorts.index)?.let { videoKey(it.url) } == videoKey(item.url)) {
                 savePosition()
                 startShort(info)
             }
@@ -1784,46 +1769,46 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         catch (e: Exception) { shortsResolver.fail(item.url, e.message ?: "failed to load") }
     }
     // Setelah Short berikutnya selesai di-resolve, masukkan ke daftar putar supaya ikut di-buffer.
-    val nextShortInfo = if (shortsMode) queue.getOrNull(shortsIndex + 1)?.let { shortsResolver.info(it.url) } else null
+    val nextShortInfo = if (shortsMode) queue.getOrNull(shorts.index + 1)?.let { shortsResolver.info(it.url) } else null
     LaunchedEffect(shortsMode, selected?.url, nextShortInfo) {
         val next = nextShortInfo ?: return@LaunchedEffect
         val current = selected ?: return@LaunchedEffect
-        if (shortsMode && queue.getOrNull(shortsIndex)?.let { videoKey(it.url) } == videoKey(current.url)) preloadNext(current, next)
+        if (shortsMode && queue.getOrNull(shorts.index)?.let { videoKey(it.url) } == videoKey(current.url)) preloadNext(current, next)
     }
     // Siapkan Short di sekitar halaman aktif selagi yang sekarang diputar.
-    LaunchedEffect(shortsMode, shortsIndex, queue.size) {
+    LaunchedEffect(shortsMode, shorts.index, queue.size) {
         if (!shortsMode) return@LaunchedEffect
-        for (offset in intArrayOf(0, 1, 2, -1)) queue.getOrNull(shortsIndex + offset)?.let { shortsResolver.prefetch(it.url) }
+        for (offset in intArrayOf(0, 1, 2, -1)) queue.getOrNull(shorts.index + offset)?.let { shortsResolver.prefetch(it.url) }
     }
     // Isi ulang antrean tab Shorts saat sisa halaman tinggal sedikit.
-    val shortsNeedMore = shortsMode && shortsTabQueue && queue.isNotEmpty() && queue.size - shortsIndex <= 4
-    LaunchedEffect(shortsNeedMore, queue.size, shortsMoreRequest, YouTubeAuth.sessionRevision) {
+    val shortsNeedMore = shortsMode && shorts.tabQueue && queue.isNotEmpty() && queue.size - shorts.index <= 4
+    LaunchedEffect(shortsNeedMore, queue.size, shorts.moreRequest, YouTubeAuth.sessionRevision) {
         if (!shortsNeedMore) return@LaunchedEffect
-        shortsMoreLoading = true
-        shortsMoreError = null
+        shorts.moreLoading = true
+        shorts.moreError = null
         try {
             val existing = queue.mapTo(mutableSetOf()) { videoKey(it.url) }
             val found = mutableListOf<StreamInfoItem>()
             var fromFeed = false
-            if (shortsFromFeed) {
+            if (shorts.fromFeed) {
                 var feedAttempts = 0
                 try {
                     while (found.isEmpty() && feedAttempts < 3) {
-                        val token = shortsSeqNext ?: break
+                        val token = shorts.seqNext ?: break
                         val feed = ShortsFeed.more(token)
-                        shortsSeqNext = feed.next
+                        shorts.seqNext = feed.next
                         found += feed.items.filter { it.url !in hidden.videos && existing.add(videoKey(it.url)) }
                         feedAttempts++
                     }
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) { /* jatuh ke pencarian untuk putaran ini; token feed tetap disimpan untuk dicoba lagi */ }
-                if (found.isNotEmpty()) fromFeed = true else if (shortsSeqNext == null) shortsFromFeed = false
+                if (found.isNotEmpty()) fromFeed = true else if (shorts.seqNext == null) shorts.fromFeed = false
             }
-            var page = shortsPage
+            var page = shorts.page
             var attempts = 0
             while (found.isEmpty() && attempts < 4) {
                 page = if (page?.next != null) VideoRepository.moreSearch(page) else {
-                    val topic = HomeRecommendations.query(watchHistory, topics, shortsTopicIndex++, searchHistory.terms)
+                    val topic = HomeRecommendations.query(watchHistory, topics, shorts.topicIndex++, searchHistory.terms)
                     VideoRepository.searchPage("$topic shorts")
                 }
                 found += page.items.filterIsInstance<StreamInfoItem>().filter {
@@ -1831,13 +1816,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 }
                 attempts++
             }
-            shortsPage = page
+            shorts.page = page
             val additions = if (fromFeed) found.toList() else HomeRecommendations.rank(found, watchHistory, hidden.videos, hidden.channels)
             queue = queue + additions
-            if (additions.isEmpty()) shortsMoreError = "No new Shorts. Tap to try again."
+            if (additions.isEmpty()) shorts.moreError = "No new Shorts. Tap to try again."
         } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { shortsMoreError = "Failed to load Shorts. Tap to try again." }
-        finally { shortsMoreLoading = false }
+        catch (e: Exception) { shorts.moreError = "Failed to load Shorts. Tap to try again." }
+        finally { shorts.moreLoading = false }
     }
     fun nextItem(info: StreamInfo): StreamInfoItem? {
         val index = queue.indexOfFirst { videoKey(it.url) == videoKey(info.url) }
@@ -2000,8 +1985,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 if (pendingVideo != null) closePlayer()
                 // Masuk ke layar Shorts seketika (hitam + spinner); antrean diisi oleh efek pemuatan feed.
                 if (selected != null && !shortsMode) { savePosition(); player.stop(); player.clearMediaItems(); selected = null; quality = null; selectedAudio = null }
-                minimized = false; shortsMode = true; shortsTabQueue = true
-                queue = emptyList(); shortsIndex = 0; shortsError = null; shortsLoading = true
+                minimized = false; shortsMode = true; shorts.tabQueue = true
+                queue = emptyList(); shorts.index = 0; shorts.error = null; shorts.loading = true
             }
             mainTab = tab; showHistory = false; accountPlaylist = null; searchMode = false; searchActive = false; channel = null; playlist = null; category = homeChipTitle; selectedChip = null; categoryItems = emptyList(); categoryContinuation = null; error = null
         }
@@ -2086,9 +2071,9 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     onOpenPlaylist = { accountPlaylist = it }, historyActions = historyActions,
                     onDownloads = { player.pause(); SavedDownloads.open(context) },
                     onAccount = { if (YouTubeAuth.isLoggedIn || YouTubeAuth.savedAccounts.isNotEmpty()) showAccountDialog = true else showLoginDialog = true },
-                    shortsLoading = shortsLoading || (mainTab == "shorts" && loading),
-                    shortsError = shortsError ?: if (mainTab == "shorts") error else null,
-                    onSearchShorts = { error = null; shortsRequest++ },
+                    shortsLoading = shorts.loading || (mainTab == "shorts" && loading),
+                    shortsError = shorts.error ?: if (mainTab == "shorts") error else null,
+                    onSearchShorts = { error = null; shorts.request++ },
                     subscriptionsContent = {
                         SubscriptionsScreen(
                             entries = subs.entries,
@@ -2455,16 +2440,16 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
         }
         if (shortsMode && !minimized) {
-            val inTab = shortsTabQueue && mainTab == "shorts"
+            val inTab = shorts.tabQueue && mainTab == "shorts"
             ShortsScreen(
-                items = queue, startIndex = shortsIndex, generation = shortsGeneration, resolver = shortsResolver,
+                items = queue, startIndex = shorts.index, generation = shorts.generation, resolver = shortsResolver,
                 activeUrl = selected?.url, player = player,
-                emptyLoading = shortsLoading, emptyMessage = shortsError, feedMessage = shortsMoreError,
-                onSettled = { shortsIndex = it }, onRetry = { shortsRequest++ }, onRetryMore = { shortsMoreRequest++ },
+                emptyLoading = shorts.loading, emptyMessage = shorts.error, feedMessage = shorts.moreError,
+                onSettled = { shorts.index = it }, onRetry = { shorts.request++ }, onRetryMore = { shorts.moreRequest++ },
                 onRetryItem = { url ->
                     // Buang pemutaran yang gagal supaya efek pemutaran memuat ulang Short ini dari awal.
                     lastRecovered = null; player.stop(); player.clearMediaItems(); selected = null
-                    shortsResolver.evict(url); shortsResolver.retry(url); shortsRetry++
+                    shortsResolver.evict(url); shortsResolver.retry(url); shorts.retry++
                 },
                 onRate = { info, direction -> rateWatch(info, direction) },
                 onNeedLogin = { showLoginDialog = true },
@@ -2474,12 +2459,12 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 onShare = { shareVideo(it) },
                 onSave = { id -> if (YouTubeAuth.isLoggedIn) savePlaylistVideoId = id else showLoginDialog = true },
                 onSearch = { selectTab("home"); searchActive = true },
-                onDownload = { shortsDownloadInfo = it },
+                onDownload = { shorts.downloadInfo = it },
                 bottomBar = { if (inTab) HomeNavigation(selected = "shorts", onSelect = selectTab) },
             )
-            shortsDownloadInfo?.let { target ->
-                DownloadDialog(target, onDismiss = { shortsDownloadInfo = null }) { height, audio ->
-                    shortsDownloadInfo = null
+            shorts.downloadInfo?.let { target ->
+                DownloadDialog(target, onDismiss = { shorts.downloadInfo = null }) { height, audio ->
+                    shorts.downloadInfo = null
                     startDownload(target, height, audio)
                 }
             }
