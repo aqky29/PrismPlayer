@@ -2134,142 +2134,26 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
           val glassBackdrop = LocalFrostedGlassBackdrop.current
           Box(if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Column(Modifier.fillMaxSize().frostedGlassSource(glassBackdrop)) {
-            if (showFeed) {
-                if (searchActive) {
-                    val focusRequester = remember { FocusRequester() }
-                    LaunchedEffect(Unit) { focusRequester.requestFocus(); keyboard?.show() }
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { searchActive = false; keyboard?.hide() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                        TextField(value = query, onValueChange = { query = it }, modifier = Modifier.weight(1f).focusRequester(focusRequester), placeholder = { Text("Telusuri YouTube") }, singleLine = true,
-                            colors = TextFieldDefaults.colors(focusedContainerColor = Surface, unfocusedContainerColor = Surface, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
-                            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "Delete") } },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { search() }), shape = RoundedCornerShape(50))
-                        IconButton(onClick = { search() }) { Icon(Icons.Default.Search, "Search") }
-                    }
-                } else {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (playlist != null || channel != null || searchMode) IconButton(onClick = { back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                        if (searchMode && playlist == null && channel == null) {
-                            Text(lastSearch, modifier = Modifier.weight(1f).clip(RoundedCornerShape(50)).background(Surface).clickable { query = lastSearch; searchActive = true }.padding(horizontal = 16.dp, vertical = 10.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        } else if (channel != null) {
-                            Spacer(Modifier.weight(1f))
-                            IconButton(onClick = {
-                                val shareUrl = channel?.info?.url ?: return@IconButton
-                                runCatching {
-                                    val intent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, shareUrl)
-                                    }
-                                    context.startActivity(Intent.createChooser(intent, "Bagikan Channel"))
-                                }
-                            }) { Icon(Icons.Default.MoreVert, "Lainnya") }
-                        } else {
-                            Box(Modifier.size(width = 34.dp, height = 24.dp).background(Accent, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                            }
-                            Text("FlufPlay", modifier = Modifier.padding(start = 7.dp).weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        }
-                        // Tombol Search sudah berada di Floating Bottom Navigation; AppBar atas bersih tanpa ikon Search ganda.
-                    }
-                }
-            }
+            if (showFeed) FeedTopBar(
+                searchActive = searchActive, query = query, onQueryChange = { query = it }, onSearch = { search() },
+                onCloseSearch = { searchActive = false; keyboard?.hide() },
+                showBack = playlist != null || channel != null || searchMode, onBack = { back() },
+                searchTitle = lastSearch.takeIf { searchMode && playlist == null && channel == null },
+                onEditSearch = { query = lastSearch; searchActive = true },
+                channelShareUrl = channel?.info?.url,
+            )
             val showTopTabs = showFeed && !searchActive && playlist == null && channel == null && !searchMode && (mainTab == "home" || mainTab == "subscriptions")
-            if (showTopTabs) {
-                val currentActiveTab = when {
-                    mainTab == "subscriptions" -> "Subs"
-                    category == "Music" -> "Music"
-                    category == "Live" -> "Live"
-                    category != homeChipTitle -> "More"
-                    else -> "Home"
-                }
-                TopCategoryTabs(
-                    activeTab = currentActiveTab,
-                    moreCategories = visibleChips.filterNot { it.title in listOf("All", "Music", "Live", homeChipTitle) },
-                    onSelectTab = { tab ->
-                        when (tab) {
-                            "Home" -> {
-                                if (mainTab != "home") selectTab("home")
-                                if (category != homeChipTitle) selectCategory(homeChipTitle)
-                            }
-                            "Subs" -> {
-                                selectTab("subscriptions")
-                            }
-                            "Music" -> {
-                                if (mainTab != "home") selectTab("home")
-                                selectCategory("Music")
-                            }
-                            "Live" -> {
-                                if (mainTab != "home") selectTab("home")
-                                selectCategory("Live")
-                            }
-                        }
-                    },
-                    onSelectMoreChip = { chip ->
-                        if (mainTab != "home") selectTab("home")
-                        selectChip(chip)
-                    }
-                )
-            }
-            if (downloadState.message.isNotBlank() && showFeed) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(downloadState.message, style = MaterialTheme.typography.bodySmall)
-                        if (downloadState.running) {
-                            val value = downloadState.progress
-                            if (value == null) LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
-                            else LinearProgressIndicator(progress = { value / 100f }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
-                        }
-                    }
-                    if (downloadState.running) TextButton(onClick = { context.startService(Intent(context, DownloadService::class.java).setAction("cancel")) }) { Text("Cancel") }
-                    else {
-                        downloadState.completed?.let { saved -> TextButton(onClick = { player.pause(); SavedDownloads.open(context, saved) }) { Text("Open") } }
-                        TextButton(onClick = { DownloadStatus.state.value = DownloadState() }) { Text("Close") }
-                    }
-                }
-            }
+            if (showTopTabs) HomeTopTabs(mainTab, category, homeChipTitle, visibleChips, selectTab, { selectCategory(it) }, { selectChip(it) })
+            if (downloadState.message.isNotBlank() && showFeed) DownloadStatusBanner(downloadState, onOpen = { saved -> player.pause(); SavedDownloads.open(context, saved) })
             if (loading && showFeed && (searchMode || channel != null || playlist != null || searchActive)) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (showFeed && searchActive) {
-                val recent = history.filter { query.isBlank() || it.contains(query, ignoreCase = true) }
-                val online = suggestions.filterNot { suggestion -> recent.any { it.equals(suggestion, ignoreCase = true) } }
-                LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
-                    items(recent) { term ->
-                        Row(Modifier.fillMaxWidth().clickable { search(term) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(painterResource(R.drawable.yt_w_history), contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(20.dp))
-                            Text(term, Modifier.weight(1f).padding(start = 16.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
-                            IconButton(onClick = { history = history.filterNot { it == term }; preferences.edit().putString("recent", org.json.JSONArray(history).toString()).apply() }) { Icon(Icons.Default.Close, "Remove from history", tint = Color.LightGray, modifier = Modifier.size(18.dp)) }
-                        }
-                    }
-                    items(online) { term ->
-                        Row(Modifier.fillMaxWidth().clickable { search(term) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(20.dp))
-                            val q = query.trim()
-                            val idx = if (q.isNotEmpty()) term.indexOf(q, ignoreCase = true) else -1
-                            val annotated = remember(term, q) {
-                                if (idx >= 0) {
-                                    buildAnnotatedString {
-                                        append(term.substring(0, idx))
-                                        withStyle(SpanStyle(fontWeight = FontWeight.Normal, color = Color.LightGray)) {
-                                            append(term.substring(idx, idx + q.length))
-                                        }
-                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color.White)) {
-                                            append(term.substring(idx + q.length))
-                                        }
-                                    }
-                                } else {
-                                    buildAnnotatedString {
-                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color.White)) {
-                                            append(term)
-                                        }
-                                    }
-                                }
-                            }
-                            Text(annotated, Modifier.weight(1f).padding(start = 16.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
-                            IconButton(onClick = { query = term }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Pilih saran", tint = Color.LightGray, modifier = Modifier.size(18.dp).graphicsLayer(rotationZ = -45f))
-                            }
-                        }
-                    }
-                }
+                SearchSuggestionList(
+                    query = query, history = history, suggestions = suggestions,
+                    onSearch = { search(it) },
+                    onRemoveHistory = { term -> history = history.filterNot { it == term }; preferences.edit().putString("recent", org.json.JSONArray(history).toString()).apply() },
+                    onPickSuggestion = { query = it },
+                    modifier = Modifier.weight(1f),
+                )
             } else if (showFeed && mainTab != "home" && channel == null && playlist == null && !searchMode) {
                 LibraryTab(
                     modifier = Modifier.weight(1f), tab = mainTab, videos = if (accountHistoryLoggedIn) accountHistoryPreview(accountEntries) else watchHistory,
