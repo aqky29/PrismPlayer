@@ -1,45 +1,36 @@
 package id.flufclip.player
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -57,7 +48,7 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
     companion object {
         fun of(maxWidth: Dp, maxHeight: Dp, bottomBar: Dp): MiniLimits {
             val w = maxWidth.value; val h = maxHeight.value; val bar = bottomBar.value
-            val inset = if (w >= 840f) 12f else 8f
+            val inset = if (w >= 840f || (w >= 600f && w > h)) 12f else 8f
             val shortSide = minOf(w, h)
             val usableHeight = (h - bar - 2 * inset).coerceAtLeast(60f)
             val max = minOf(if (w >= 1024f) 720f else 640f, shortSide - 2 * inset, usableHeight * 16f / 9f).coerceAtLeast(100f)
@@ -136,42 +127,64 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
         preferred = rawWidth.coerceIn(limits.min, limits.max)
         release(Offset.Zero)
     }
+
+    /** Double tap: switches between the default and the "large" width, like YouTube's `qxo.P()`. */
+    fun toggleSize() {
+        if (stashed != 0) return
+        val large = minOf(minOf(limits.areaWidth, limits.areaHeight) - 2 * limits.inset, limits.max)
+        preferred = if (target() >= large) limits.default else large
+        settle(animate = true)
+    }
 }
 
-/** Overlay of the floating mini player: close, maximize, ±10 s, centre play/pause with buffering ring, 2 dp time bar. */
-@Composable internal fun MiniPlayerControls(player: ExoPlayer, playing: Boolean, buffering: Boolean, width: Dp, onExpand: () -> Unit, onClose: () -> Unit) {
-    var visible by remember { mutableStateOf(true) }
-    var interaction by remember { mutableIntStateOf(0) }
+/** Overlay of the floating mini player, matching YouTube 21.43's `modern_miniplayer_controls_overlay` (driven by `oix`):
+ * the controls stay on screen (no scrim, no auto-hide). Close sits at the top-right and the 48 dp play/pause/replay
+ * button (24 dp icon) at the top-left: `oix.n()` drops its end/bottom constraints, leaving it pinned top-start. Neither has a filled background, only a
+ * circular ripple, and the icons carry YouTube's soft drop shadow. The expand and ±10 s buttons exist in the layout but
+ * this version never shows them: a tap on the video expands instead. Taps/drag/pinch go through [gestureModifier]. */
+@Composable internal fun MiniPlayerControls(player: ExoPlayer, playing: Boolean, buffering: Boolean, onClose: () -> Unit, gestureModifier: Modifier = Modifier, recovering: Boolean = false, onRetryPlayback: (() -> Unit)? = null) {
     var fraction by remember { mutableFloatStateOf(0f) }
+    var ended by remember { mutableStateOf(false) }
+    var playWhenReady by remember(player) { mutableStateOf(player.playWhenReady) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlayWhenReadyChanged(value: Boolean, reason: Int) { playWhenReady = value }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
     LaunchedEffect(player) {
         while (true) {
             val duration = player.duration.takeIf { it > 0 && it != C.TIME_UNSET }
             fraction = if (duration != null) (player.currentPosition.toFloat() / duration).coerceIn(0f, 1f) else 0f
+            ended = player.playbackState == Player.STATE_ENDED
             delay(250)
         }
     }
-    LaunchedEffect(visible, playing, interaction) { if (visible && playing) { delay(3000); visible = false } }
-    fun touch() { interaction++ }
-    fun skip(ms: Long) {
-        touch()
-        val end = player.duration.takeIf { it > 0 && it != C.TIME_UNSET }
-        player.seekTo((player.currentPosition + ms).coerceAtLeast(0L).let { if (end != null) it.coerceAtMost(end) else it })
-    }
-    Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures(onTap = { visible = !visible; interaction++ }, onDoubleTap = { onExpand() }) }) {
-        AnimatedVisibility(visible || !playing, enter = fadeIn(tween(150)), exit = fadeOut(tween(200)), modifier = Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .4f))) {
-                MiniButton("Buka pemutar", { onExpand() }, Modifier.align(Alignment.TopStart)) { MiniGlyph("maximize", Modifier.size(20.dp)) }
-                MiniButton("Tutup video", onClose, Modifier.align(Alignment.TopEnd)) { Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(22.dp)) }
-                Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (width >= 300.dp) 24.dp else 8.dp)) {
-                    if (width >= 240.dp) MiniButton("Mundur 10 detik", { skip(-10_000) }) { SkipGlyph(forward = false) }
-                    Box(Modifier.size(48.dp).clip(CircleShape).background(Color.Black.copy(alpha = .35f)).clickable { touch(); if (playing) player.pause() else player.play() }
-                        .semantics { contentDescription = if (playing) "Jeda" else "Putar" }, contentAlignment = Alignment.Center) {
-                        if (buffering) CircularProgressIndicator(Modifier.fillMaxSize(), color = Color.White, strokeWidth = 2.dp)
-                        Image(painterResource(if (playing) R.drawable.yt_pause else R.drawable.yt_play), null, Modifier.size(36.dp))
-                    }
-                    if (width >= 240.dp) MiniButton("Maju 10 detik", { skip(10_000) }) { SkipGlyph(forward = true) }
-                }
+    // scrim_overlay: full-size ytOverlayBackgroundMedium (black 60%), faded in by okz while the video is not playing.
+    // playWhenReady rather than isPlaying, so buffering does not flash the scrim.
+    val scrim by animateFloatAsState(if (ended || !playing && !playWhenReady) 1f else 0f, tween(250), label = "mini scrim")
+    val wantsPlayback = playing || (buffering && playWhenReady)
+    Box(Modifier.fillMaxSize().then(gestureModifier)) {
+        if (scrim > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .6f * scrim)))
+        if (buffering && !recovering) androidx.compose.material3.CircularProgressIndicator(
+            Modifier.align(Alignment.Center).size(28.dp), color = Color.White, strokeWidth = 3.dp)
+        MiniButton("Close miniplayer", onClose, Modifier.align(Alignment.TopEnd)) { ShadowIcon(R.drawable.yt_mini_close) }
+        val (icon, label) = when {
+            player.playerError != null -> R.drawable.yt_replay to "Try again"
+            ended -> R.drawable.yt_replay to "Replay"
+            wantsPlayback -> R.drawable.yt_pause to "Pause video"
+            else -> R.drawable.yt_play to "Play video"
+        }
+        MiniButton(label, {
+            if (!recovering) when {
+                ended -> { player.seekTo(0L); player.play() }
+                wantsPlayback -> player.pause()
+                else -> resumeOrRetryPlayback(player, onRetryPlayback)
             }
+        }, Modifier.align(Alignment.TopStart)) {
+            if (recovering) androidx.compose.material3.CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+            else ShadowIcon(icon)
         }
         Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = .20f))) {
             Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(Color(0xFFFF0000)))
@@ -183,7 +196,7 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
 @Composable internal fun MiniPlayerHandle(side: Int, wide: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val shape = if (side < 0) RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp) else RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)
     Box(modifier.size(if (wide) 32.dp else 24.dp, 108.dp).clip(shape).background(Color(0xE6282828)).clickable(onClick = onClick)
-        .semantics { contentDescription = "Tampilkan mini player" }, contentAlignment = Alignment.Center) {
+        .semantics { contentDescription = "Show miniplayer" }, contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(12.dp).graphicsLayer { scaleX = if (side < 0) 1f else -1f }) {
             val stroke = size.width * .18f
             drawLine(Color.White, Offset(size.width * .3f, size.height * .1f), Offset(size.width * .75f, size.height * .5f), stroke, StrokeCap.Round)
@@ -192,38 +205,17 @@ internal data class MiniLimits(val areaWidth: Float, val areaHeight: Float, val 
     }
 }
 
+/** 48 dp touch target with only a circular ripple, like YouTube's `YouTubePlayerButton` style (`touch_feedback_overlay`). */
 @Composable private fun MiniButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Box(modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClick).semantics { contentDescription = label }, contentAlignment = Alignment.Center) { content() }
+    Box(modifier.size(48.dp).clip(CircleShape).clickable(onClick = onClick).semantics { contentDescription = label }, contentAlignment = Alignment.Center) { content() }
 }
 
-/** Circular arrow with "10" in the middle, like YouTube's rewind/forward 10 s buttons. */
-@Composable internal fun SkipGlyph(forward: Boolean, size: Dp = 24.dp) {
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize().graphicsLayer { scaleX = if (forward) 1f else -1f }) {
-            val w = this.size.width; val stroke = w * .09f
-            drawArc(Color.White, startAngle = -60f, sweepAngle = 290f, useCenter = false, topLeft = Offset(w * .1f, w * .1f), size = Size(w * .8f, w * .8f), style = Stroke(stroke, cap = StrokeCap.Round))
-            drawPath(Path().apply { moveTo(w * .56f, 0f); lineTo(w * .80f, w * .17f); lineTo(w * .52f, w * .30f); close() }, Color.White)
-        }
-        Text("10", color = Color.White, fontSize = (size.value * .34f).sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable private fun MiniGlyph(icon: String, modifier: Modifier) {
-    Canvas(modifier) {
-        val w = size.width; val stroke = w * .1f; val white = Color.White
-        fun arrow(from: Offset, to: Offset) {
-            drawLine(white, from, to, stroke, StrokeCap.Round)
-            val dir = (to - from) / (to - from).getDistance()
-            val back = to - dir * (w * .3f)
-            drawLine(white, to, Offset(back.x, to.y), stroke, StrokeCap.Round)
-            drawLine(white, to, Offset(to.x, back.y), stroke, StrokeCap.Round)
-        }
-        when (icon) {
-            // Box with an arrow out of its top-left corner: "open the full player".
-            "maximize" -> {
-                drawRect(white, Offset(w * .3f, w * .3f), Size(w * .62f, w * .62f), style = Stroke(stroke))
-                arrow(Offset(w * .62f, w * .62f), Offset(w * .08f, w * .08f))
-            }
-        }
+/** 24 dp white icon with YouTube's icon shadow (`shadow_icon_*`: black at alpha 166, 1 dp down, 4 dp blur). */
+@Composable private fun ShadowIcon(id: Int) {
+    val painter = painterResource(id)
+    Box(Modifier.size(24.dp)) {
+        Image(painter, null, Modifier.fillMaxSize().offset(y = 1.dp).blur(2.dp, BlurredEdgeTreatment.Unbounded),
+            colorFilter = ColorFilter.tint(Color.Black.copy(alpha = 166 / 255f)))
+        Image(painter, null, Modifier.fillMaxSize(), colorFilter = ColorFilter.tint(Color.White))
     }
 }

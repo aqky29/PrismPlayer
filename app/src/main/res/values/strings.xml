@@ -1,0 +1,9 @@
+<resources>
+    <string name="accessibility_seek">Playback position</string>
+    <string name="accessibility_seek_position">%1$s of %2$s</string>
+    <string name="accessibility_rewind">Back %1$d seconds</string>
+    <string name="accessibility_forward">Forward %1$d seconds</string>
+    <string name="downloads">Downloads</string>
+    <string name="download_notification_title">FlufPlay · Downloads</string>
+    <string name="cancel">Cancel</string>
+</resources>

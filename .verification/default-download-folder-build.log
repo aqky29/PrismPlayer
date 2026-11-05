@@ -1,0 +1,109 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:compileDebugKotlin
+w: Class androidx.media3.common.util.UnstableApi is not an opt-in requirement marker
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:188:22 'field unappliedRotationDegrees: Int' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:692:38 'field isVideoOnly: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:693:39 'field isVideoOnly: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:1067:56 'field resolution: String!' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:1099:38 'field isVideoOnly: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:1100:39 'field isVideoOnly: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:1811:63 'field isVideoOnly: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:1815:46 'field isVideoOnly: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:2238:39 Condition is always 'true'.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:2242:35 Condition is always 'true'.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:2520:55 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:2521:51 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:2523:47 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:3002:32 'val Icons.Filled.KeyboardArrowRight: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.KeyboardArrowRight.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:3288:105 'field resolution: String!' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:3289:29 'field resolution: String!' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:3310:34 'field resolution: String!' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:3343:103 'field resolution: String!' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:3352:149 'field isVideoOnly: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:3409:50 'field resolution: String!' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:3415:39 'field isVideoOnly: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/MainActivity.kt:3416:107 'field isVideoOnly: Boolean' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/PlayerControls.kt:347:46 Condition is always 'true'.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/PlayerControls.kt:348:49 Condition is always 'true'.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/PlayerControls.kt:447:30 Condition is always 'true'.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/PlayerControls.kt:499:26 Condition is always 'true'.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/VideoRepository.kt:548:31 'field resolution: String!' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/VideoRepository.kt:551:31 'field resolution: String!' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/WatchHistory.kt:79:68 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/WatchPanels.kt:165:119 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/WatchPanels.kt:168:99 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/main/java/id/flufclip/player/WatchPanels.kt:395:40 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac NO-SOURCE
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:bundleDebugClassesToCompileJar
+
+> Task :app:compileDebugUnitTestKotlin
+w: Class androidx.media3.common.util.UnstableApi is not an opt-in requirement marker
+w: file:///home/iqbal/Documents/flufclip/flufplay/app/src/test/java/id/flufclip/player/DownloadFilesTest.kt:37:47 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'File?'.
+
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugJavaRes
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :app:testDebugUnitTest
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics UP-TO-DATE
+> Task :app:mergeDebugJavaResource
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeProjectDexDebug
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:generateDebugAndroidTestResValues UP-TO-DATE
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:generateDebugLintReportModel
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:lintAnalyzeDebug
+> Task :app:lintAnalyzeDebugAndroidTest
+> Task :app:lintAnalyzeDebugUnitTest
+
+> Task :app:lintReportDebug
+Wrote HTML report to file:///home/iqbal/Documents/flufclip/flufplay/app/build/reports/lint-results-debug.html
+
+> Task :app:lintDebug
+
+BUILD SUCCESSFUL in 4m 58s
+51 actionable tasks: 18 executed, 33 up-to-date

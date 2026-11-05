@@ -1,0 +1,822 @@
+{
+ "responseContext": {
+  "visitorData": "<redacted>",
+  "serviceTrackingParams": [
+   {
+    "service": "CSI",
+    "params": [
+     {
+      "key": "<redacted>",
+      "value": "WEB"
+     },
+     {
+      "key": "<redacted>",
+      "value": "2.20261029.11.00"
+     },
+     {
+      "key": "<redacted>",
+      "value": "1"
+     },
+     {
+      "key": "<redacted>",
+      "value": "0x19194110f120aa5c"
+     }
+    ]
+   },
+   {
+    "service": "GFEEDBACK",
+    "params": [
+     {
+      "key": "<redacted>",
+      "value": "1"
+     }
+    ]
+   },
+   {
+    "service": "GUIDED_HELP",
+    "params": [
+     {
+      "key": "<redacted>",
+      "value": "1"
+     }
+    ]
+   },
+   {
+    "service": "ECATCHER",
+    "params": [
+     {
+      "key": "<redacted>",
+      "value": "2.20261029"
+     },
+     {
+      "key": "<redacted>",
+      "value": "WEB"
+     }
+    ]
+   }
+  ],
+  "mainAppWebResponseContext": {
+   "datasyncId": "<redacted>",
+   "loggedOut": false,
+   "trackingParam": "<redacted>"
+  },
+  "responseId": "<redacted>",
+  "webResponseContextExtensionData": {
+   "webResponseContextPreloadData": {
+    "preloadMessageNames": [
+     "engagementPanelSectionListRenderer",
+     "youChatItemViewModel",
+     "responseActionsViewModel",
+     "flexibleActionsViewModel",
+     "toggleButtonViewModel",
+     "buttonViewModel",
+     "snackbarViewModel",
+     "chatItemViewModel",
+     "disclaimerItemViewModel",
+     "chatUserTurnViewModel",
+     "chatLoadingViewModel",
+     "lottieAnimationViewModel"
+    ]
+   },
+   "hasDecorated": true
+  }
+ },
+ "content": {
+  "engagementPanelSectionListRenderer": {}
+ },
+ "trackingParams": "<redacted>",
+ "onResponseReceivedCommand": {
+  "clickTrackingParams": "<redacted>",
+  "listMutationCommand": {
+   "operations": {
+    "operations": [
+     {
+      "insertItemSectionContent": {
+       "contents": [
+        {
+         "youChatItemViewModel": {
+          "text": {
+           "content": "This video features the official 4K remastered music video for *Rick Astley*'s 1987 global hit, \"Never Gonna Give You Up,\" which reached number one in 25 countries and has become a landmark of pop culture.",
+           "styleRuns": [
+            {
+             "startIndex": 0,
+             "length": 205,
+             "weightLabel": "FONT_WEIGHT_NORMAL"
+            }
+           ]
+          },
+          "id": "<redacted>",
+          "chatResponseStyle": "CHAT_RESPONSE_STYLE_SINGLE_ITEM",
+          "transparentBackground": true,
+          "icon": {
+           "sources": [
+            {
+             "clientResource": {
+              "imageName": "SPARK"
+             }
+            }
+           ]
+          },
+          "responseActionsViewModel": {
+           "responseActionsViewModel": {
+            "actionsBar": {
+             "flexibleActionsViewModel": {
+              "actionsRows": [
+               {
+                "actions": [
+                 {
+                  "toggleButtonViewModel": {
+                   "defaultButtonViewModel": {
+                    "buttonViewModel": {
+                     "iconName": "LIKE",
+                     "onTap": {
+                      "innertubeCommand": {
+                       "clickTrackingParams": "<redacted>",
+                       "commandExecutorCommand": {
+                        "commands": [
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "entityUpdateCommand": {
+                           "entityBatchUpdate": {
+                            "mutations": [
+                             {
+                              "entityKey": "<redacted>",
+                              "type": "ENTITY_MUTATION_TYPE_REPLACE",
+                              "payload": {
+                               "booleanEntity": {
+                                "key": "<redacted>",
+                                "value": true
+                               }
+                              }
+                             }
+                            ]
+                           }
+                          }
+                         },
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "entityUpdateCommand": {
+                           "entityBatchUpdate": {
+                            "mutations": [
+                             {
+                              "entityKey": "<redacted>",
+                              "type": "ENTITY_MUTATION_TYPE_REPLACE",
+                              "payload": {
+                               "booleanEntity": {
+                                "key": "<redacted>",
+                                "value": false
+                               }
+                              }
+                             }
+                            ]
+                           }
+                          }
+                         },
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "showEngagementPanelEndpoint": {
+                           "identifier": {
+                            "tag": "PAfeedback_genai"
+                           },
+                           "globalConfiguration": {
+                            "params": "<redacted>"
+                           },
+                           "engagementPanelPresentationConfigs": {
+                            "engagementPanelPopupPresentationConfig": {
+                             "popupType": "PANEL_POPUP_TYPE_DIALOG"
+                            }
+                           }
+                          }
+                         }
+                        ]
+                       }
+                      }
+                     },
+                     "accessibilityText": "Thumbs up",
+                     "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                     "trackingParams": "<redacted>",
+                     "type": "BUTTON_VIEW_MODEL_TYPE_TEXT",
+                     "buttonSize": "BUTTON_VIEW_MODEL_SIZE_XSMALL",
+                     "state": "BUTTON_VIEW_MODEL_STATE_ACTIVE",
+                     "loggingDirectives": {
+                      "trackingParams": "<redacted>",
+                      "visibility": {
+                       "types": "12"
+                      }
+                     }
+                    }
+                   },
+                   "toggledButtonViewModel": {
+                    "buttonViewModel": {
+                     "iconName": "LIKE_SELECTED",
+                     "onTap": {
+                      "innertubeCommand": {
+                       "clickTrackingParams": "<redacted>",
+                       "commandExecutorCommand": {
+                        "commands": [
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "entityUpdateCommand": {
+                           "entityBatchUpdate": {
+                            "mutations": [
+                             {
+                              "entityKey": "<redacted>",
+                              "type": "ENTITY_MUTATION_TYPE_REPLACE",
+                              "payload": {
+                               "booleanEntity": {
+                                "key": "<redacted>",
+                                "value": false
+                               }
+                              }
+                             }
+                            ]
+                           }
+                          }
+                         },
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "commandMetadata": {
+                           "webCommandMetadata": {
+                            "sendPost": true,
+                            "apiUrl": "/youtubei/v1/feedback"
+                           }
+                          },
+                          "feedbackEndpoint": {
+                           "feedbackToken": "<redacted>"
+                          }
+                         }
+                        ]
+                       }
+                      }
+                     },
+                     "accessibilityText": "Thumbs up",
+                     "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                     "trackingParams": "<redacted>",
+                     "type": "BUTTON_VIEW_MODEL_TYPE_TEXT",
+                     "buttonSize": "BUTTON_VIEW_MODEL_SIZE_XSMALL",
+                     "state": "BUTTON_VIEW_MODEL_STATE_ACTIVE",
+                     "loggingDirectives": {
+                      "trackingParams": "<redacted>",
+                      "visibility": {
+                       "types": "12"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "<redacted>",
+                   "entityKey": "<redacted>",
+                   "toggledStateEntitySelectorType": "TOGGLE_BUTTON_ENTITY_SELECTOR_TYPE_BOOLEAN"
+                  }
+                 },
+                 {
+                  "toggleButtonViewModel": {
+                   "defaultButtonViewModel": {
+                    "buttonViewModel": {
+                     "iconName": "DISLIKE",
+                     "onTap": {
+                      "innertubeCommand": {
+                       "clickTrackingParams": "<redacted>",
+                       "commandExecutorCommand": {
+                        "commands": [
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "entityUpdateCommand": {
+                           "entityBatchUpdate": {
+                            "mutations": [
+                             {
+                              "entityKey": "<redacted>",
+                              "type": "ENTITY_MUTATION_TYPE_REPLACE",
+                              "payload": {
+                               "booleanEntity": {
+                                "key": "<redacted>",
+                                "value": false
+                               }
+                              }
+                             }
+                            ]
+                           }
+                          }
+                         },
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "entityUpdateCommand": {
+                           "entityBatchUpdate": {
+                            "mutations": [
+                             {
+                              "entityKey": "<redacted>",
+                              "type": "ENTITY_MUTATION_TYPE_REPLACE",
+                              "payload": {
+                               "booleanEntity": {
+                                "key": "<redacted>",
+                                "value": true
+                               }
+                              }
+                             }
+                            ]
+                           }
+                          }
+                         },
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "showEngagementPanelEndpoint": {
+                           "identifier": {
+                            "tag": "PAfeedback_genai"
+                           },
+                           "globalConfiguration": {
+                            "params": "<redacted>"
+                           },
+                           "engagementPanelPresentationConfigs": {
+                            "engagementPanelPopupPresentationConfig": {
+                             "popupType": "PANEL_POPUP_TYPE_DIALOG"
+                            }
+                           }
+                          }
+                         }
+                        ]
+                       }
+                      }
+                     },
+                     "accessibilityText": "Thumbs down",
+                     "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                     "trackingParams": "<redacted>",
+                     "type": "BUTTON_VIEW_MODEL_TYPE_TEXT",
+                     "buttonSize": "BUTTON_VIEW_MODEL_SIZE_XSMALL",
+                     "state": "BUTTON_VIEW_MODEL_STATE_ACTIVE",
+                     "loggingDirectives": {
+                      "trackingParams": "<redacted>",
+                      "visibility": {
+                       "types": "12"
+                      }
+                     }
+                    }
+                   },
+                   "toggledButtonViewModel": {
+                    "buttonViewModel": {
+                     "iconName": "DISLIKE_SELECTED",
+                     "onTap": {
+                      "innertubeCommand": {
+                       "clickTrackingParams": "<redacted>",
+                       "commandExecutorCommand": {
+                        "commands": [
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "entityUpdateCommand": {
+                           "entityBatchUpdate": {
+                            "mutations": [
+                             {
+                              "entityKey": "<redacted>",
+                              "type": "ENTITY_MUTATION_TYPE_REPLACE",
+                              "payload": {
+                               "booleanEntity": {
+                                "key": "<redacted>",
+                                "value": false
+                               }
+                              }
+                             }
+                            ]
+                           }
+                          }
+                         },
+                         {
+                          "clickTrackingParams": "<redacted>",
+                          "commandMetadata": {
+                           "webCommandMetadata": {
+                            "sendPost": true,
+                            "apiUrl": "/youtubei/v1/feedback"
+                           }
+                          },
+                          "feedbackEndpoint": {
+                           "feedbackToken": "<redacted>"
+                          }
+                         }
+                        ]
+                       }
+                      }
+                     },
+                     "accessibilityText": "Thumbs down",
+                     "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                     "trackingParams": "<redacted>",
+                     "type": "BUTTON_VIEW_MODEL_TYPE_TEXT",
+                     "buttonSize": "BUTTON_VIEW_MODEL_SIZE_XSMALL",
+                     "state": "BUTTON_VIEW_MODEL_STATE_ACTIVE",
+                     "loggingDirectives": {
+                      "trackingParams": "<redacted>",
+                      "visibility": {
+                       "types": "12"
+                      }
+                     }
+                    }
+                   },
+                   "trackingParams": "<redacted>",
+                   "entityKey": "<redacted>",
+                   "toggledStateEntitySelectorType": "TOGGLE_BUTTON_ENTITY_SELECTOR_TYPE_BOOLEAN"
+                  }
+                 },
+                 {
+                  "buttonViewModel": {
+                   "iconName": "COPY",
+                   "onTap": {
+                    "innertubeCommand": {
+                     "clickTrackingParams": "<redacted>",
+                     "commandExecutorCommand": {
+                      "commands": [
+                       {
+                        "clickTrackingParams": "<redacted>",
+                        "copyToClipboardCommand": {
+                         "content": {
+                          "text": "This video features the official 4K remastered music video for *Rick Astley*'s 1987 global hit, \"Never Gonna Give You Up,\" which reached number one in 25 countries and has become a landmark of pop culture."
+                         }
+                        }
+                       },
+                       {
+                        "clickTrackingParams": "<redacted>",
+                        "showSnackbarCommand": {
+                         "content": {
+                          "snackbarViewModel": {
+                           "text": {
+                            "content": "Text copied to clipboard"
+                           }
+                          }
+                         }
+                        }
+                       }
+                      ]
+                     }
+                    }
+                   },
+                   "accessibilityText": "Copy",
+                   "style": "BUTTON_VIEW_MODEL_STYLE_MONO",
+                   "trackingParams": "<redacted>",
+                   "type": "BUTTON_VIEW_MODEL_TYPE_TEXT",
+                   "buttonSize": "BUTTON_VIEW_MODEL_SIZE_XSMALL",
+                   "state": "BUTTON_VIEW_MODEL_STATE_ACTIVE",
+                   "shouldLogGestures": true,
+                   "loggingDirectives": {
+                    "trackingParams": "<redacted>",
+                    "visibility": {
+                     "types": "12"
+                    }
+                   }
+                  }
+                 }
+                ]
+               }
+              ],
+              "justifyContent": "FLEXIBLE_ACTIONS_JUSTIFY_CONTENT_START"
+             }
+            }
+           }
+          }
+         }
+        },
+        {
+         "chatItemViewModel": {
+          "targetId": "disclaimer_chat_item_id-youchat-1793624005148",
+          "content": {
+           "disclaimerItemViewModel": {
+            "linkfiedText": {
+             "content": "AI can make mistakes, so double-check it. Learn more",
+             "commandRuns": [
+              {
+               "startIndex": 42,
+               "length": 10,
+               "onTap": {
+                "innertubeCommand": {
+                 "clickTrackingParams": "<redacted>",
+                 "commandMetadata": {
+                  "webCommandMetadata": {
+                   "url": "https://support.google.com/youtube/answer/14110396",
+                   "webPageType": "WEB_PAGE_TYPE_UNKNOWN",
+                   "rootVe": 83769
+                  }
+                 },
+                 "urlEndpoint": {
+                  "url": "https://support.google.com/youtube/answer/14110396",
+                  "target": "TARGET_NEW_WINDOW"
+                 }
+                }
+               }
+              }
+             ],
+             "styleRuns": [
+              {
+               "startIndex": 42,
+               "length": 10,
+               "fontColor": 4284506208,
+               "weightLabel": "FONT_WEIGHT_BOLD",
+               "styleRunExtensions": {
+                "styleRunColorMapExtension": {
+                 "colorMap": [
+                  {
+                   "key": "<redacted>",
+                   "value": 4284506208
+                  },
+                  {
+                   "key": "<redacted>",
+                   "value": 4289374890
+                  }
+                 ]
+                }
+               }
+              }
+             ]
+            }
+           }
+          },
+          "removeVerticalPadding": true
+         }
+        },
+        {
+         "youChatItemViewModel": {
+          "chipsData": {
+           "chipData": [
+            {
+             "id": "<redacted>",
+             "text": {
+              "content": "Who produced this song?"
+             },
+             "showIcon": true,
+             "onClick": {
+              "clickTrackingParams": "<redacted>",
+              "listMutationCommand": {
+               "operations": {
+                "operations": [
+                 {
+                  "insertItemSectionContent": {
+                   "contents": [
+                    {
+                     "chatUserTurnViewModel": {
+                      "text": "Who produced this song?",
+                      "backgroundStyle": "CHAT_USER_TURN_BACKGROUND_STYLE_MONO"
+                     }
+                    },
+                    {
+                     "chatLoadingViewModel": {
+                      "targetId": "loading_response_message_id",
+                      "animation": {
+                       "lottieAnimationViewModel": {
+                        "trustedAnimationUrl": {
+                         "privateDoNotAccessOrElseTrustedResourceUrlWrappedValue": "<opaque 104 chars>"
+                        },
+                        "loop": true
+                       }
+                      },
+                      "loadingAnimationA11yLabel": "Load in progress.",
+                      "darkThemeAnimation": {
+                       "lottieAnimationViewModel": {
+                        "trustedAnimationUrl": {
+                         "privateDoNotAccessOrElseTrustedResourceUrlWrappedValue": "<opaque 103 chars>"
+                        },
+                        "loop": true
+                       }
+                      }
+                     }
+                    }
+                   ],
+                   "insertByPositionInSection": {
+                    "sectionTargetId": "youchat_messages_section",
+                    "position": "INSERTION_POSITION_LAST"
+                   }
+                  }
+                 }
+                ],
+                "scrollConfig": {
+                 "scrollToItem": {
+                  "item": {
+                   "itemTargetId": "loading_response_message_id",
+                   "sectionTargetId": "youchat_section_list"
+                  },
+                  "scrollPosition": "SCROLL_POSITION_END"
+                 }
+                }
+               }
+              }
+             },
+             "continuation": "<opaque 250 chars>",
+             "transparentWhenLoading": true,
+             "rendererContext": {
+              "loggingContext": {
+               "loggingDirectives": {
+                "trackingParams": "<redacted>",
+                "visibility": {
+                 "types": "12"
+                }
+               }
+              }
+             }
+            },
+            {
+             "id": "<redacted>",
+             "text": {
+              "content": "When did this video hit one billion views?"
+             },
+             "showIcon": true,
+             "onClick": {
+              "clickTrackingParams": "<redacted>",
+              "listMutationCommand": {
+               "operations": {
+                "operations": [
+                 {
+                  "insertItemSectionContent": {
+                   "contents": [
+                    {
+                     "chatUserTurnViewModel": {
+                      "text": "When did this video hit one billion views?",
+                      "backgroundStyle": "CHAT_USER_TURN_BACKGROUND_STYLE_MONO"
+                     }
+                    },
+                    {
+                     "chatLoadingViewModel": {
+                      "targetId": "loading_response_message_id",
+                      "animation": {
+                       "lottieAnimationViewModel": {
+                        "trustedAnimationUrl": {
+                         "privateDoNotAccessOrElseTrustedResourceUrlWrappedValue": "<opaque 104 chars>"
+                        },
+                        "loop": true
+                       }
+                      },
+                      "loadingAnimationA11yLabel": "Load in progress.",
+                      "darkThemeAnimation": {
+                       "lottieAnimationViewModel": {
+                        "trustedAnimationUrl": {
+                         "privateDoNotAccessOrElseTrustedResourceUrlWrappedValue": "<opaque 103 chars>"
+                        },
+                        "loop": true
+                       }
+                      }
+                     }
+                    }
+                   ],
+                   "insertByPositionInSection": {
+                    "sectionTargetId": "youchat_messages_section",
+                    "position": "INSERTION_POSITION_LAST"
+                   }
+                  }
+                 }
+                ],
+                "scrollConfig": {
+                 "scrollToItem": {
+                  "item": {
+                   "itemTargetId": "loading_response_message_id",
+                   "sectionTargetId": "youchat_section_list"
+                  },
+                  "scrollPosition": "SCROLL_POSITION_END"
+                 }
+                }
+               }
+              }
+             },
+             "continuation": "<opaque 280 chars>",
+             "transparentWhenLoading": true,
+             "rendererContext": {
+              "loggingContext": {
+               "loggingDirectives": {
+                "trackingParams": "<redacted>",
+                "visibility": {
+                 "types": "12"
+                }
+               }
+              }
+             }
+            },
+            {
+             "id": "<redacted>",
+             "text": {
+              "content": "What other songs are on this album?"
+             },
+             "showIcon": true,
+             "onClick": {
+              "clickTrackingParams": "<redacted>",
+              "listMutationCommand": {
+               "operations": {
+                "operations": [
+                 {
+                  "insertItemSectionContent": {
+                   "contents": [
+                    {
+                     "chatUserTurnViewModel": {
+                      "text": "What other songs are on this album?",
+                      "backgroundStyle": "CHAT_USER_TURN_BACKGROUND_STYLE_MONO"
+                     }
+                    },
+                    {
+                     "chatLoadingViewModel": {
+                      "targetId": "loading_response_message_id",
+                      "animation": {
+                       "lottieAnimationViewModel": {
+                        "trustedAnimationUrl": {
+                         "privateDoNotAccessOrElseTrustedResourceUrlWrappedValue": "<opaque 104 chars>"
+                        },
+                        "loop": true
+                       }
+                      },
+                      "loadingAnimationA11yLabel": "Load in progress.",
+                      "darkThemeAnimation": {
+                       "lottieAnimationViewModel": {
+                        "trustedAnimationUrl": {
+                         "privateDoNotAccessOrElseTrustedResourceUrlWrappedValue": "<opaque 103 chars>"
+                        },
+                        "loop": true
+                       }
+                      }
+                     }
+                    }
+                   ],
+                   "insertByPositionInSection": {
+                    "sectionTargetId": "youchat_messages_section",
+                    "position": "INSERTION_POSITION_LAST"
+                   }
+                  }
+                 }
+                ],
+                "scrollConfig": {
+                 "scrollToItem": {
+                  "item": {
+                   "itemTargetId": "loading_response_message_id",
+                   "sectionTargetId": "youchat_section_list"
+                  },
+                  "scrollPosition": "SCROLL_POSITION_END"
+                 }
+                }
+               }
+              }
+             },
+             "continuation": "<opaque 268 chars>",
+             "transparentWhenLoading": true,
+             "rendererContext": {
+              "loggingContext": {
+               "loggingDirectives": {
+                "trackingParams": "<redacted>",
+                "visibility": {
+                 "types": "12"
+                }
+               }
+              }
+             }
+            }
+           ],
+           "isHorizontal": true,
+           "onShowAnimationMs": 400,
+           "onShowDelayMs": 400,
+           "pendingStateEntityKey": "<redacted>",
+           "lastMessageIdEntityKey": "<redacted>"
+          },
+          "id": "<redacted>"
+         }
+        }
+       ],
+       "insertByPositionInSection": {
+        "sectionTargetId": "youchat_messages_section",
+        "position": "INSERTION_POSITION_LAST"
+       }
+      }
+     },
+     {
+      "removeItem": {
+       "removeByTargetId": {
+        "targetIds": [
+         "loading_response_message_id"
+        ]
+       },
+       "sectionTargetId": "youchat_messages_section"
+      }
+     }
+    ],
+    "scrollConfig": {
+     "scrollToItem": {
+      "item": {
+       "itemTargetId": "youchat-1793624005148",
+       "sectionTargetId": "youchat_section_list"
+      },
+      "scrollPosition": "SCROLL_POSITION_START"
+     }
+    }
+   }
+  }
+ },
+ "frameworkUpdates": {
+  "entityBatchUpdate": {
+   "mutations": [
+    {
+     "entityKey": "<redacted>",
+     "type": "ENTITY_MUTATION_TYPE_DELETE"
+    },
+    {
+     "entityKey": "<redacted>",
+     "type": "ENTITY_MUTATION_TYPE_REPLACE",
+     "payload": {
+      "stringEntity": {
+       "key": "<redacted>",
+       "value": "youchat-1793624005148"
+      }
+     }
+    }
+   ],
+   "timestamp": {
+    "seconds": "1793624007",
+    "nanos": 588635324
+   }
+  }
+ }
+}

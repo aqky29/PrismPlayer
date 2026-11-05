@@ -15,12 +15,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -39,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
@@ -54,6 +58,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.comments.CommentsInfo
@@ -61,6 +66,7 @@ import org.schabi.newpipe.extractor.comments.CommentsInfoItem
 import org.schabi.newpipe.extractor.localization.DateWrapper
 import org.schabi.newpipe.extractor.stream.Description
 import org.schabi.newpipe.extractor.stream.StreamInfo
+import org.schabi.newpipe.extractor.stream.StreamSegment
 import kotlin.math.roundToInt
 
 internal val LinkBlue = Color(0xFF3EA6FF)
@@ -80,7 +86,7 @@ internal class CommentsState(val url: String, private val scope: CoroutineScope)
             val result = VideoRepository.comments(url)
             info = result; items = result.relatedItems; next = result.nextPage
         } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error = "Komentar gagal dimuat: ${e.message ?: "coba lagi"}" }
+        catch (e: Exception) { error = "Failed to load comments: ${e.message ?: "try again"}" }
         finally { loading = false }
     }
     fun retry() { scope.launch { load() } }
@@ -96,7 +102,7 @@ internal class CommentsState(val url: String, private val scope: CoroutineScope)
                 next = if (updated.size == items.size) null else result.next
                 items = updated
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = "Komentar berikutnya gagal dimuat: ${e.message ?: "coba lagi"}" }
+            catch (e: Exception) { error = "Failed to load more comments: ${e.message ?: "try again"}" }
             finally { loading = false }
         }
     }
@@ -138,18 +144,30 @@ internal fun relativeTime(date: DateWrapper?, fallback: String?): String? {
     val time = date?.offsetDateTime() ?: return fallback?.takeIf { it.isNotBlank() }
     val seconds = java.time.Duration.between(time, java.time.OffsetDateTime.now()).seconds.coerceAtLeast(0)
     val (value, unit) = when {
-        seconds < 60 -> return "Baru saja"
-        seconds < 3_600 -> seconds / 60 to "menit"
-        seconds < 86_400 -> seconds / 3_600 to "jam"
-        seconds < 604_800 -> seconds / 86_400 to "hari"
-        seconds < 2_592_000 -> seconds / 604_800 to "minggu"
-        seconds < 31_536_000 -> seconds / 2_592_000 to "bulan"
-        else -> seconds / 31_536_000 to "tahun"
+        seconds < 60 -> return "Just now"
+        seconds < 3_600 -> seconds / 60 to "minute"
+        seconds < 86_400 -> seconds / 3_600 to "hour"
+        seconds < 604_800 -> seconds / 86_400 to "day"
+        seconds < 2_592_000 -> seconds / 604_800 to "week"
+        seconds < 31_536_000 -> seconds / 2_592_000 to "month"
+        else -> seconds / 31_536_000 to "year"
     }
-    return "$value $unit yang lalu"
+    return "$value $unit${if (value == 1L) "" else "s"} ago"
 }
 
-internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerInstance(java.util.Locale("id", "ID")).format(count)
+/**
+ * Teks tanggal mulai siaran live seperti `dateText` dari server YouTube ("Started streaming on Jun 15, 2026" untuk siaran lama,
+ * "Started streaming 2 hours ago" untuk yang baru). Ambang tujuh hari antara bentuk relatif dan tanggal penuh adalah pilihan
+ * sendiri (server tidak menyebutnya). Mengembalikan null bila tanggal mulai tidak diketahui; teks mentah dari extractor tidak dipakai.
+ */
+internal fun startedStreamingText(date: DateWrapper?): String? {
+    val time = date?.offsetDateTime() ?: return null
+    val seconds = java.time.Duration.between(time, java.time.OffsetDateTime.now()).seconds
+    if (seconds < 604_800) return relativeTime(date, null)?.let { "Started streaming ${it.replaceFirstChar(Char::lowercaseChar)}" }
+    return "Started streaming on " + time.format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.US))
+}
+
+internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(count)
 
 @Composable internal fun RichText(html: String, onLink: (String) -> Unit, modifier: Modifier = Modifier, collapsedLines: Int = Int.MAX_VALUE, fontSize: Int = 14) {
     val latestOnLink by rememberUpdatedState(onLink)
@@ -162,7 +180,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
     Column(modifier) {
         Text(text, color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize + 6).sp, maxLines = if (expanded) Int.MAX_VALUE else collapsedLines,
             overflow = TextOverflow.Ellipsis, onTextLayout = { if (!expanded) overflow = it.hasVisualOverflow })
-        if (overflow || expanded) Text(if (expanded) "Lebih sedikit" else "Baca selengkapnya", color = Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+        if (overflow || expanded) Text(if (expanded) "Show less" else "Baca selengkapnya", color = Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(top = 4.dp).clickable { expanded = !expanded })
     }
 }
@@ -171,7 +189,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 
 /** YouTube engagement panel: drag handle, title row with close button, divider; dragging the header down dismisses it. */
 @Composable internal fun EngagementPanel(title: String, subtitle: String?, draggable: Boolean, onDismiss: () -> Unit, modifier: Modifier = Modifier,
-    navigation: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    navigation: (@Composable () -> Unit)? = null, showHandle: Boolean = true, titleWeight: FontWeight = FontWeight.Bold, content: @Composable ColumnScope.() -> Unit) {
     val scope = rememberCoroutineScope()
     val offset = remember { Animatable(0f) }
     var panelHeight by remember { mutableIntStateOf(0) }
@@ -188,13 +206,13 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
         })
     Column(modifier.onSizeChanged { panelHeight = it.height }.offset { IntOffset(0, offset.value.roundToInt()) }.clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(Background)) {
         Column(drag) {
-            Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(40.dp, 4.dp).clip(RoundedCornerShape(50)).background(Color(0xFF606060))) }
-            Row(Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (showHandle) Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(40.dp, 4.dp).clip(RoundedCornerShape(50)).background(Color(0xFF606060))) }
+            Row(Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = if (showHandle) 4.dp else 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 navigation?.invoke()
-                Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(title, fontSize = 20.sp, fontWeight = titleWeight)
                 subtitle?.let { Text(it, color = Muted, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp)) }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Tutup") }
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Close") }
             }
         }
         HorizontalDivider(color = PanelLine)
@@ -204,51 +222,302 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 
 // ---------- comments ----------
 
-@Composable internal fun CommentsTeaser(state: CommentsState, onClick: () -> Unit) {
+/**
+ * Kartu komentar di bawah deskripsi. Seperti YouTube: label "Comments" + jumlah dan cuplikan komentar.
+ * Dapat ditampilkan dalam carousel horizontal bersama komentar lain, live chat replay, atau daftar bab.
+ */
+@Composable internal fun CommentsTeaser(
+    state: CommentsState,
+    onClick: () -> Unit,
+    pageIndicator: (@Composable () -> Unit)? = null,
+    commentIndex: Int = 0
+) {
     val count = state.info?.commentsCount?.takeIf { it >= 0 }
-    val first = state.items.firstOrNull()
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Surface).clickable(onClick = onClick).padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Komentar", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            count?.let { Text(formatCount(it.toLong()), color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp)) }
-        }
-        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            when {
-                state.info?.isCommentsDisabled == true -> Text("Komentar dinonaktifkan.", color = Muted, fontSize = 13.sp)
-                first != null -> {
-                    Avatar(first.uploaderAvatars.lastOrNull()?.url, first.uploaderName, 24)
-                    Text(plainText(first.commentText), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
+    val comment = state.items.getOrNull(commentIndex) ?: state.items.firstOrNull()
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Surface).clickable(onClick = onClick)) {
+        Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 14.dp)) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Comments", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                count?.let { Text(formatCount(it.toLong()), color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp)) }
+                Spacer(Modifier.weight(1f))
+                pageIndicator?.invoke()
+            }
+            Box(Modifier.padding(top = 12.dp)) {
+                when {
+                    state.info?.isCommentsDisabled == true -> Text("Comments are turned off.", color = Muted, fontSize = 13.sp)
+                    comment != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(comment.uploaderAvatars.lastOrNull()?.url, comment.uploaderName, 24)
+                        Text(plainText(comment.commentText), fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
+                    }
+                    state.loading -> Box(Modifier.fillMaxWidth().height(16.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF3A3A3A)))
+                    state.error != null -> Text("Failed to load comments. Tap to try again.", color = Muted, fontSize = 13.sp)
+                    else -> Text("No comments yet.", color = Muted, fontSize = 13.sp)
                 }
-                state.loading -> Box(Modifier.fillMaxWidth().height(16.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF3A3A3A)))
-                state.error != null -> Text("Komentar gagal dimuat. Ketuk untuk mencoba lagi.", color = Muted, fontSize = 13.sp)
-                else -> Text("Belum ada komentar.", color = Muted, fontSize = 13.sp)
             }
         }
     }
 }
 
-@Composable internal fun CommentsPanel(state: CommentsState, info: StreamInfo, draggable: Boolean, onDismiss: () -> Unit, onLink: (String) -> Unit, onChannel: (String) -> Unit, modifier: Modifier = Modifier, showCount: Boolean = true) {
-    var thread by remember(state) { mutableStateOf<CommentsInfoItem?>(null) }
+/**
+ * Kartu cuplikan bab (Chapters teaser) di layar tonton, ditampilkan dalam carousel kartu bersama komentar.
+ * Menampilkan judul bab pertama atau cuplikan waktu, dan membuka panel bab / deskripsi saat diketuk.
+ */
+@Composable internal fun ChaptersTeaser(
+    chapters: List<StreamSegment>,
+    thumbnailUrl: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    pageIndicator: (@Composable () -> Unit)? = null
+) {
+    val firstChapter = chapters.firstOrNull()
+    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Surface).clickable(onClick = onClick)) {
+        Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 14.dp)) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Chapters", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Text("${chapters.size}", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
+                Spacer(Modifier.weight(1f))
+                pageIndicator?.invoke()
+            }
+            Box(Modifier.padding(top = 10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(width = 44.dp, height = 26.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF272727))
+                    ) {
+                        (firstChapter?.previewUrl ?: thumbnailUrl)?.let {
+                            AsyncImage(
+                                model = it,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                        Text(
+                            firstChapter?.title?.takeIf { it.isNotBlank() } ?: "Key moments",
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        firstChapter?.startTimeSeconds?.let {
+                            Text(formatSeconds(it), color = LinkBlue, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Kartu carousel metadata di layar tonton seperti YouTube (metapanel_overlay):
+ * Bingkai kartu (Surface RoundedCornerShape 12dp) dan header (Judul + jumlah + indikator titik) tetap statis di posisinya,
+ * sementara isi cuplikan (komentar, bab, replay chat) bergeser secara halus di dalamnya dengan animasi titik yang dinamis.
+ */
+@Composable internal fun WatchMetadataCarousel(
+    comments: CommentsState,
+    chapters: List<StreamSegment>,
+    chatState: LiveChatState,
+    showReplayChat: Boolean,
+    thumbnailUrl: String?,
+    onComments: () -> Unit,
+    onChapters: () -> Unit,
+    onChat: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val hasChapters = chapters.isNotEmpty()
+
+    val pages = remember(showReplayChat, hasChapters) {
+        buildList {
+            add(0) // 1. Comments (Top comment preview)
+            if (hasChapters) add(-2) // 2. Chapters (Key moments)
+            if (showReplayChat) add(-1) // 3. Replay chat (Live chat replay)
+        }
+    }
+
+    val pageCount = pages.size
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState { pageCount }
+    val currentPage = pages.getOrElse(pagerState.currentPage.coerceIn(0, pageCount - 1)) { 0 }
+
+    val onCurrentClick = when (currentPage) {
+        -1 -> onChat
+        -2 -> onChapters
+        else -> onComments
+    }
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Surface)
+            .clickable(onClick = onCurrentClick)
+    ) {
+        Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 14.dp)) {
+            // Header Row: Judul dinamis (Comments / Chapters / Replay chat) + Count + Indikator Titik
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                when (currentPage) {
+                    -1 -> {
+                        Text("Replay chat", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                    }
+                    -2 -> {
+                        Text("Chapters", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        Text("${chapters.size}", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
+                    }
+                    else -> {
+                        Text("Comments", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        val count = comments.info?.commentsCount?.takeIf { it >= 0 }
+                        count?.let { Text(formatCount(it.toLong()), color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp)) }
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                if (pageCount > 1) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        repeat(pageCount) { i ->
+                            // Formula translasi dan scaling titik sesuai 'post_dot_page_indicator.eml' di APK YouTube:
+                            val distance = kotlin.math.abs(pagerState.currentPage + pagerState.currentPageOffsetFraction - i)
+                            val fraction = (1f - distance).coerceIn(0f, 1f)
+                            val width = androidx.compose.ui.unit.lerp(4.dp, 10.dp, fraction)
+                            val color = androidx.compose.ui.graphics.lerp(Color(0xFF717171), Color.White, fraction)
+                            Box(
+                                Modifier
+                                    .size(width = width, height = 4.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(color)
+                            )
+                        }
+                    }
+                } else {
+                    Icon(
+                        painter = painterResource(R.drawable.yt_chevron_down),
+                        contentDescription = "Open panel",
+                        tint = Color.LightGray,
+                        modifier = Modifier.size(16.dp).padding(end = 4.dp)
+                    )
+                }
+            }
+
+            // Carousel Body: HANYA bagian cuplikan ini yang bergeser horizontal secara halus!
+            androidx.compose.foundation.pager.HorizontalPager(
+                pagerState,
+                Modifier.padding(top = 10.dp).fillMaxWidth(),
+                userScrollEnabled = pageCount > 1,
+                pageSpacing = 16.dp,
+                verticalAlignment = Alignment.CenterVertically
+            ) { pageIdx ->
+                when (val item = pages.getOrElse(pageIdx) { 0 }) {
+                    -1 -> {
+                        val latest = chatState.visibleMessages.lastOrNull { it.text.isNotBlank() }
+                        when {
+                            latest != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                Avatar(latest.authorPhotoUrl, latest.author, 24)
+                                Text(
+                                    buildAnnotatedString {
+                                        append(latest.author)
+                                        append("  ")
+                                        val start = length
+                                        append(latest.text)
+                                        addStyle(SpanStyle(color = Color.White), start, length)
+                                    },
+                                    color = Muted,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(start = 10.dp)
+                                )
+                            }
+                            chatState.loading -> Box(Modifier.fillMaxWidth().height(16.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF3A3A3A)))
+                            else -> Text("Top chat replay is on.", color = Muted, fontSize = 13.sp)
+                        }
+                    }
+                    -2 -> {
+                        val firstChapter = chapters.firstOrNull()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier
+                                    .size(width = 44.dp, height = 26.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xFF272727))
+                            ) {
+                                (firstChapter?.previewUrl ?: thumbnailUrl)?.let {
+                                    AsyncImage(
+                                        model = it,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            }
+                            Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                                Text(
+                                    firstChapter?.title?.takeIf { it.isNotBlank() } ?: "Key moments",
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                firstChapter?.startTimeSeconds?.let {
+                                    Text(formatSeconds(it), color = LinkBlue, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                    else -> {
+                        val comment = comments.items.getOrNull(item) ?: comments.items.firstOrNull()
+                        when {
+                            comments.info?.isCommentsDisabled == true -> Text("Comments are turned off.", color = Muted, fontSize = 13.sp)
+                            comment != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                Avatar(comment.uploaderAvatars.lastOrNull()?.url, comment.uploaderName, 24)
+                                Text(plainText(comment.commentText), fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
+                            }
+                            comments.loading -> Box(Modifier.fillMaxWidth().height(16.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF3A3A3A)))
+                            comments.error != null -> Text("Failed to load comments. Tap to try again.", color = Muted, fontSize = 13.sp)
+                            else -> Text("No comments yet.", color = Muted, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable internal fun CommentsPanel(state: CommentsState, info: StreamInfo, draggable: Boolean, onDismiss: () -> Unit, onLink: (String) -> Unit, onChannel: (String) -> Unit, modifier: Modifier = Modifier, showCount: Boolean = true,
+    /** Balasan yang sedang dibuka; bisa diberikan dari luar agar ketuk di luar panel dapat kembali ke daftar komentar. */
+    threadState: MutableState<CommentsInfoItem?> = remember(state) { mutableStateOf<CommentsInfoItem?>(null) },
+    /** Panel samping di layar lebar tidak memakai handle geser ala bottom sheet. */
+    showHandle: Boolean = true) {
+    var thread by threadState
     BackHandler(thread != null) { thread = null }
     val creatorAvatar = info.uploaderAvatars.lastOrNull()?.url
     val parent = thread
     if (parent != null) {
-        EngagementPanel("Balasan", null, draggable, onDismiss, modifier, navigation = { IconButton(onClick = { thread = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali ke komentar") } }) {
+        EngagementPanel("Replies", null, draggable, onDismiss, modifier, navigation = { IconButton(onClick = { thread = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back to comments") } }, showHandle = showHandle) {
             RepliesList(state, parent, info, creatorAvatar, onLink, onChannel)
         }
         return
     }
     val count = state.info?.commentsCount?.takeIf { it >= 0 }
-    EngagementPanel("Komentar", if (showCount) count?.let { formatCount(it.toLong()) } else null, draggable, onDismiss, modifier) {
+    EngagementPanel("Comments", if (showCount) count?.let { formatCount(it.toLong()) } else null, draggable, onDismiss, modifier, showHandle = showHandle) {
         val listState = rememberLazyListState()
         val nearEnd by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index?.let { it >= listState.layoutInfo.totalItemsCount - 3 } == true } }
         LaunchedEffect(nearEnd, state.next) { if (nearEnd && state.next != null && state.error == null) state.loadMore() }
         LazyColumn(Modifier.fillMaxWidth().weight(1f), state = listState, contentPadding = PaddingValues(vertical = 8.dp)) {
-            if (state.info?.isCommentsDisabled == true) item { PanelMessage("Komentar dinonaktifkan.") }
+            if (state.info?.isCommentsDisabled == true) item { PanelMessage("Comments are turned off.") }
             items(state.items, key = { it.commentId ?: it.hashCode().toString() }) { comment ->
-                CommentRow(comment, info, creatorAvatar, avatarSize = 24, onLink = onLink, onChannel = onChannel, onReplies = { thread = comment })
+                CommentRow(comment, info, creatorAvatar, avatarSize = 32, onLink = onLink, onChannel = onChannel, onReplies = { thread = comment })
             }
-            if (!state.loading && state.info?.isCommentsDisabled == false && state.items.isEmpty() && state.error == null) item { PanelMessage("Belum ada komentar.") }
+            if (!state.loading && state.info?.isCommentsDisabled == false && state.items.isEmpty() && state.error == null) item { PanelMessage("No comments yet.") }
             if (state.loading) item { PanelSpinner() }
             state.error?.let { message -> item { PanelError(message) { if (state.info == null) state.retry() else state.loadMore() } } }
         }
@@ -273,7 +542,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
                 next = if (updated.size == replies.size) null else result.next
                 replies = updated
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { error = "Balasan gagal dimuat: ${e.message ?: "coba lagi"}" }
+            catch (e: Exception) { error = "Failed to load replies: ${e.message ?: "try again"}" }
             finally { loading = false }
         }
     }
@@ -283,7 +552,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
     LaunchedEffect(nearEnd, next) { if (nearEnd && next != null && error == null && replies.isNotEmpty()) load() }
     LazyColumn(Modifier.fillMaxWidth(), state = listState, contentPadding = PaddingValues(vertical = 8.dp)) {
         item {
-            Column(Modifier.background(Color(0xFF1A1A1A))) { CommentRow(parent, info, creatorAvatar, avatarSize = 24, onLink = onLink, onChannel = onChannel, onReplies = null, expandedByDefault = true) }
+            Column(Modifier.background(Color(0xFF1A1A1A))) { CommentRow(parent, info, creatorAvatar, avatarSize = 32, onLink = onLink, onChannel = onChannel, onReplies = null, expandedByDefault = true) }
             HorizontalDivider(color = PanelLine)
         }
         items(replies, key = { it.commentId ?: it.hashCode().toString() }) { reply ->
@@ -291,7 +560,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
         }
         if (loading) item { PanelSpinner() }
         error?.let { message -> item { PanelError(message) { load() } } }
-        if (!loading && error == null && replies.isEmpty() && next == null) item { PanelMessage("Balasan tidak tersedia.") }
+        if (!loading && error == null && replies.isEmpty() && next == null) item { PanelMessage("Replies are unavailable.") }
     }
 }
 
@@ -315,21 +584,21 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
             }
             RichText(richHtml(comment.commentText), onLink, Modifier.padding(top = 2.dp), collapsedLines = if (expandedByDefault) Int.MAX_VALUE else 5)
             Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = {}, enabled = false, modifier = Modifier.size(32.dp).offset(x = (-8).dp)) { Icon(Icons.Outlined.ThumbUp, "Suka", Modifier.size(16.dp), tint = Color.White) }
+                IconButton(onClick = {}, enabled = false, modifier = Modifier.size(32.dp).offset(x = (-8).dp)) { Icon(Icons.Outlined.ThumbUp, "Like", Modifier.size(16.dp), tint = Color.White) }
                 val likes = comment.likeCount.takeIf { it > 0 }?.let { formatCount(it.toLong()) } ?: comment.textualLikeCount?.takeIf { it.isNotBlank() && it != "0" }
                 likes?.let { Text(it, fontSize = 12.sp, color = Muted, modifier = Modifier.offset(x = (-8).dp)) }
-                IconButton(onClick = {}, enabled = false, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ThumbUp, "Tidak suka", Modifier.size(16.dp).graphicsLayer { scaleY = -1f }, tint = Color.White) }
+                IconButton(onClick = {}, enabled = false, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ThumbUp, "Dislike", Modifier.size(16.dp).graphicsLayer { scaleY = -1f }, tint = Color.White) }
                 IconButton(onClick = { onReplies?.invoke() }, enabled = onReplies != null, modifier = Modifier.size(32.dp)) { ReplyGlyph(Modifier.size(16.dp)) }
                 if (comment.isHeartedByUploader) Box(Modifier.padding(start = 6.dp).size(20.dp)) {
                     Avatar(creatorAvatar, info.uploaderName, 16)
-                    Icon(Icons.Default.Favorite, "Disukai kreator", tint = Color(0xFFFF4E45), modifier = Modifier.size(11.dp).align(Alignment.BottomEnd))
+                    Icon(Icons.Default.Favorite, "Liked by creator", tint = Color(0xFFFF4E45), modifier = Modifier.size(11.dp).align(Alignment.BottomEnd))
                 }
             }
             val replyCount = comment.replyCount
             if (onReplies != null && comment.replies != null && replyCount != 0) {
                 Row(Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onReplies).padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (comment.hasCreatorReply()) Avatar(creatorAvatar, info.uploaderName, 20, Modifier.padding(end = 6.dp))
-                    Text(if (replyCount > 0) "$replyCount balasan" else "Lihat balasan", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 4.dp))
+                    Text(if (replyCount > 0) "$replyCount replies" else "View replies", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 4.dp))
                     Text(" ›", color = Color.White, fontSize = 18.sp)
                 }
             }
@@ -342,45 +611,71 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 @Composable internal fun DescriptionTeaser(info: StreamInfo, onClick: () -> Unit) {
     val isLive = info.isOngoingLive()
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Text(info.name, fontSize = 18.sp, lineHeight = 24.sp, fontFamily = YouTubeSansBold, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        val tags = info.tags.take(2).map { "#" + it.replace(" ", "") }
-        val meta = if (isLive) {
-            val viewers = info.viewCount.takeIf { it >= 0 }?.let { "${formatCount(it)} sedang menonton" } ?: "Siaran langsung"
-            listOf(viewers, "LIVE") + tags
+        // Judul YouTube di layar tonton: huruf biasa (tidak tebal) 18 sp
+        Text(info.name, fontSize = 18.sp, lineHeight = 24.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        
+        // Metadata baris seperti YouTube Modern (Gambar 2): @Channel  [Likes]  [Views]  [Time]  more
+        val handle = info.uploaderName?.takeIf { it.isNotBlank() }?.let { if (it.startsWith("@")) it else "@$it" }
+        val likes = info.likeCount.takeIf { it > 0 }?.let { "${formatCount(it)} likes" }
+        val views = if (isLive) {
+            info.viewCount.takeIf { it >= 0 }?.let { "${formatCount(it)} watching" } ?: "Live"
         } else {
-            listOfNotNull(info.viewCount.takeIf { it >= 0 }?.let { "${formatCount(it)} x ditonton" }, relativeTime(info.uploadDate, info.textualUploadDate)) + tags
+            info.viewCount.takeIf { it >= 0 }?.let { "${formatCount(it)} views" }
         }
-        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(meta.joinToString("  ·  "), color = if (isLive) Color(0xFFFF5252) else Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Text("  ...selengkapnya", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        val time = if (isLive) startedStreamingText(info.uploadDate) else relativeTime(info.uploadDate, info.textualUploadDate)
+        val meta = listOfNotNull(handle, likes, views, time)
+
+        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                meta.joinToString("  "),
+                color = Muted,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Text("  more", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
         }
     }
 }
 
-@Composable internal fun DescriptionPanel(info: StreamInfo, draggable: Boolean, onDismiss: () -> Unit, onLink: (String) -> Unit, onSeek: (Int) -> Unit, onChannel: () -> Unit, modifier: Modifier = Modifier) {
+@Composable internal fun DescriptionPanel(info: StreamInfo, draggable: Boolean, onDismiss: () -> Unit, onLink: (String) -> Unit, onSeek: (Int) -> Unit, onChannel: () -> Unit, modifier: Modifier = Modifier, showHandle: Boolean = true, onChapters: (() -> Unit)? = null) {
     val isLive = info.isOngoingLive()
-    EngagementPanel("Deskripsi", null, draggable, onDismiss, modifier) {
+    EngagementPanel("Description", null, draggable, onDismiss, modifier, showHandle = showHandle) {
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
-            Text(info.name, fontSize = 18.sp, lineHeight = 24.sp, fontFamily = YouTubeSansBold, fontWeight = FontWeight.Bold)
-            Row(Modifier.fillMaxWidth().padding(vertical = 20.dp)) {
+            Text(info.name, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Surface)
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 val date = info.uploadDate?.offsetDateTime()
-                val locale = java.util.Locale("id", "ID")
-                DescriptionStat(if (info.likeCount >= 0) fullCount(info.likeCount) else "–", "Suka")
-                DescriptionStat(if (info.viewCount >= 0) fullCount(info.viewCount) else "–", if (isLive) "Menonton" else "Penayangan")
-                if (isLive) {
-                    DescriptionStat("LIVE", "Status")
-                } else if (date != null) {
+                val locale = java.util.Locale.US
+                DescriptionStat(if (info.likeCount >= 0) fullCount(info.likeCount) else "–", "Likes")
+                Box(Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.15f)))
+                DescriptionStat(if (info.viewCount >= 0) fullCount(info.viewCount) else "–", if (isLive) "Watching" else "Views")
+                Box(Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.15f)))
+                // Siaran live tetap punya kolom tanggal (tanggal mulai); teks mentah extractor bisa berupa stempel ISO, jadi tidak dipakai.
+                if (date != null) {
                     DescriptionStat(date.format(java.time.format.DateTimeFormatter.ofPattern("d MMM", locale)), date.year.toString())
                 } else {
-                    DescriptionStat(info.textualUploadDate?.takeIf { it.isNotBlank() } ?: "–", "Diunggah")
+                    DescriptionStat(info.textualUploadDate?.takeIf { it.isNotBlank() && !isLive } ?: "–", if (isLive) "Started" else "Uploaded")
                 }
             }
             val html = richHtml(info.description)
-            if (info.description?.content.isNullOrBlank()) Text("Tidak ada deskripsi.", color = Muted, fontSize = 14.sp)
+            if (info.description?.content.isNullOrBlank()) Text("No description.", color = Muted, fontSize = 14.sp)
             else RichText(html, onLink)
             val chapters = info.streamSegments
             if (chapters.isNotEmpty()) {
-                Text("Bab", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 24.dp, bottom = 12.dp))
+                // YouTube: judul "Chapters" dengan tombol "View all" yang membuka panel daftar bab.
+                Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Bab", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    if (onChapters != null) PanelPill("View all", onChapters)
+                }
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(chapters) { chapter ->
                         Column(Modifier.width(168.dp).clip(RoundedCornerShape(8.dp)).clickable { onSeek(chapter.startTimeSeconds) }) {
@@ -417,10 +712,44 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
     }
 }
 
+// ---------- chapters ----------
+
+/** Index of the chapter playing at [positionMs], or -1 before the first one. */
+internal fun chapterIndexAt(segments: List<StreamSegment>, positionMs: Long): Int = segments.indexOfLast { it.startTimeSeconds * 1000L <= positionMs }
+
+/**
+ * Panel "Bab" seperti panel Chapters YouTube (dibuka dari judul bab di player atau "View all" di deskripsi): satu baris per
+ * bab dengan thumbnail, judul dan waktu mulai; bab yang sedang diputar disorot dan digulir ke tengah saat panel dibuka.
+ * Ketuk baris untuk melompat ke bab itu.
+ */
+@Composable internal fun ChaptersPanel(info: StreamInfo, positionMs: () -> Long, draggable: Boolean, onDismiss: () -> Unit, onSeek: (Int) -> Unit, modifier: Modifier = Modifier, showHandle: Boolean = true) {
+    val chapters = info.streamSegments
+    var current by remember { mutableIntStateOf(chapterIndexAt(chapters, positionMs())) }
+    LaunchedEffect(chapters) { while (true) { current = chapterIndexAt(chapters, positionMs()); delay(500) } }
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = (current - 1).coerceAtLeast(0))
+    EngagementPanel("Bab", null, draggable, onDismiss, modifier, showHandle = showHandle) {
+        LazyColumn(Modifier.fillMaxWidth().weight(1f), state = list, contentPadding = PaddingValues(vertical = 8.dp)) {
+            itemsIndexed(chapters) { index, chapter ->
+                Row(Modifier.fillMaxWidth().background(if (index == current) Surface else Color.Transparent).clickable { onSeek(chapter.startTimeSeconds) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(112.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Surface)) {
+                        (chapter.previewUrl ?: info.thumbnails.lastOrNull()?.url)?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+                    }
+                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(chapter.title?.takeIf { it.isNotBlank() } ?: "Bab ${index + 1}", fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(formatSeconds(chapter.startTimeSeconds), color = LinkBlue, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(4.dp)).background(LinkBlue.copy(alpha = .15f)).padding(horizontal = 4.dp, vertical = 1.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable private fun RowScope.DescriptionStat(value: String, label: String) {
     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center)
-        Text(label, color = Muted, fontSize = 12.sp, textAlign = TextAlign.Center)
+        Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, textAlign = TextAlign.Center)
+        Text(label, color = Muted, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 2.dp))
     }
 }
 
@@ -438,11 +767,16 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
     }
 }
 
-/** Foto profil komentar; kalau kosong, pakai foto channel penulisnya (hasilnya di-cache di VideoRepository). */
-@Composable private fun rememberAvatarUrl(suppliedUrl: String?, channelUrl: String?): String? {
-    var avatar by remember(channelUrl, suppliedUrl) { mutableStateOf(suppliedUrl?.takeIf { it.isNotBlank() }) }
+/** Foto profil dari URL yang diberikan; kalau kosong, pakai foto channel-nya (hasilnya di-cache di VideoRepository). */
+@Composable internal fun rememberAvatarUrl(suppliedUrl: String?, channelUrl: String?): String? {
+    val initial = suppliedUrl?.takeIf { it.isNotBlank() }
+        ?: channelUrl?.let { VideoRepository.cachedAvatar(it) }
+    var avatar by remember(channelUrl, suppliedUrl) { mutableStateOf(initial) }
     LaunchedEffect(channelUrl, suppliedUrl) {
-        if (suppliedUrl.isNullOrBlank() && !channelUrl.isNullOrBlank()) avatar = VideoRepository.channelAvatar(channelUrl)
+        if (avatar.isNullOrBlank() && !channelUrl.isNullOrBlank()) {
+            val resolved = VideoRepository.channelAvatar(channelUrl)
+            if (!resolved.isNullOrBlank()) avatar = resolved
+        }
     }
     return avatar
 }
@@ -450,7 +784,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 @Composable private fun PanelMessage(text: String) { Text(text, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(16.dp)) }
 @Composable private fun PanelSpinner() { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) } }
 @Composable private fun PanelError(message: String, onRetry: () -> Unit) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { Text(message, color = Muted, fontSize = 13.sp); TextButton(onClick = onRetry) { Text("Coba lagi", color = LinkBlue) } }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { Text(message, color = Muted, fontSize = 13.sp); TextButton(onClick = onRetry) { Text("Try again", color = LinkBlue) } }
 }
 
 @Composable private fun ReplyGlyph(modifier: Modifier) {

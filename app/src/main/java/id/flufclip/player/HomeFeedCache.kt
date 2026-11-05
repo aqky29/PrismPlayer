@@ -20,6 +20,8 @@ internal object HomeFeedCache {
             val title = json.optString("title")
             if (url.isBlank() || title.isBlank()) return@mapNotNull null
             val type = runCatching { StreamType.valueOf(json.optString("type")) }.getOrDefault(StreamType.VIDEO_STREAM)
+            // Siaran live cepat berakhir; entri lama yang masih bertanda live tidak dipakai dari cache.
+            if (type == StreamType.LIVE_STREAM || type == StreamType.AUDIO_LIVE_STREAM) return@mapNotNull null
             StreamInfoItem(json.optInt("service", 0), url, title, type).apply {
                 uploaderName = json.optString("uploader")
                 uploaderUrl = json.optString("channel")
@@ -31,6 +33,18 @@ internal object HomeFeedCache {
                 }
                 json.optString("avatar").takeIf { it.isNotBlank() }?.let {
                     uploaderAvatars = listOf(Image(it, -1, -1, Image.ResolutionLevel.UNKNOWN))
+                    val ch = json.optString("channel")
+                    if (ch.isNotBlank()) VideoRepository.cacheAvatar(ch, it)
+                }
+                val progress = json.optInt("progress", -1)
+                val resumeMs = json.optLong("resume_ms", 0L)
+                if (progress in 0..100 || resumeMs > 0L) {
+                    HomeFeed.rememberMeta(url, VideoMeta(
+                        viewsText = json.optString("views_text"),
+                        publishedText = json.optString("date"),
+                        progressPercent = progress,
+                        resumePositionMs = resumeMs
+                    ))
                 }
             }
         }
@@ -39,12 +53,16 @@ internal object HomeFeedCache {
     fun save(prefs: SharedPreferences, items: List<StreamInfoItem>) {
         if (items.isEmpty()) return
         val json = JSONArray()
-        items.take(LIMIT).forEach { item ->
+        items.filterNot { it.isOngoingLive() }.take(LIMIT).forEach { item ->
+            val meta = HomeFeed.metaOf(item.url)
             json.put(JSONObject().put("service", item.serviceId).put("url", item.url).put("title", item.name)
                 .put("type", item.streamType.name).put("uploader", item.uploaderName.orEmpty())
                 .put("channel", item.uploaderUrl.orEmpty()).put("views", item.viewCount).put("duration", item.duration)
                 .put("date", item.textualUploadDate.orEmpty()).put("thumbnail", item.thumbnails.lastOrNull()?.url.orEmpty())
-                .put("avatar", item.uploaderAvatars.lastOrNull()?.url.orEmpty()))
+                .put("avatar", item.uploaderAvatars.lastOrNull()?.url.orEmpty())
+                .put("progress", meta?.progressPercent ?: -1)
+                .put("resume_ms", meta?.resumePositionMs ?: 0L)
+                .put("views_text", meta?.viewsText.orEmpty()))
         }
         prefs.edit().putString(KEY, json.toString()).apply()
     }

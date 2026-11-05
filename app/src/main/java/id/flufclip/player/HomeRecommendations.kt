@@ -27,6 +27,30 @@ internal object HomeRecommendations {
         } ?: topics.getOrNull(slot % topics.size.coerceAtLeast(1)) ?: "video terbaru"
     }
 
+    /**
+     * URL channel dari tontonan terakhir, terbaru dulu, untuk dicek siaran live-nya. Entri riwayat lama belum menyimpan URL
+     * channel, jadi dicari lewat nama pada [known] (item feed yang sudah dimuat). Entri tanpa keduanya dilewati.
+     */
+    fun watchedChannels(history: List<WatchedVideo>, known: List<StreamInfoItem>, limit: Int = 6): List<String> {
+        val byName = HashMap<String, String>()
+        known.forEach { item ->
+            val url = item.uploaderUrl.orEmpty()
+            if (url.isNotBlank()) byName.putIfAbsent(normalize(item.uploaderName.orEmpty()), url)
+        }
+        return history.asSequence().take(30)
+            .mapNotNull { video -> video.channelUrl?.takeIf { it.isNotBlank() } ?: byName[normalize(video.uploader)] }
+            .distinct().take(limit).toList()
+    }
+
+    /** Taruh siaran live dari channel yang views di awal feed (paling banyak empat), tanpa menggandakan item yang sama. */
+    fun withLive(feed: List<StreamInfoItem>, live: List<StreamInfoItem>, hiddenVideos: Set<String>, hiddenChannels: Set<String>): List<StreamInfoItem> {
+        val fresh = live.filter { it.url.isNotBlank() && it.url !in hiddenVideos && it.uploaderUrl.orEmpty() !in hiddenChannels }
+            .distinctBy { it.url }.take(4)
+        if (fresh.isEmpty()) return feed
+        val urls = fresh.mapTo(HashSet()) { it.url }
+        return fresh + feed.filter { it.url !in urls }
+    }
+
     fun rank(items: List<StreamInfoItem>, history: List<WatchedVideo>, hiddenVideos: Set<String>, hiddenChannels: Set<String>): List<StreamInfoItem> {
         val recent = history.take(50)
         val watched = history.mapTo(HashSet()) { it.url }
@@ -45,7 +69,9 @@ internal object HomeRecommendations {
                 val channel = normalize(item.uploaderName.orEmpty())
                 val channelScore = (channelWeights[channel] ?: 0).coerceAtMost(9) * 2
                 val titleScore = tokens(item.name).sumOf { (words[it] ?: 0).coerceAtMost(4) }.coerceAtMost(14)
-                Candidate(item, channelScore + titleScore - (if (item.url in watched) 35 else 0) - (index / 12).coerceAtMost(6), channel)
+                // Tanpa bobot ini siaran live dari kiosk selalu tenggelam di akhir karena tidak cocok dengan riwayat.
+                val liveScore = if (!item.isOngoingLive()) 0 else if ((channelWeights[channel] ?: 0) > 0) 16 else 8
+                Candidate(item, channelScore + titleScore + liveScore - (if (item.url in watched) 35 else 0) - (index / 12).coerceAtMost(6), channel)
             }.toMutableList()
         val result = ArrayList<StreamInfoItem>(remaining.size)
         val channelCounts = mutableMapOf<String, Int>()
