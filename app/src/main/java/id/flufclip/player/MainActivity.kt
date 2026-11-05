@@ -137,10 +137,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
 internal val Background = Color(0xFF0F0F0F)
 internal val Surface = Color(0xFF272727)
 internal val WatchActionSurface = Color(0xFF343434)
-private val Accent = Color(0xFFFF0000)
+internal val Accent = Color(0xFFFF0000)
 
 /** What the tapped card already knows about a video, shown at once while its StreamInfo loads (like YouTube's watch page). */
-private data class PendingVideo(val url: String, val title: String = "", val uploader: String = "", val thumbnail: String? = null, val avatar: String? = null, val resumeLocal: Boolean = true, val resumePositionMs: Long? = null, val error: String? = null)
+internal data class PendingVideo(val url: String, val title: String = "", val uploader: String = "", val thumbnail: String? = null, val avatar: String? = null, val resumeLocal: Boolean = true, val resumePositionMs: Long? = null, val error: String? = null)
 
 /**
  * Menentukan apakah layout layar tonton menggunakan 2 kolom lebar (seperti YouTube `qye.java`),
@@ -188,7 +188,7 @@ internal fun rememberPlayerLive(player: ExoPlayer, mediaKey: String?): Boolean {
 }
 
 /** ExoPlayer membungkus error HLS di PlaybackException, jadi periksa rantai cause-nya. */
-private fun Throwable.causedByBehindLiveWindow(): Boolean =
+internal fun Throwable.causedByBehindLiveWindow(): Boolean =
     generateSequence(this) { it.cause }.take(8).any { it is BehindLiveWindowException }
 
 class MainActivity : ComponentActivity() {
@@ -266,13 +266,13 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Status bar height from framework resources, so it stays the same while the bar is hidden in fullscreen. */
-private fun statusBarPixels(context: Context): Int {
+internal fun statusBarPixels(context: Context): Int {
     val id = context.resources.getIdentifier("status_bar_height", "dimen", "android")
     return if (id > 0) context.resources.getDimensionPixelSize(id) else 0
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun App() {
+@Composable internal fun App() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
@@ -2985,7 +2985,7 @@ private fun statusBarPixels(context: Context): Int {
 }
 
 /** Watch details shown while the stream information is loading. The player is drawn separately so it can move. */
-@Composable private fun PendingWatchScreen(pending: PendingVideo, watchAlpha: Float, watchOffset: Float) {
+@Composable internal fun PendingWatchScreen(pending: PendingVideo, watchAlpha: Float, watchOffset: Float) {
     BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
         .graphicsLayer { alpha = watchAlpha; translationY = size.height * watchOffset }
         .background(Background).pointerInput(Unit) { detectTapGestures { } }) {
@@ -3016,7 +3016,7 @@ private fun statusBarPixels(context: Context): Int {
 }
 
 /** Thumbnail player stays interactive while resolution continues, then hands its position to FloatingPlayer. */
-@Composable private fun PendingFloatingPlayer(
+@Composable internal fun PendingFloatingPlayer(
     pending: PendingVideo, minimized: Boolean, progress: Float, miniState: MiniPlayerState,
     travelDistance: Dp, modifier: Modifier, onMinimize: () -> Unit, onExpand: () -> Unit,
     onClose: () -> Unit, onRetry: () -> Unit, onDrag: (Float) -> Unit,
@@ -3061,7 +3061,7 @@ private fun statusBarPixels(context: Context): Int {
 }
 
 /** The pending player follows the same downward swipe and release thresholds as the loaded player. */
-@Composable private fun Modifier.pendingWatchSwipe(
+@Composable internal fun Modifier.pendingWatchSwipe(
     origin: () -> Offset, travelDistance: () -> Float, onDrag: (Float) -> Unit,
     onCancel: () -> Unit, onRelease: (Float, Float) -> Unit,
 ): Modifier {
@@ -3103,7 +3103,7 @@ private fun statusBarPixels(context: Context): Int {
 }
 
 /** Shared mini-player gestures for both the loading thumbnail and the resolved video. */
-@Composable private fun rememberMiniPlayerGesture(enabled: Boolean, miniState: MiniPlayerState, onExpand: () -> Unit): Modifier {
+@Composable internal fun rememberMiniPlayerGesture(enabled: Boolean, miniState: MiniPlayerState, onExpand: () -> Unit): Modifier {
     val currentExpand by rememberUpdatedState(onExpand)
     val miniTapScope = rememberCoroutineScope()
     var pendingMiniTap by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
@@ -3156,7 +3156,7 @@ private fun statusBarPixels(context: Context): Int {
 }
 
 /** Load the watch feed independently of whichever extractor supplied playback. */
-@Composable private fun rememberWatchRecommendations(info: StreamInfo, revision: Int): List<StreamInfoItem> {
+@Composable internal fun rememberWatchRecommendations(info: StreamInfo, revision: Int): List<StreamInfoItem> {
     val id = InnerTubePlayer.videoIdOf(info.url) ?: videoKey(info.url)
     fun itemKey(item: StreamInfoItem) = InnerTubePlayer.videoIdOf(item.url) ?: videoKey(item.url)
     val initial = remember(info) { info.relatedItems.filterIsInstance<StreamInfoItem>().filter { itemKey(it) != id }.distinctBy { itemKey(it) } }
@@ -3171,7 +3171,7 @@ private fun statusBarPixels(context: Context): Int {
     return recommendations
 }
 
-@Composable private fun WatchScreen(
+@Composable internal fun WatchScreen(
     showDescription: Boolean, showComments: Boolean, showChat: Boolean, showAsk: Boolean, ask: AskSession?, onAsk: () -> Unit,
     showChapters: Boolean, onChapters: () -> Unit, onClosePanel: () -> Unit, watchAlpha: Float, watchOffset: Float,
     info: StreamInfo, isLive: Boolean, comments: CommentsState, chatState: LiveChatState,
@@ -3322,7 +3322,7 @@ private fun statusBarPixels(context: Context): Int {
     }
 }
 
-@Composable private fun WatchPlaylistQueueBar(
+@Composable internal fun WatchPlaylistQueueBar(
     info: StreamInfo,
     queue: List<StreamInfoItem>,
     playlistTitle: String?,
@@ -3398,7 +3398,7 @@ private fun statusBarPixels(context: Context): Int {
     }
 }
 
-@Composable private fun PlaylistQueuePanel(
+@Composable internal fun PlaylistQueuePanel(
     info: StreamInfo,
     queue: List<StreamInfoItem>,
     playlistTitle: String?,
@@ -4109,7 +4109,7 @@ private fun statusBarPixels(context: Context): Int {
     }
 }
 
-@Composable private fun WatchSheetOption(
+@Composable internal fun WatchSheetOption(
     icon: androidx.compose.ui.graphics.painter.Painter,
     label: String,
     onClick: () -> Unit
@@ -4248,7 +4248,7 @@ internal class WatchEngagement(
     val onNotificationPreference: (NotificationPreference) -> Unit = {},
 )
 
-@Composable private fun WatchAction(icon: String, label: String, onClick: () -> Unit) {
+@Composable internal fun WatchAction(icon: String, label: String, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     Row(
         Modifier
@@ -4650,7 +4650,7 @@ internal fun NotificationOptionsSheet(
 }
 
 @Composable
-private fun NotificationOptionRow(
+internal fun NotificationOptionRow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     selected: Boolean,
@@ -4688,7 +4688,7 @@ private fun NotificationOptionRow(
     }
 }
 
-@Composable private fun ActionGlyph(icon: String, modifier: Modifier = Modifier) {
+@Composable internal fun ActionGlyph(icon: String, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val w = size.width; val h = size.height; val stroke = 1.8.dp.toPx()
         fun line(x1: Float, y1: Float, x2: Float, y2: Float) = drawLine(Color.White, Offset(w*x1,h*y1), Offset(w*x2,h*y2), strokeWidth = stroke, cap = StrokeCap.Round)
@@ -4748,7 +4748,7 @@ internal fun LiveThumbnailBadge(modifier: Modifier = Modifier) {
     }
 }
 
-@Composable private fun SearchWideVideoCard(
+@Composable internal fun SearchWideVideoCard(
     item: StreamInfoItem,
     resolveAvatar: Boolean = true,
     onChannel: ((String) -> Unit)? = null,
@@ -4833,7 +4833,7 @@ internal fun LiveThumbnailBadge(modifier: Modifier = Modifier) {
     }
 }
 
-@Composable private fun SearchWidePlaylistCard(item: PlaylistInfoItem, onClick: () -> Unit) {
+@Composable internal fun SearchWidePlaylistCard(item: PlaylistInfoItem, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         PlaylistStackedThumbnail(
             playlist = AccountPlaylist(
@@ -4853,7 +4853,7 @@ internal fun LiveThumbnailBadge(modifier: Modifier = Modifier) {
     }
 }
 
-@Composable private fun CompactVideoCard(
+@Composable internal fun CompactVideoCard(
     item: StreamInfoItem,
     onChannel: ((String) -> Unit)? = null,
     onClick: () -> Unit
@@ -4892,7 +4892,7 @@ internal fun LiveThumbnailBadge(modifier: Modifier = Modifier) {
     }
 }
 
-@Composable private fun MembersOnlyBadge(modifier: Modifier = Modifier) {
+@Composable internal fun MembersOnlyBadge(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .padding(6.dp)
@@ -5056,9 +5056,9 @@ internal fun LiveThumbnailBadge(modifier: Modifier = Modifier) {
     }
 }
 
-private data class SubsChipOption(val key: String, val label: String)
+internal data class SubsChipOption(val key: String, val label: String)
 
-private val subsChipOptions = listOf(
+internal val subsChipOptions = listOf(
     SubsChipOption("all", "All"),
     SubsChipOption("members", "Membership"),
     SubsChipOption("today", "Today"),
@@ -5069,21 +5069,21 @@ private val subsChipOptions = listOf(
     SubsChipOption("unwatched", "Unwatched")
 )
 
-private val SubsChannel.key: String get() = id.ifBlank { url }.ifBlank { name }
+internal val SubsChannel.key: String get() = id.ifBlank { url }.ifBlank { name }
 
-private fun matchesSubsChannel(item: StreamInfoItem, channel: SubsChannel): Boolean {
+internal fun matchesSubsChannel(item: StreamInfoItem, channel: SubsChannel): Boolean {
     val itemUrl = item.uploaderUrl.orEmpty()
     return (channel.url.isNotBlank() && itemUrl == channel.url) ||
         (channel.name.isNotBlank() && item.uploaderName.equals(channel.name, ignoreCase = true))
 }
 
-private fun isTodayText(text: String): Boolean {
+internal fun isTodayText(text: String): Boolean {
     val value = text.lowercase()
     return value.contains("hour") || value.contains("minute") || value.contains("today") || value.contains("just now") ||
         value.contains("jam") || value.contains("menit") || value.contains("hari ini") || value.contains("baru saja")
 }
 
-private fun filterSubsEntries(entries: List<SubsEntry>, chip: String, channel: SubsChannel?, watchedUrls: Set<String>): List<SubsEntry> {
+internal fun filterSubsEntries(entries: List<SubsEntry>, chip: String, channel: SubsChannel?, watchedUrls: Set<String>): List<SubsEntry> {
     fun matchesChannel(item: StreamInfoItem): Boolean = channel == null || matchesSubsChannel(item, channel)
 
     fun videoAllowed(entry: SubsEntry.Video): Boolean {
@@ -5111,7 +5111,7 @@ private fun filterSubsEntries(entries: List<SubsEntry>, chip: String, channel: S
     }
 }
 
-private fun mergeSubsEntries(old: List<SubsEntry>, new: List<SubsEntry>): List<SubsEntry> {
+internal fun mergeSubsEntries(old: List<SubsEntry>, new: List<SubsEntry>): List<SubsEntry> {
     val videoUrls = old.filterIsInstance<SubsEntry.Video>().map { it.item.url }.toMutableSet()
     val shortIds = old.filterIsInstance<SubsEntry.ShortsShelf>().flatMap { it.items }.map { it.videoId }.toMutableSet()
     val result = old.toMutableList()
@@ -5128,7 +5128,7 @@ private fun mergeSubsEntries(old: List<SubsEntry>, new: List<SubsEntry>): List<S
 }
 
 @Composable
-private fun SubsChannelAvatarRow(
+internal fun SubsChannelAvatarRow(
     channels: List<SubsChannel>,
     selectedKey: String?,
     liveKeys: Set<String>,
@@ -5255,7 +5255,7 @@ private fun SubsChannelAvatarRow(
 }
 
 @Composable
-private fun SubsChipBar(active: String, onSelect: (String) -> Unit) {
+internal fun SubsChipBar(active: String, onSelect: (String) -> Unit) {
     LazyRow(
         Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -5284,7 +5284,7 @@ private fun SubsChipBar(active: String, onSelect: (String) -> Unit) {
 }
 
 @Composable
-private fun SubsChannelRail(
+internal fun SubsChannelRail(
     channels: List<SubsChannel>,
     selectedKey: String?,
     liveKeys: Set<String>,
@@ -5365,7 +5365,7 @@ private fun SubsChannelRail(
 }
 
 @Composable
-private fun ShortsShelfRow(items: List<ShortsCard>, onOpen: (Int) -> Unit) {
+internal fun ShortsShelfRow(items: List<ShortsCard>, onOpen: (Int) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
             Icon(painterResource(R.drawable.yt_nav_shorts_active), contentDescription = null, tint = Accent, modifier = Modifier.size(22.dp))
@@ -5411,7 +5411,7 @@ private fun ShortsShelfRow(items: List<ShortsCard>, onOpen: (Int) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SubscriptionsScreen(
+internal fun SubscriptionsScreen(
     entries: List<SubsEntry>,
     channels: List<SubsChannel>,
     membershipEntries: List<SubsEntry.Video>,
@@ -5597,16 +5597,16 @@ private fun SubscriptionsScreen(
     }
 }
 
-@Composable private fun DurationBadge(duration: Long, modifier: Modifier = Modifier) {
+@Composable internal fun DurationBadge(duration: Long, modifier: Modifier = Modifier) {
     val label = if (duration >= 3600) "%d:%02d:%02d".format(duration / 3600, duration / 60 % 60, duration % 60) else "%d:%02d".format(duration / 60, duration % 60)
     Text(label, modifier = modifier.padding(6.dp).background(Color.Black.copy(alpha = .85f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = Color.White)
 }
-private fun Modifier.clipCard(): Modifier = this.clip(RoundedCornerShape(16.dp)).background(Surface)
+internal fun Modifier.clipCard(): Modifier = this.clip(RoundedCornerShape(16.dp)).background(Surface)
 
-private data class DownloadChoice(val url: String, val height: Int, val audio: Boolean, val video: DownloadVideo)
+internal data class DownloadChoice(val url: String, val height: Int, val audio: Boolean, val video: DownloadVideo)
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun DownloadDialog(info: StreamInfo, onDismiss: () -> Unit, download: (Int, Boolean) -> Unit) {
+@Composable internal fun DownloadDialog(info: StreamInfo, onDismiss: () -> Unit, download: (Int, Boolean) -> Unit) {
     var choice by remember(info.url) { mutableIntStateOf(0) }
     val choices = listOf(0 to "Best quality", 1080 to "1080p", 720 to "720p", 480 to "480p", 360 to "360p", -1 to "Audio only")
     val listHeight = (LocalConfiguration.current.screenHeightDp - 310).coerceIn(72, 300).dp
@@ -5635,7 +5635,7 @@ private data class DownloadChoice(val url: String, val height: Int, val audio: B
     }
 }
 
-@Composable private fun PlayerChoiceRow(label: String, detail: String? = null, selected: Boolean, onClick: () -> Unit) {
+@Composable internal fun PlayerChoiceRow(label: String, detail: String? = null, selected: Boolean, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp).padding(start = 20.dp, end = 20.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge, color = Color.White)
@@ -5645,13 +5645,13 @@ private data class DownloadChoice(val url: String, val height: Int, val audio: B
     }
 }
 
-private fun audioTracks(info: StreamInfo): List<AudioStream> = VideoRepository.audios(info)
+internal fun audioTracks(info: StreamInfo): List<AudioStream> = VideoRepository.audios(info)
     .distinctBy(::audioTrackIdentity)
 
 /** BCP 47 tag of [audio]'s track (e.g. "id" for an Indonesian original), as HLS `LANGUAGE` uses it. */
-private fun audioLanguage(audio: AudioStream?): String? = audioLanguageTag(audio)
+internal fun audioLanguage(audio: AudioStream?): String? = audioLanguageTag(audio)
 
-private fun audioLabel(audio: AudioStream): String {
+internal fun audioLabel(audio: AudioStream): String {
     val name = audio.audioTrackName?.takeIf { it.isNotBlank() }
         ?: audio.audioLocale?.getDisplayName(java.util.Locale.ENGLISH)?.takeIf { it.isNotBlank() }
         ?: "Audio default"
@@ -5665,7 +5665,7 @@ private fun audioLabel(audio: AudioStream): String {
     return if (type != null && !name.contains(type, ignoreCase = true)) "$name · $type" else name
 }
 
-private fun embeddedAudioLabel(metadata: AudioTrackMetadata): String {
+internal fun embeddedAudioLabel(metadata: AudioTrackMetadata): String {
     val name = metadata.name?.takeIf { it.isNotBlank() }
         ?: metadata.locale?.getDisplayName(java.util.Locale.ENGLISH)?.takeIf { it.isNotBlank() }
         ?: "Audio default"
@@ -5679,7 +5679,7 @@ private fun embeddedAudioLabel(metadata: AudioTrackMetadata): String {
     return if (type != null && !name.contains(type, ignoreCase = true)) "$name · $type" else name
 }
 
-private fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List<VideoStream> {
+internal fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List<VideoStream> {
     val separate = if (VideoRepository.audios(info).isNotEmpty()) VideoRepository.videos(info) else emptyList()
     val allProgressive = VideoRepository.progressive(info)
     val embedded = VideoRepository.embeddedAudio(info)
@@ -5691,7 +5691,7 @@ private fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List<
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun QualityDialog(info: StreamInfo, selected: VideoStream?, selectedAudio: AudioStream?, selectedSubtitle: SubtitlesStream?, autoplay: Boolean, maxHeight: Int, player: ExoPlayer, initialPage: String, fullscreen: Boolean, qualityMode: String,
+@Composable internal fun QualityDialog(info: StreamInfo, selected: VideoStream?, selectedAudio: AudioStream?, selectedSubtitle: SubtitlesStream?, autoplay: Boolean, maxHeight: Int, player: ExoPlayer, initialPage: String, fullscreen: Boolean, qualityMode: String,
     useManifestAudio: Boolean, onAudioPreference: (AudioPreference) -> Unit, onSelectManifestAudio: (Tracks.Group, List<Int>) -> Unit, onSelectEmbedded: (AudioTrackMetadata) -> Unit,
     onQualityMode: (String) -> Unit, onLock: () -> Unit, onMaxHeight: (Int) -> Unit, onAutoplay: (Boolean) -> Unit, onSubtitle: (SubtitlesStream?) -> Unit, onDismiss: () -> Unit, onSelect: (VideoStream?) -> Unit, onSelectAudio: (AudioStream) -> Unit) {
     val currentEmbedded = VideoRepository.embeddedAudio(info, selected)
@@ -5852,7 +5852,7 @@ private fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List<
     }
 }
 
-@Composable private fun QualityOption(label: String, detail: String?, selected: Boolean, onClick: () -> Unit) {
+@Composable internal fun QualityOption(label: String, detail: String?, selected: Boolean, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 62.dp).padding(start = 20.dp, end = 20.dp, top = 7.dp, bottom = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(44.dp), contentAlignment = Alignment.CenterStart) {
             if (selected) Icon(Icons.Default.Check, contentDescription = "Selected", tint = Color.White, modifier = Modifier.size(24.dp))
@@ -5864,7 +5864,7 @@ private fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List<
     }
 }
 
-@Composable private fun SettingsRow(icon: Int, label: String, value: String, onClick: () -> Unit) {
+@Composable internal fun SettingsRow(icon: Int, label: String, value: String, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 56.dp).padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.width(40.dp), contentAlignment = Alignment.CenterStart) { Image(painterResource(icon), contentDescription = null, modifier = Modifier.size(24.dp), colorFilter = ColorFilter.tint(Color.White)) }
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
@@ -5873,7 +5873,7 @@ private fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List<
     }
 }
 
-@Composable private fun ChannelHeader(
+@Composable internal fun ChannelHeader(
     page: ChannelPage,
     selectedTab: String,
     isLive: Boolean = false,
@@ -6301,7 +6301,7 @@ private fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List<
     }
 }
 
-@Composable private fun PlaylistCard(item: PlaylistInfoItem, onClick: () -> Unit) {
+@Composable internal fun PlaylistCard(item: PlaylistInfoItem, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         PlaylistStackedThumbnail(
             playlist = AccountPlaylist(
@@ -6319,7 +6319,7 @@ private fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List<
     }
 }
 
-@Composable private fun SearchChannelCard(item: ChannelInfoItem, onClick: () -> Unit) {
+@Composable internal fun SearchChannelCard(item: ChannelInfoItem, onClick: () -> Unit) {
     val subState = Engagement.subscription(item.url)
     val isSubscribed = subState.subscribed == true
     Row(
@@ -6368,7 +6368,7 @@ private fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List<
     }
 }
 
-@Composable private fun ChannelCard(item: ChannelInfoItem, onClick: () -> Unit) {
+@Composable internal fun ChannelCard(item: ChannelInfoItem, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clipCard().clickable(onClick = onClick).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         AsyncImage(model = item.thumbnails.lastOrNull()?.url, contentDescription = null, contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.size(64.dp).clip(RoundedCornerShape(50)).background(Color.DarkGray))
         Spacer(Modifier.width(14.dp))
