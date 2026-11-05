@@ -1166,6 +1166,78 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
         }
     }
+    fun selectManifestAudio(info: StreamInfo, group: Tracks.Group, indices: List<Int>) {
+        manualAudioOverride = true
+        val format = group.getTrackFormat(indices.first())
+        val lang = audioLocale(format.language)?.toLanguageTag()
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(lang)
+            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, indices)).build()
+        val matching = audioTracks(info).filter { audioLocale(audioLanguage(it))?.language == audioLocale(lang)?.language && lang != null }
+        selectedAudio = matching.singleOrNull() ?: matching.firstOrNull { !format.label.isNullOrBlank() && it.audioTrackName.equals(format.label, ignoreCase = true) }
+    }
+    fun selectEmbeddedAudio(info: StreamInfo, metadata: AudioTrackMetadata) {
+        manualAudioOverride = true
+        val height = quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
+        fun heightOf(video: VideoStream) = video.height.takeIf { it > 0 } ?: (video.resolution.filter(Char::isDigit).toIntOrNull() ?: 0)
+        val video = VideoRepository.embeddedAudio(info).filter { it.metadata.id == metadata.id }
+            .minByOrNull { kotlin.math.abs(heightOf(it.video) - height) }?.video
+        if (video == null) {
+            android.widget.Toast.makeText(context, "No stream found for ${metadata.name}", android.widget.Toast.LENGTH_LONG).show()
+        } else {
+            try {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO).build()
+                playQuality(info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                selectedAudio = null
+            } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
+        }
+    }
+    fun selectStreamQuality(info: StreamInfo, stream: VideoStream?) {
+        if (stream != quality) {
+            val position = player.currentPosition.coerceAtLeast(0L)
+            val playing = player.playWhenReady
+            val audio = selectedAudio ?: selectAudioTrack(audioTracks(info), PlayerSettings.audioPreference, java.util.Locale.getDefault())
+            try { playQuality(info, stream, audio, position, playing, forceDirectPlayback && stream?.isVideoOnly == true) }
+            catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change quality: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
+        }
+    }
+    fun selectAudio(info: StreamInfo, audio: AudioStream?) {
+        manualAudioOverride = true
+        val language = audioLanguage(audio)
+        val manifestHasLanguage = language != null && player.currentTracks.groups.any { group ->
+            group.type == C.TRACK_TYPE_AUDIO && (0 until group.length).any { index ->
+                group.isTrackSupported(index) && audioLocale(group.getTrackFormat(index).language)?.language == audioLocale(language)?.language
+            }
+        }
+        if (usesAdaptiveAudio(info) && manifestHasLanguage) {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(language).build()
+            selectedAudio = audio
+        } else if (audio != selectedAudio || quality?.isVideoOnly != true) {
+            val separate = VideoRepository.videos(info).filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+            val currentHeight = quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
+            val video = quality?.takeIf { it.isVideoOnly && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+                ?: separate.minByOrNull { kotlin.math.abs(it.height - currentHeight) }
+            if (video == null) {
+                android.widget.Toast.makeText(context, "Audio selection is unavailable for this video format", android.widget.Toast.LENGTH_LONG).show()
+            } else {
+                try {
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(language).build()
+                    playQuality(info, video, audio, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                    selectedAudio = audio
+                } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
+            }
+        }
+    }
+    fun setMaxVideoHeightPreference(height: Int) {
+        maxVideoHeight = height
+        watchPrefs.edit().putInt("max_video_height", height).apply()
+        if (quality == null && qualityMode == "auto") {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, height).build()
+        }
+    }
     /** Pasang [info] ke pemutar: pilih kualitas dan audio awal, lalu mulai memutar. Dipakai video biasa. */
     fun startInfo(info: StreamInfo, resume: Long, startMinimized: Boolean = false) {
         chaptersOpen = false
@@ -2122,159 +2194,87 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             rememberLiveChat(current.url, liveStream || playerLive, postLive, player)
         }
         // Move the opaque watch page down with the player before fading it out.
-        if (info != null && !shortsMode) Box(if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            val isLive = info.isOngoingLive() || playerLive
-            val isPostLive = info.streamType == org.schabi.newpipe.extractor.stream.StreamType.POST_LIVE_STREAM ||
-                info.streamType == org.schabi.newpipe.extractor.stream.StreamType.POST_LIVE_AUDIO_STREAM
-            val chatState = activeChatState ?: rememberLiveChat(info.url, isLive, isPostLive, player)
-            var showComments by remember(info.url) { mutableStateOf(false) }
-            var showChat by remember(info.url, isLive) { mutableStateOf(isLive) }
-            var showDescription by remember(info.url) { mutableStateOf(false) }
-            var showAsk by remember(info.url) { mutableStateOf(false) }
-            // Ask hanya ada bila server mengirim panelnya untuk akun dan video ini (lihat AskYouTube.panel); tanpa itu tombolnya tidak muncul.
-            val askPanel by produceState<AskPanel?>(null, info.url, YouTubeAuth.isLoggedIn) { value = null; value = AskYouTube.panel(info.url) }
-            // Status akun dibaca ulang saat video dibuka. Generasi menolak respons basi yang dimulai sebelum
-            // tindakan pengguna, tetapi tetap mengizinkan pembacaan baru memperbaiki nilai uncertain/known.
-            LaunchedEffect(info.url, YouTubeAuth.sessionRevision) {
-                val revision = YouTubeAuth.sessionRevision
-                if (!YouTubeAuth.isLoggedIn) return@LaunchedEffect
-                val videoId = info.id.ifBlank { videoKey(info.url) }
-                val channelId = Regex("/channel/(UC[\\w-]{22})").find(info.uploaderUrl.orEmpty())?.groupValues?.get(1)
-                val generation = Engagement.generation(videoId, channelId)
-                val snapshot = try { EngagementSource.fetch(videoId, revision) }
-                    catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { null }
-                if (snapshot != null) Engagement.refresh(videoId, snapshot, revision, generation, channelId)
-                // Status "tersimpan" juga berasal dari server; nilai baru menggantikan status lama bila belum ada klik.
-                val saveGeneration = Engagement.generation(videoId, channelId).save
-                val choices = try { AccountLibrary.choices(videoId) }
-                    catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { null }
-                if (choices != null && revision == YouTubeAuth.sessionRevision) {
-                    Engagement.refresh(videoId, EngagementSnapshot(saved = choices.any { it.selected }), revision,
-                        EngagementGeneration(save = saveGeneration), channelId)
-                }
-            }
-            val askScope = rememberCoroutineScope()
-            val askSession = remember(info.url, askPanel != null) { askPanel?.let { AskSession(info.url, it, askScope) { player.currentPosition } } }
-            val comments = rememberComments(info.url)
-            val watchRecommendations = rememberWatchRecommendations(info, YouTubeAuth.sessionRevision)
-            WatchScreen(showDescription = showDescription, showComments = showComments, showChat = showChat, showAsk = showAsk && askSession != null, ask = askSession, onAsk = { chaptersOpen = false; showComments = false; showDescription = false; showChat = false; showAsk = true }, showChapters = chaptersOpen, onClosePanel = { showDescription = false; showComments = false; showChat = false; showAsk = false; chaptersOpen = false }, watchAlpha = 1f - watchFade, watchOffset = if (fullscreen) 0f else verticalProgress, info = info, isLive = isLive, comments = comments, chatState = chatState, onComments = { chaptersOpen = false; showDescription = false; showChat = false; showAsk = false; showComments = true }, onDescription = { chaptersOpen = false; showComments = false; showChat = false; showAsk = false; showDescription = true }, onChat = { chaptersOpen = false; showComments = false; showDescription = false; showAsk = false; showChat = true },
-                onChapters = { showComments = false; showDescription = false; showChat = false; showAsk = false; chaptersOpen = true },
-                onLink = { openLink(info, it) }, onSeek = { player.seekTo(it * 1000L); player.play() }, onShare = { shareVideo(info) }, onRemix = { closePlayer(); selectTab("shorts") }, onClip = { clipVideoLink(info) }, onCopy = { copyVideoLink(info) }, player = player, hidden = fullscreen && !exitDragging, onFullscreen = { setFullscreen(!fullscreen) }, recommendations = watchRecommendations, error = error,
-                onBack = { back() }, onSettings = { qualityInitialPage = "menu"; showQuality = true }, onDownload = { showDownloads = true },
-                onChannel = { openChannel(info.uploaderUrl ?: "") }, onOpenChannel = { openChannel(it) }, onVideo = { open(it) },
-                engagement = run {
-                    val key = videoKey(info.url)
-                    val channelId = Regex("/channel/(UC[\\w-]{22})").find(info.uploaderUrl.orEmpty())?.groupValues?.get(1)
-                    val ratingState = Engagement.rating(key)
-                    val subscriptionState = channelId?.let { Engagement.subscription(it) }
-                    WatchEngagement(
-                        rating = ratingState.value ?: 0,
-                        saved = Engagement.saved(key).saved == true,
-                        subscribed = subscriptionState?.subscribed == true,
-                        onLike = { rateWatch(info, 1) },
-                        onDislike = { rateWatch(info, -1) },
-                        onSave = { saveWatch(info) },
-                        onSubscribe = { subscribeWatch(info, true) },
-                        onUnsubscribe = { subscribeWatch(info, false) },
-                        likeDelta = ratingState.likeDelta,
-                        ratingUncertain = ratingState.uncertain,
-                        subscriptionUncertain = subscriptionState?.uncertain == true,
-                        notificationPreference = subscriptionState?.notificationPreference ?: NotificationPreference.PERSONALIZED,
-                        onNotificationPreference = { pref -> channelId?.let { setChannelNotificationPref(it, pref) } }
-                    )
-                },
+        if (info != null && !shortsMode) {
+            WatchPageHost(
+                info = info,
+                player = player,
+                playerLive = playerLive,
+                activeChatState = activeChatState,
+                chaptersOpen = chaptersOpen,
+                onChaptersOpenChange = { chaptersOpen = it },
+                watchFade = watchFade,
+                fullscreen = fullscreen,
+                verticalProgress = verticalProgress,
+                exitDragging = exitDragging,
+                wideWatch = wideWatch,
+                error = error,
                 queue = queue,
-                playlistTitle = activePlaylistTitle,
-                playlistId = activePlaylistId,
-                watchAspect = if (wideWatch) (16f / 9f) else run { val a = videoAspectOf(player.videoSize); if (a > 0f) a.coerceIn(4f / 3f, 21f / 9f) else 16f / 9f },
-                onSelectQueueItem = { item ->
-                    openUrl(item.url, PendingVideo(item.url, item.name.orEmpty(), item.uploaderName.orEmpty(), item.thumbnails.lastOrNull()?.url), resumeLocal = false)
-                },
+                activePlaylistTitle = activePlaylistTitle,
+                activePlaylistId = activePlaylistId,
                 onOpenFullPlaylist = activePlaylistId?.takeUnless { it.startsWith("RD") }?.let { pid ->
                     {
                         minimized = true
                         showHistory = false
                         accountPlaylist = AccountPlaylist(pid.removePrefix("VL"), activePlaylistTitle ?: "Playlist", queue.firstOrNull()?.thumbnails?.lastOrNull()?.url.orEmpty())
                     }
-                })
-            if (showQuality) QualityDialog(info, quality, selectedAudio, selectedSubtitle, autoplay, maxVideoHeight, player, qualityInitialPage, fullscreen, qualityMode,
-                useManifestAudio = usesAdaptiveAudio(info), onAudioPreference = { changePreferredAudio(info, it) },
+                },
+                showQuality = showQuality,
+                onDismissQuality = { showQuality = false },
+                onOpenQuality = {
+                    qualityInitialPage = "menu"
+                    showQuality = true
+                },
+                qualityInitialPage = qualityInitialPage,
+                showDownloads = showDownloads,
+                onDismissDownloads = { showDownloads = false },
+                onOpenDownloads = { showDownloads = true },
+                quality = quality,
+                selectedAudio = selectedAudio,
+                selectedSubtitle = selectedSubtitle,
+                autoplay = autoplay,
+                onAutoplayChange = { autoplay = it; watchPrefs.edit().putBoolean("autoplay", it).apply() },
+                maxVideoHeight = maxVideoHeight,
+                qualityMode = qualityMode,
+                onQualityModeChange = { qualityMode = it },
+                onLockPlayer = { playerLocked = true; showQuality = false },
+                usesAdaptiveAudio = usesAdaptiveAudio(info),
+                onAudioPreference = { changePreferredAudio(info, it) },
                 onSelectManifestAudio = { group, indices ->
-                    manualAudioOverride = true
-                    val format = group.getTrackFormat(indices.first())
-                    val lang = audioLocale(format.language)?.toLanguageTag()
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(lang)
-                        .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, indices)).build()
-                    val matching = audioTracks(info).filter { audioLocale(audioLanguage(it))?.language == audioLocale(lang)?.language && lang != null }
-                    selectedAudio = matching.singleOrNull() ?: matching.firstOrNull { !format.label.isNullOrBlank() && it.audioTrackName.equals(format.label, ignoreCase = true) }
+                    selectManifestAudio(info, group, indices)
                     showQuality = false
-                }, onSelectEmbedded = { metadata ->
-                    manualAudioOverride = true
-                    val height = quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
-                    fun heightOf(video: VideoStream) = video.height.takeIf { it > 0 } ?: (video.resolution.filter(Char::isDigit).toIntOrNull() ?: 0)
-                    val video = VideoRepository.embeddedAudio(info).filter { it.metadata.id == metadata.id }
-                        .minByOrNull { kotlin.math.abs(heightOf(it.video) - height) }?.video
-                    if (video == null) {
-                        android.widget.Toast.makeText(context, "Audio selection is unavailable for this video format", android.widget.Toast.LENGTH_LONG).show()
-                    } else {
-                        try {
-                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                                .clearOverridesOfType(C.TRACK_TYPE_AUDIO).build()
-                            playQuality(info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
-                            selectedAudio = null
-                        } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
-                    }
+                },
+                onSelectEmbeddedAudio = { metadata ->
+                    selectEmbeddedAudio(info, metadata)
                     showQuality = false
-                }, onQualityMode = { qualityMode = it }, onLock = { playerLocked = true; showQuality = false }, onMaxHeight = { height ->
-                maxVideoHeight = height; watchPrefs.edit().putInt("max_video_height", height).apply()
-                if (quality == null && qualityMode == "auto") player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, height).build()
-            }, onAutoplay = { autoplay = it; watchPrefs.edit().putBoolean("autoplay", it).apply() }, onSubtitle = { subtitle -> changeSubtitle(info, subtitle) }, onDismiss = { showQuality = false }, onSelect = { stream ->
-                if (stream != quality) {
-                    val position = player.currentPosition.coerceAtLeast(0L)
-                    val playing = player.playWhenReady
-                    val audio = selectedAudio ?: selectAudioTrack(audioTracks(info), PlayerSettings.audioPreference, java.util.Locale.getDefault())
-                    try { playQuality(info, stream, audio, position, playing, forceDirectPlayback && stream?.isVideoOnly == true) }
-                    catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change quality: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
-                }
-                showQuality = false
-            }, onSelectAudio = { audio ->
-                manualAudioOverride = true
-                val language = audioLanguage(audio)
-                val manifestHasLanguage = language != null && player.currentTracks.groups.any { group ->
-                    group.type == C.TRACK_TYPE_AUDIO && (0 until group.length).any { index ->
-                        group.isTrackSupported(index) && audioLocale(group.getTrackFormat(index).language)?.language == audioLocale(language)?.language
-                    }
-                }
-                if (usesAdaptiveAudio(info) && manifestHasLanguage) {
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(language).build()
-                    selectedAudio = audio
-                } else if (audio != selectedAudio || quality?.isVideoOnly != true) {
-                    val separate = VideoRepository.videos(info).filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-                    // In auto/HLS mode `quality` is null; keep the height that is playing instead of falling to the lowest stream.
-                    val currentHeight = quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
-                    val video = quality?.takeIf { it.isVideoOnly && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-                        ?: separate.minByOrNull { kotlin.math.abs(it.height - currentHeight) }
-                    if (video == null) {
-                        android.widget.Toast.makeText(context, "Audio selection is unavailable for this video format", android.widget.Toast.LENGTH_LONG).show()
-                    } else {
-                        try {
-                            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                                .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(language).build()
-                            playQuality(info, video, audio, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
-                            selectedAudio = audio
-                        } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
-                    }
-                }
-                showQuality = false
-            })
-            if (showDownloads) DownloadDialog(info, onDismiss = { showDownloads = false }) { height, audio ->
-                showDownloads = false
-                startDownload(info, height, audio)
-            }
+                },
+                onSelectStreamQuality = { stream ->
+                    selectStreamQuality(info, stream)
+                    showQuality = false
+                },
+                onSelectAudioTrack = { audio ->
+                    selectAudio(info, audio)
+                    showQuality = false
+                },
+                onSetMaxVideoHeight = { height -> setMaxVideoHeightPreference(height) },
+                onChangeSubtitle = { subtitle -> changeSubtitle(info, subtitle) },
+                onOpenLink = { url -> openLink(info, url) },
+                onShareVideo = { shareVideo(info) },
+                onRemixVideo = { closePlayer(); selectTab("shorts") },
+                onClipVideo = { clipVideoLink(info) },
+                onCopyVideoLink = { copyVideoLink(info) },
+                onToggleFullscreen = { setFullscreen(!fullscreen) },
+                onBack = { back() },
+                onOpenChannel = { openChannel(it) },
+                onOpenVideo = { open(it) },
+                onSelectQueueItem = { item ->
+                    openUrl(item.url, PendingVideo(item.url, item.name.orEmpty(), item.uploaderName.orEmpty(), item.thumbnails.lastOrNull()?.url), resumeLocal = false)
+                },
+                onRateWatch = { delta -> rateWatch(info, delta) },
+                onSaveWatch = { saveWatch(info) },
+                onSubscribeWatch = { sub -> subscribeWatch(info, sub) },
+                onNotificationPreference = { channelId, pref -> setChannelNotificationPref(channelId, pref) },
+                onStartDownload = { height, audio -> startDownload(info, height, audio) },
+            )
         }
         if (shortsMode && !minimized) {
             val inTab = shorts.tabQueue && mainTab == "shorts"
