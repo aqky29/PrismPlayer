@@ -144,9 +144,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     val homeCachePrefs = remember(YouTubeAuth.sessionScopeId) { context.getSharedPreferences("home_feed_cache_v2_${YouTubeAuth.sessionScopeId}", Context.MODE_PRIVATE) }
     val relatedCachePrefs = remember(YouTubeAuth.sessionScopeId) { context.getSharedPreferences("home_related_cache_v2_${YouTubeAuth.sessionScopeId}", Context.MODE_PRIVATE) }
     var home by remember(YouTubeAuth.sessionScopeId) { mutableStateOf(HomeFeedCache.read(homeCachePrefs)) }
-    var lastAccountState by remember { mutableStateOf(YouTubeAuth.isLoggedIn) }
-    var homeSessionRevision by remember { mutableIntStateOf(YouTubeAuth.sessionRevision) }
-    var homeLoadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val feedState = remember { HomeFeedState() }
     var showLoginDialog by remember { mutableStateOf(false) }
     var addLoginAccount by remember { mutableStateOf(false) }
     var showAccountDialog by remember { mutableStateOf(false) }
@@ -273,30 +271,15 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     LaunchedEffect(minimized) { if (minimized) miniState.show() }
     var fullscreen by remember { mutableStateOf(false) }
     var dragProgress by remember { mutableStateOf<Float?>(null) }
-    var category by remember { mutableStateOf("All") }
-    var categoryItems by remember { mutableStateOf<List<InfoItem>>(emptyList()) }
-    var homePage by remember { mutableStateOf<SearchPage?>(null) }
-    var homeContinuationToken by remember { mutableStateOf<String?>(null) }
-    var categoryPage by remember { mutableStateOf<SearchPage?>(null) }
-    /** Halaman berikutnya feed live untuk chip "Live"; chip lain memakai [categoryPage]. */
-    var liveNext by remember { mutableStateOf<Page?>(null) }
-    var homeChips by remember { mutableStateOf<List<HomeChip>>(emptyList()) }
-    var selectedChip by remember { mutableStateOf<HomeChip?>(null) }
-    var categoryContinuation by remember { mutableStateOf<String?>(null) }
-    var homeChipTitle by remember { mutableStateOf("All") }
     val fallbackChips = remember { listOf("All", "Music", "Gaming", "News", "Movies", "Sports", "Live").map { HomeChip(it) } }
-    val visibleChips = if (homeChips.isNotEmpty()) homeChips else fallbackChips
+    val visibleChips = if (feedState.homeChips.isNotEmpty()) feedState.homeChips else fallbackChips
     fun mergeHomeChips(updated: List<HomeChip>) {
         if (updated.isEmpty()) return
         val merged = LinkedHashMap<String, HomeChip>()
-        homeChips.forEach { merged[it.title] = it }
+        feedState.homeChips.forEach { merged[it.title] = it }
         updated.forEach { merged[it.title] = it }
-        homeChips = merged.values.toList()
+        feedState.homeChips = merged.values.toList()
     }
-    var feedLoading by remember { mutableStateOf(false) }
-    var feedError by remember { mutableStateOf<String?>(null) }
-    var feedEnd by remember { mutableStateOf(false) }
-    var topicIndex by remember { mutableIntStateOf(0) }
     val topics = remember { listOf("video terbaru", "musik terbaru", "game terbaru", "sains teknologi terbaru", "film terbaru", "olahraga terbaru") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -703,10 +686,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     }
     BackHandler(shortsMode || showHistory || fullscreen || searchState.active || (selected != null && !minimized) || accountPlaylist != null || browse.playlist != null || browse.channel != null || searchState.mode || mainTab != "home") { back() }
     fun loadHome(refresh: Boolean = false) {
-        if (loading || feedLoading) return
+        if (loading || feedState.feedLoading) return
         val revision = YouTubeAuth.sessionRevision
-        loading = true; error = null; feedError = null; feedEnd = false
-        homeLoadJob = scope.launch {
+        loading = true; error = null; feedState.feedError = null; feedState.feedEnd = false
+        feedState.homeLoadJob = scope.launch {
             // Cek siaran live channel yang sering views berjalan paralel; hasilnya disisipkan setelah feed tampil.
             val liveJob = async {
                 runCatching {
@@ -728,20 +711,20 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                             nextContinuation = accountHome.continuationToken
                         }
                         if (accountHome.chips.isNotEmpty()) {
-                            homeChips = accountHome.chips
+                            feedState.homeChips = accountHome.chips
                             val homeChip = accountHome.chips.firstOrNull { it.title.equals("All", true) || it.title.equals("Semua", true) }
                                 ?: accountHome.chips.firstOrNull { !it.hasEndpoint }
                                 ?: accountHome.chips.firstOrNull()
-                            selectedChip = homeChip
-                            if (homeChip != null) { homeChipTitle = homeChip.title; category = homeChip.title }
+                            feedState.selectedChip = homeChip
+                            if (homeChip != null) { feedState.homeChipTitle = homeChip.title; feedState.category = homeChip.title }
                         }
                     } catch (e: CancellationException) { throw e }
                     catch (_: Exception) { /* Fallback ke Kiosk / search jika request akun gagal */ }
                 } else {
-                    homeChips = emptyList()
-                    selectedChip = null
-                    homeChipTitle = "All"
-                    category = "All"
+                    feedState.homeChips = emptyList()
+                    feedState.selectedChip = null
+                    feedState.homeChipTitle = "All"
+                    feedState.category = "All"
                 }
 
                 // JALUR 2: Fallback ke Kiosk NewPipe atau Search jika akun belum login atau feed akun kosong (nudge)
@@ -754,13 +737,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         catch (_: Exception) { /* Try the search-based feed below. */ }
                     }
                     if (items.isEmpty() || refresh) {
-                        val page = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex, searchHistory.terms))
-                        topicIndex++
+                        val page = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, feedState.topicIndex, searchHistory.terms))
+                        feedState.topicIndex++
                         items = (items + page.items.filterIsInstance<StreamInfoItem>()).distinctBy { it.url }
                         nextHomePage = page
                     } else if (watchHistory.any { it.uploader.isNotBlank() }) {
                         try {
-                            val page = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex++, searchHistory.terms))
+                            val page = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, feedState.topicIndex++, searchHistory.terms))
                             items = (page.items.filterIsInstance<StreamInfoItem>() + items).distinctBy { it.url }
                         } catch (e: CancellationException) { throw e }
                         catch (_: Exception) { /* Keep the kiosk feed if personalization is unavailable. */ }
@@ -776,8 +759,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     } else {
                         HomeRecommendations.rank(items, watchHistory, emptySet(), emptySet())
                     }
-                    homePage = nextHomePage
-                    homeContinuationToken = nextContinuation
+                    feedState.homePage = nextHomePage
+                    feedState.homeContinuationToken = nextContinuation
                     HomeFeedCache.save(homeCachePrefs, home)
                 }
             } catch (e: CancellationException) { throw e }
@@ -789,22 +772,22 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     }
     LaunchedEffect(YouTubeAuth.sessionRevision, YouTubeAuth.isLoggedIn) {
         val loggedIn = YouTubeAuth.isLoggedIn
-        if (homeSessionRevision != YouTubeAuth.sessionRevision || (lastAccountState && !loggedIn)) {
-            homeLoadJob?.cancel()
+        if (feedState.homeSessionRevision != YouTubeAuth.sessionRevision || (feedState.lastAccountState && !loggedIn)) {
+            feedState.homeLoadJob?.cancel()
             loading = false
             home = emptyList()
             subs.reset()
-            homeContinuationToken = null
-            feedLoading = false
+            feedState.homeContinuationToken = null
+            feedState.feedLoading = false
         }
-        homeSessionRevision = YouTubeAuth.sessionRevision
-        homeChips = emptyList()
-        selectedChip = null
-        homeChipTitle = "All"
-        category = "All"
-        categoryItems = emptyList()
-        categoryContinuation = null
-        lastAccountState = loggedIn
+        feedState.homeSessionRevision = YouTubeAuth.sessionRevision
+        feedState.homeChips = emptyList()
+        feedState.selectedChip = null
+        feedState.homeChipTitle = "All"
+        feedState.category = "All"
+        feedState.categoryItems = emptyList()
+        feedState.categoryContinuation = null
+        feedState.lastAccountState = loggedIn
         loadHome()
         if (loggedIn && mainTab == "subscriptions") subs.load()
     }
@@ -824,10 +807,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     val items = (mine.await() + kiosk.items.filterIsInstance<StreamInfoItem>())
                         .filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }.distinctBy { it.url }
                     if (items.isNotEmpty() || !force) {
-                        categoryPage = null
-                        liveNext = kiosk.next
-                        categoryItems = items
-                        feedEnd = kiosk.next == null
+                        feedState.categoryPage = null
+                        feedState.liveNext = kiosk.next
+                        feedState.categoryItems = items
+                        feedState.feedEnd = kiosk.next == null
                     } else error = "Cannot refresh category. Showing the latest videos."
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) { error = "Failed to load category: ${e.message ?: "try again"}" }
@@ -840,9 +823,9 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 val page = VideoRepository.searchPage(value)
                 val items = page.items.filterIsInstance<StreamInfoItem>().distinctBy { it.url }
                 if (items.isNotEmpty() || !force) {
-                    categoryPage = page
-                    categoryItems = items
-                    feedEnd = page.next == null
+                    feedState.categoryPage = page
+                    feedState.categoryItems = items
+                    feedState.feedEnd = page.next == null
                 } else error = "Cannot refresh category. Showing the latest videos."
             } catch (e: Exception) { error = "Failed to load category: ${e.message ?: "try again"}" }
             finally { loading = false }
@@ -850,13 +833,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     }
 
     fun selectChip(chip: HomeChip, force: Boolean = false) {
-        if (loading || feedLoading || (chip.title == category && !force)) return
-        category = chip.title; selectedChip = chip; error = null; feedError = null; feedEnd = false
-        if (chip.title == homeChipTitle) {
-            categoryItems = emptyList(); categoryContinuation = null; categoryPage = null; liveNext = null
+        if (loading || feedState.feedLoading || (chip.title == feedState.category && !force)) return
+        feedState.category = chip.title; feedState.selectedChip = chip; error = null; feedState.feedError = null; feedState.feedEnd = false
+        if (chip.title == feedState.homeChipTitle) {
+            feedState.categoryItems = emptyList(); feedState.categoryContinuation = null; feedState.categoryPage = null; feedState.liveNext = null
             return
         }
-        if (!force) { categoryItems = emptyList(); categoryPage = null; categoryContinuation = null; liveNext = null }
+        if (!force) { feedState.categoryItems = emptyList(); feedState.categoryPage = null; feedState.categoryContinuation = null; feedState.liveNext = null }
         if (!chip.hasEndpoint) {
             startFallbackCategory(chip.title, force)
             return
@@ -866,116 +849,116 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         scope.launch {
             try {
                 val page = HomeFeed.chip(chip, revision)
-                if (revision != YouTubeAuth.sessionRevision || selectedChip != chip || category != chip.title) return@launch
+                if (revision != YouTubeAuth.sessionRevision || feedState.selectedChip != chip || feedState.category != chip.title) return@launch
                 val items = page.items.filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }.distinctBy { it.url }
                 if (items.isNotEmpty() || !force) {
-                    categoryItems = items
-                    categoryContinuation = page.continuationToken
-                    feedEnd = page.continuationToken == null
+                    feedState.categoryItems = items
+                    feedState.categoryContinuation = page.continuationToken
+                    feedState.feedEnd = page.continuationToken == null
                     mergeHomeChips(page.chips)
                 } else error = "Cannot refresh category. Showing the latest videos."
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (revision == YouTubeAuth.sessionRevision && selectedChip == chip) error = "Failed to load category: ${e.message ?: "try again"}" }
+            catch (e: Exception) { if (revision == YouTubeAuth.sessionRevision && feedState.selectedChip == chip) error = "Failed to load category: ${e.message ?: "try again"}" }
             finally { if (revision == YouTubeAuth.sessionRevision) loading = false }
         }
     }
 
     fun selectFallbackCategory(value: String, force: Boolean = false) {
-        if (loading || feedLoading || (value == category && !force)) return
-        category = value; selectedChip = null; error = null; feedError = null; feedEnd = false
-        if (value == homeChipTitle) {
-            categoryItems = emptyList(); categoryContinuation = null; categoryPage = null; liveNext = null
+        if (loading || feedState.feedLoading || (value == feedState.category && !force)) return
+        feedState.category = value; feedState.selectedChip = null; error = null; feedState.feedError = null; feedState.feedEnd = false
+        if (value == feedState.homeChipTitle) {
+            feedState.categoryItems = emptyList(); feedState.categoryContinuation = null; feedState.categoryPage = null; feedState.liveNext = null
             return
         }
-        if (!force) { categoryItems = emptyList(); categoryPage = null; categoryContinuation = null; liveNext = null }
+        if (!force) { feedState.categoryItems = emptyList(); feedState.categoryPage = null; feedState.categoryContinuation = null; feedState.liveNext = null }
         startFallbackCategory(value, force)
     }
 
     fun selectCategory(value: String, force: Boolean = false) {
-        val chip = homeChips.firstOrNull { it.title == value }
+        val chip = feedState.homeChips.firstOrNull { it.title == value }
         if (chip != null) selectChip(chip, force) else selectFallbackCategory(value, force)
     }
     fun loadMoreFeed() {
-        if (loading || feedLoading || feedEnd || searchState.mode || browse.channel != null || browse.playlist != null || searchState.active || (selected != null && !minimized)) return
+        if (loading || feedState.feedLoading || feedState.feedEnd || searchState.mode || browse.channel != null || browse.playlist != null || searchState.active || (selected != null && !minimized)) return
         val revision = YouTubeAuth.sessionRevision
-        feedLoading = true; feedError = null
-        val currentCategory = category
-        val currentChip = selectedChip
-        val homeTitle = homeChipTitle
+        feedState.feedLoading = true; feedState.feedError = null
+        val currentCategory = feedState.category
+        val currentChip = feedState.selectedChip
+        val homeTitle = feedState.homeChipTitle
         scope.launch {
             try {
                 if (currentCategory == homeTitle) {
-                    val token = homeContinuationToken
+                    val token = feedState.homeContinuationToken
                     if (token != null) {
                         try {
                             val nextPage = HomeFeed.more(token, revision)
-                            if (revision != YouTubeAuth.sessionRevision || token != homeContinuationToken || currentCategory != category) return@launch
-                            homeContinuationToken = nextPage.continuationToken
+                            if (revision != YouTubeAuth.sessionRevision || token != feedState.homeContinuationToken || currentCategory != feedState.category) return@launch
+                            feedState.homeContinuationToken = nextPage.continuationToken
                             val existing = home.mapTo(HashSet()) { it.url }
                             val newItems = nextPage.items.filter { it.url !in existing && it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }
-                            feedEnd = newItems.isEmpty() && nextPage.continuationToken == null
+                            feedState.feedEnd = newItems.isEmpty() && nextPage.continuationToken == null
                             home = home + newItems
                         } catch (e: CancellationException) { throw e }
                         catch (_: Exception) {
-                            if (revision == YouTubeAuth.sessionRevision && token == homeContinuationToken) homeContinuationToken = null
+                            if (revision == YouTubeAuth.sessionRevision && token == feedState.homeContinuationToken) feedState.homeContinuationToken = null
                         }
                     } else {
-                        val current = homePage
+                        val current = feedState.homePage
                         val page = if (current?.next != null) VideoRepository.moreSearch(current) else {
-                            val next = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex, searchHistory.terms)); topicIndex++; next
+                            val next = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, feedState.topicIndex, searchHistory.terms)); feedState.topicIndex++; next
                         }
-                        if (revision != YouTubeAuth.sessionRevision || currentCategory != category) return@launch
-                        homePage = page
+                        if (revision != YouTubeAuth.sessionRevision || currentCategory != feedState.category) return@launch
+                        feedState.homePage = page
                         val existing = home.mapTo(HashSet()) { it.url }
                         var newItems = page.items.filterIsInstance<StreamInfoItem>().filter { it.url !in existing }
                         if (newItems.isEmpty()) {
-                            val fallback = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex++, searchHistory.terms))
-                            if (revision != YouTubeAuth.sessionRevision || currentCategory != category) return@launch
-                            homePage = fallback
+                            val fallback = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, feedState.topicIndex++, searchHistory.terms))
+                            if (revision != YouTubeAuth.sessionRevision || currentCategory != feedState.category) return@launch
+                            feedState.homePage = fallback
                             newItems = fallback.items.filterIsInstance<StreamInfoItem>().filter { it.url !in existing }
                         }
                         val updated = home + HomeRecommendations.rank(newItems, watchHistory, emptySet(), emptySet())
-                        feedEnd = newItems.isEmpty()
+                        feedState.feedEnd = newItems.isEmpty()
                         home = updated
                     }
                 } else if (currentChip?.hasEndpoint == true) {
-                    val token = categoryContinuation
-                    if (token == null) { feedEnd = true } else {
+                    val token = feedState.categoryContinuation
+                    if (token == null) { feedState.feedEnd = true } else {
                         val page = HomeFeed.more(token, revision)
-                        if (revision != YouTubeAuth.sessionRevision || currentChip != selectedChip || currentCategory != category || token != categoryContinuation) return@launch
-                        categoryContinuation = page.continuationToken
-                        val updated = (categoryItems + page.items.filter {
+                        if (revision != YouTubeAuth.sessionRevision || currentChip != feedState.selectedChip || currentCategory != feedState.category || token != feedState.categoryContinuation) return@launch
+                        feedState.categoryContinuation = page.continuationToken
+                        val updated = (feedState.categoryItems + page.items.filter {
                             it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels
                         }).distinctBy { it.url }
-                        feedEnd = page.continuationToken == null || updated.size == categoryItems.size
-                        categoryItems = updated
+                        feedState.feedEnd = page.continuationToken == null || updated.size == feedState.categoryItems.size
+                        feedState.categoryItems = updated
                         mergeHomeChips(page.chips)
                     }
                 } else if (currentCategory == "Live") {
-                    val next = liveNext
-                    if (next == null) { feedEnd = true } else {
+                    val next = feedState.liveNext
+                    if (next == null) { feedState.feedEnd = true } else {
                         val page = VideoRepository.moreLiveKiosk(next)
-                        if (revision != YouTubeAuth.sessionRevision || currentCategory != category) return@launch
-                        liveNext = page.next
-                        val updated = (categoryItems + page.items.filterIsInstance<StreamInfoItem>()
+                        if (revision != YouTubeAuth.sessionRevision || currentCategory != feedState.category) return@launch
+                        feedState.liveNext = page.next
+                        val updated = (feedState.categoryItems + page.items.filterIsInstance<StreamInfoItem>()
                             .filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }).distinctBy { it.url }
-                        feedEnd = page.next == null || updated.size == categoryItems.size
-                        categoryItems = updated
+                        feedState.feedEnd = page.next == null || updated.size == feedState.categoryItems.size
+                        feedState.categoryItems = updated
                     }
                 } else {
-                    val current = categoryPage
-                    if (current?.next == null) { feedEnd = true } else {
+                    val current = feedState.categoryPage
+                    if (current?.next == null) { feedState.feedEnd = true } else {
                         val page = VideoRepository.moreSearch(current)
-                        if (revision != YouTubeAuth.sessionRevision || currentCategory != category) return@launch
-                        categoryPage = page
-                        val updated = (categoryItems + page.items.filterIsInstance<StreamInfoItem>()).distinctBy { it.url }
-                        feedEnd = page.next == null || updated.size == categoryItems.size
-                        categoryItems = updated
+                        if (revision != YouTubeAuth.sessionRevision || currentCategory != feedState.category) return@launch
+                        feedState.categoryPage = page
+                        val updated = (feedState.categoryItems + page.items.filterIsInstance<StreamInfoItem>()).distinctBy { it.url }
+                        feedState.feedEnd = page.next == null || updated.size == feedState.categoryItems.size
+                        feedState.categoryItems = updated
                     }
                 }
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (revision == YouTubeAuth.sessionRevision && currentCategory == category) feedError = "Cannot load next video: ${e.message ?: "try again"}" }
-            finally { if (revision == YouTubeAuth.sessionRevision) feedLoading = false }
+            catch (e: Exception) { if (revision == YouTubeAuth.sessionRevision && currentCategory == feedState.category) feedState.feedError = "Cannot load next video: ${e.message ?: "try again"}" }
+            finally { if (revision == YouTubeAuth.sessionRevision) feedState.feedLoading = false }
         }
     }
     fun openChannel(url: String) {
@@ -1972,7 +1955,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 minimized = false; shortsMode = true; shorts.tabQueue = true
                 queue = emptyList(); shorts.index = 0; shorts.error = null; shorts.loading = true
             }
-            mainTab = tab; showHistory = false; accountPlaylist = null; searchState.mode = false; searchState.active = false; browse.channel = null; browse.playlist = null; category = homeChipTitle; selectedChip = null; categoryItems = emptyList(); categoryContinuation = null; error = null
+            mainTab = tab; showHistory = false; accountPlaylist = null; searchState.mode = false; searchState.active = false; browse.channel = null; browse.playlist = null; feedState.category = feedState.homeChipTitle; feedState.selectedChip = null; feedState.categoryItems = emptyList(); feedState.categoryContinuation = null; error = null
         }
     }
     val offlineMini = OfflinePlaybackBridge.session
@@ -2032,7 +2015,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 channelShareUrl = browse.channel?.info?.url,
             )
             val showTopTabs = showFeed && !searchState.active && browse.playlist == null && browse.channel == null && !searchState.mode && (mainTab == "home" || mainTab == "subscriptions")
-            if (showTopTabs) HomeTopTabs(mainTab, category, homeChipTitle, visibleChips, selectTab, { selectCategory(it) }, { selectChip(it) })
+            if (showTopTabs) HomeTopTabs(mainTab, feedState.category, feedState.homeChipTitle, visibleChips, selectTab, { selectCategory(it) }, { selectChip(it) })
             if (downloadState.message.isNotBlank() && showFeed) DownloadStatusBanner(downloadState, onOpen = { saved -> player.pause(); SavedDownloads.open(context, saved) })
             if (loading && showFeed && (searchState.mode || browse.channel != null || browse.playlist != null || searchState.active)) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (showFeed && searchState.active) {
@@ -2082,7 +2065,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 error?.let { message ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-                        if (!searchState.mode && browse.channel == null) TextButton(onClick = { if (category == homeChipTitle) loadHome() else selectCategory(category, true) }) { Text("Try again") }
+                        if (!searchState.mode && browse.channel == null) TextButton(onClick = { if (feedState.category == feedState.homeChipTitle) loadHome() else selectCategory(feedState.category, true) }) { Text("Try again") }
                     }
                 }
                 val page = browse.channel
@@ -2090,7 +2073,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 val filteredHome = remember(home, hidden.videos, hidden.channels) {
                     home.filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }
                 }
-                val visibleItems: List<InfoItem> = if (currentPlaylist != null) browse.playlistItems else if (page != null) browse.channelItems else if (searchState.mode) searchState.results else if (category == homeChipTitle) filteredHome else categoryItems
+                val visibleItems: List<InfoItem> = if (currentPlaylist != null) browse.playlistItems else if (page != null) browse.channelItems else if (searchState.mode) searchState.results else if (feedState.category == feedState.homeChipTitle) filteredHome else feedState.categoryItems
                 // A playlist can contain the same video more than once, so include its occurrence.
                 val itemKeys = remember(visibleItems) {
                     val counts = mutableMapOf<String, Int>()
@@ -2102,8 +2085,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     }
                 }
                 val isFeed = currentPlaylist == null && page == null && !searchState.mode
-                LaunchedEffect(gridState, isFeed, category, visibleItems.size, feedLoading, feedError, feedEnd, loading) {
-                    if (isFeed && !feedLoading && feedError == null && !feedEnd && !loading && visibleItems.isNotEmpty()) {
+                LaunchedEffect(gridState, isFeed, feedState.category, visibleItems.size, feedState.feedLoading, feedState.feedError, feedState.feedEnd, loading) {
+                    if (isFeed && !feedState.feedLoading && feedState.feedError == null && !feedState.feedEnd && !loading && visibleItems.isNotEmpty()) {
                         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
                             .distinctUntilChanged().collect { last ->
                                 if (last >= visibleItems.size - 3) loadMoreFeed()
@@ -2131,8 +2114,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 val refreshModifier = if (isFeed) Modifier.pullToRefresh(
                     isRefreshing = refreshingFeed,
                     state = refreshState,
-                    enabled = !showHistory && (selected == null || minimized) && !feedLoading,
-                    onRefresh = { if (category == homeChipTitle) loadHome(refresh = true) else selectCategory(category, true) }
+                    enabled = !showHistory && (selected == null || minimized) && !feedState.feedLoading,
+                    onRefresh = { if (feedState.category == feedState.homeChipTitle) loadHome(refresh = true) else selectCategory(feedState.category, true) }
                 ) else Modifier
                 val isHomeFeed = isFeed && !searchState.mode && currentPlaylist == null && page == null
                 val isWideScreen = screenWidth >= 600.dp
@@ -2210,10 +2193,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                                 VideoCard(
                                     item,
                                     isMembership = isMembership,
-                                    onNotInterested = if (isFeed && category == homeChipTitle) {
+                                    onNotInterested = if (isFeed && feedState.category == feedState.homeChipTitle) {
                                         { hidden.hideVideo(item.url) }
                                     } else null,
-                                    onHideChannel = if (isFeed && category == homeChipTitle && !item.uploaderUrl.isNullOrBlank()) {
+                                    onHideChannel = if (isFeed && feedState.category == feedState.homeChipTitle && !item.uploaderUrl.isNullOrBlank()) {
                                         { hidden.hideChannel(item.uploaderUrl) }
                                     } else null,
                                     onChannel = { openChannel(it) }
@@ -2227,8 +2210,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     if (browse.error != null && (page != null || currentPlaylist != null)) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(browse.error ?: "", Modifier.weight(1f)); TextButton(onClick = { loadMoreBrowse() }) { Text("Try again") } } }
                     if (isSearchResults && searchState.moreLoading) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
                     if (isSearchResults && searchState.moreError != null) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(searchState.moreError ?: "", Modifier.weight(1f)); TextButton(onClick = { moreSearchResults() }) { Text("Try again") } } }
-                    if (isFeed && feedLoading) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
-                    if (isFeed && feedError != null) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(feedError ?: "", Modifier.weight(1f), color = Color.LightGray); TextButton(onClick = { loadMoreFeed() }) { Text("Try again") } } }
+                    if (isFeed && feedState.feedLoading) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
+                    if (isFeed && feedState.feedError != null) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(feedState.feedError ?: "", Modifier.weight(1f), color = Color.LightGray); TextButton(onClick = { loadMoreFeed() }) { Text("Try again") } } }
                     if (!loading && error == null && visibleItems.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text(if (page != null) "No videos available yet." else "No results.", color = Color.LightGray) }
                 }
                 if (isFeed) PullToRefreshDefaults.Indicator(state = refreshState, isRefreshing = refreshingFeed, modifier = Modifier.align(Alignment.TopCenter))
