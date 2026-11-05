@@ -184,20 +184,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             catch (_: Exception) { suggestions = emptyList() }
         }
     }
-    var channel by remember { mutableStateOf<ChannelPage?>(null) }
-    var channelTab by remember { mutableStateOf(ChannelTabs.VIDEOS) }
-    var channelItems by remember { mutableStateOf<List<InfoItem>>(emptyList()) }
-    var playlist by remember { mutableStateOf<PlaylistInfo?>(null) }
+    val browse = remember { BrowseState() }
     var accountPlaylist by remember(YouTubeAuth.sessionRevision) { mutableStateOf<AccountPlaylist?>(null) }
     var savePlaylistVideoId by remember(YouTubeAuth.sessionRevision) { mutableStateOf<String?>(null) }
     savePlaylistVideoId?.let { id -> SavePlaylistDialog(id, onDismiss = { savePlaylistVideoId = null }, onSelectedPlaylists = { Engagement.setPlaylists(id, it) }) }
     var selected by remember { mutableStateOf<StreamInfo?>(null) }
     var pendingVideo by remember { mutableStateOf<PendingVideo?>(null) }
     var openJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var browseNext by remember { mutableStateOf<Page?>(null) }
-    var playlistItems by remember { mutableStateOf<List<InfoItem>>(emptyList()) }
-    var browseLoading by remember { mutableStateOf(false) }
-    var browseError by remember { mutableStateOf<String?>(null) }
     var selectedSubtitle by remember { mutableStateOf<SubtitlesStream?>(null) }
     var lastSubtitle by remember { mutableStateOf<SubtitlesStream?>(null) }
     var attachedSubtitle by remember { mutableStateOf<SubtitlesStream?>(null) }
@@ -643,8 +636,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             showHistory -> showHistory = false
             selected != null && !minimized -> minimized = true
             accountPlaylist != null -> accountPlaylist = null
-            playlist != null -> playlist = null
-            channel != null -> { channel = null; if (mainTab == "shorts" && shorts.tabQueue && queue.isNotEmpty()) shortsMode = true }
+            browse.playlist != null -> browse.playlist = null
+            browse.channel != null -> { browse.channel = null; if (mainTab == "shorts" && shorts.tabQueue && queue.isNotEmpty()) shortsMode = true }
             searchMode -> { searchMode = false; query = "" }
             mainTab != "home" -> mainTab = "home"
         }
@@ -718,7 +711,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             android.widget.Toast.makeText(context, "Captions failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
-    BackHandler(shortsMode || showHistory || fullscreen || searchActive || (selected != null && !minimized) || accountPlaylist != null || playlist != null || channel != null || searchMode || mainTab != "home") { back() }
+    BackHandler(shortsMode || showHistory || fullscreen || searchActive || (selected != null && !minimized) || accountPlaylist != null || browse.playlist != null || browse.channel != null || searchMode || mainTab != "home") { back() }
     fun loadHome(refresh: Boolean = false) {
         if (loading || feedLoading) return
         val revision = YouTubeAuth.sessionRevision
@@ -913,7 +906,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         if (chip != null) selectChip(chip, force) else selectFallbackCategory(value, force)
     }
     fun loadMoreFeed() {
-        if (loading || feedLoading || feedEnd || searchMode || channel != null || playlist != null || searchActive || (selected != null && !minimized)) return
+        if (loading || feedLoading || feedEnd || searchMode || browse.channel != null || browse.playlist != null || searchActive || (selected != null && !minimized)) return
         val revision = YouTubeAuth.sessionRevision
         feedLoading = true; feedError = null
         val currentCategory = category
@@ -1016,7 +1009,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 } else {
                     first.items
                 }
-                browseNext = first.next; browseError = null; showHistory = false
+                browse.next = first.next; browse.error = null; showHistory = false
                 // Seperti YouTube: membuka channel tidak mematikan pemutaran. Dari layar tonton videonya
                 // berubah menjadi mini player, dan mini player yang sudah melayang tetap berjalan di atas
                 // halaman channel.
@@ -1027,7 +1020,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 } else {
                     savePosition(); player.stop(); shortsMode = false; selected = null; quality = null; selectedAudio = null
                 }
-                channel = page; channelTab = ChannelTabs.VIDEOS; channelItems = items; playlist = null
+                browse.channel = page; browse.channelTab = ChannelTabs.VIDEOS; browse.channelItems = items; browse.playlist = null
             } catch (e: Exception) { error = "Cannot open channel: ${e.message ?: "try again"}" }
             finally { loading = false }
         }
@@ -1065,7 +1058,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         mainTab = "home"; query = term; lastSearch = term; searchFilter = filter; searchActive = false; keyboard?.hide()
         searchHistory.add(term)
         searchGeneration++; searchMoreLoading = false
-        loading = true; error = null; searchMode = true; channel = null; playlist = null; results = emptyList(); searchPage = null; searchMoreError = null
+        loading = true; error = null; searchMode = true; browse.channel = null; browse.playlist = null; results = emptyList(); searchPage = null; searchMoreError = null
         scope.launch {
             try { val page = VideoRepository.searchPage(term, filter); searchPage = page; results = page.items; if (results.isEmpty()) error = "No results found." }
             catch (e: Exception) { error = "Search failed: ${e.message ?: "try again"}" }
@@ -1089,11 +1082,11 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
     }
     fun loadChannelTab(filter: String) {
-        val page = channel ?: return
+        val page = browse.channel ?: return
         if (loading) return
-        channelTab = filter; channelItems = emptyList(); error = null; loading = true
+        browse.channelTab = filter; browse.channelItems = emptyList(); error = null; loading = true
         scope.launch {
-            try { val result = VideoRepository.channelTabPage(page, filter); channelItems = result.items; browseNext = result.next; browseError = null }
+            try { val result = VideoRepository.channelTabPage(page, filter); browse.channelItems = result.items; browse.next = result.next; browse.error = null }
             catch (e: Exception) { error = "Failed to load tab: ${e.message ?: "try again"}" }
             finally { loading = false }
         }
@@ -1108,29 +1101,29 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
         loading = true; error = null
         scope.launch {
-            try { val result = VideoRepository.playlist(url); playlist = result; playlistItems = result.relatedItems; browseNext = result.nextPage; browseError = null; showHistory = false }
+            try { val result = VideoRepository.playlist(url); browse.playlist = result; browse.playlistItems = result.relatedItems; browse.next = result.nextPage; browse.error = null; showHistory = false }
             catch (e: Exception) { error = "Cannot open playlist: ${e.message ?: "try again"}" }
             finally { loading = false }
         }
     }
     fun loadMoreBrowse() {
-        val next = browseNext ?: return
-        val currentPlaylist = playlist
-        val currentChannel = channel
-        val currentTab = channelTab
-        if (browseLoading) return
-        browseLoading = true; browseError = null
+        val next = browse.next ?: return
+        val currentPlaylist = browse.playlist
+        val currentChannel = browse.channel
+        val currentTab = browse.channelTab
+        if (browse.loading) return
+        browse.loading = true; browse.error = null
         scope.launch {
             try {
                 val result = if (currentPlaylist != null) VideoRepository.morePlaylist(currentPlaylist.url, next) else if (currentChannel != null) VideoRepository.moreChannelTab(currentChannel, currentTab, next) else return@launch
-                if (playlist != currentPlaylist || channel != currentChannel || channelTab != currentTab) return@launch
-                val old = if (currentPlaylist != null) playlistItems else channelItems
+                if (browse.playlist != currentPlaylist || browse.channel != currentChannel || browse.channelTab != currentTab) return@launch
+                val old = if (currentPlaylist != null) browse.playlistItems else browse.channelItems
                 val merged = (old + result.items).distinctBy { it.url }
-                if (currentPlaylist != null) playlistItems = merged else channelItems = merged
-                browseNext = if (merged.size == old.size) null else result.next
+                if (currentPlaylist != null) browse.playlistItems = merged else browse.channelItems = merged
+                browse.next = if (merged.size == old.size) null else result.next
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { browseError = "Failed to load next page: ${e.message ?: "try again"}" }
-            finally { browseLoading = false }
+            catch (e: Exception) { browse.error = "Failed to load next page: ${e.message ?: "try again"}" }
+            finally { browse.loading = false }
         }
     }
     /** Kualitas video dan jalur audio awal untuk [info]. */
@@ -1632,8 +1625,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             )
             return
         }
-        val short = item.isShortFormContent || (channel != null && channelTab == ChannelTabs.SHORTS)
-        val knownRef = if (!short && playlist == null) {
+        val short = item.isShortFormContent || (browse.channel != null && browse.channelTab == ChannelTabs.SHORTS)
+        val knownRef = if (!short && browse.playlist == null) {
             InnerTubePlayer.videoIdOf(item.url)?.let { WatchHistory.playlistRefForVideoId(it, watchPrefs) }
         } else null
         if (knownRef != null) {
@@ -1646,8 +1639,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             )
             return
         }
-        val list = if (playlist != null) playlistItems.filterIsInstance<StreamInfoItem>()
-            else if (short) (if (channel != null) channelItems else results).filterIsInstance<StreamInfoItem>().filter { it.isShortFormContent || (channel != null && channelTab == ChannelTabs.SHORTS) }
+        val list = if (browse.playlist != null) browse.playlistItems.filterIsInstance<StreamInfoItem>()
+            else if (short) (if (browse.channel != null) browse.channelItems else results).filterIsInstance<StreamInfoItem>().filter { it.isShortFormContent || (browse.channel != null && browse.channelTab == ChannelTabs.SHORTS) }
             else emptyList()
         if (short) {
             if (pendingVideo != null) closePlayer()
@@ -1664,9 +1657,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             shortsMode = true
         } else {
             playlistQueueJob?.cancel()
-            if (playlist != null) {
-                activePlaylistId = playlist?.id?.removePrefix("VL")
-                activePlaylistTitle = playlist?.name
+            val currentPlaylist = browse.playlist
+            if (currentPlaylist != null) {
+                activePlaylistId = currentPlaylist.id?.removePrefix("VL")
+                activePlaylistTitle = currentPlaylist.name
                 activePlaylistCount = "${list.size} videos"
             } else {
                 activePlaylistId = null; activePlaylistTitle = null; activePlaylistCount = null
@@ -1988,7 +1982,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 minimized = false; shortsMode = true; shorts.tabQueue = true
                 queue = emptyList(); shorts.index = 0; shorts.error = null; shorts.loading = true
             }
-            mainTab = tab; showHistory = false; accountPlaylist = null; searchMode = false; searchActive = false; channel = null; playlist = null; category = homeChipTitle; selectedChip = null; categoryItems = emptyList(); categoryContinuation = null; error = null
+            mainTab = tab; showHistory = false; accountPlaylist = null; searchMode = false; searchActive = false; browse.channel = null; browse.playlist = null; category = homeChipTitle; selectedChip = null; categoryItems = emptyList(); categoryContinuation = null; error = null
         }
     }
     val offlineMini = OfflinePlaybackBridge.session
@@ -2042,15 +2036,15 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             if (showFeed) FeedTopBar(
                 searchActive = searchActive, query = query, onQueryChange = { query = it }, onSearch = { search() },
                 onCloseSearch = { searchActive = false; keyboard?.hide() },
-                showBack = playlist != null || channel != null || searchMode, onBack = { back() },
-                searchTitle = lastSearch.takeIf { searchMode && playlist == null && channel == null },
+                showBack = browse.playlist != null || browse.channel != null || searchMode, onBack = { back() },
+                searchTitle = lastSearch.takeIf { searchMode && browse.playlist == null && browse.channel == null },
                 onEditSearch = { query = lastSearch; searchActive = true },
-                channelShareUrl = channel?.info?.url,
+                channelShareUrl = browse.channel?.info?.url,
             )
-            val showTopTabs = showFeed && !searchActive && playlist == null && channel == null && !searchMode && (mainTab == "home" || mainTab == "subscriptions")
+            val showTopTabs = showFeed && !searchActive && browse.playlist == null && browse.channel == null && !searchMode && (mainTab == "home" || mainTab == "subscriptions")
             if (showTopTabs) HomeTopTabs(mainTab, category, homeChipTitle, visibleChips, selectTab, { selectCategory(it) }, { selectChip(it) })
             if (downloadState.message.isNotBlank() && showFeed) DownloadStatusBanner(downloadState, onOpen = { saved -> player.pause(); SavedDownloads.open(context, saved) })
-            if (loading && showFeed && (searchMode || channel != null || playlist != null || searchActive)) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (loading && showFeed && (searchMode || browse.channel != null || browse.playlist != null || searchActive)) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (showFeed && searchActive) {
                 SearchSuggestionList(
                     query = query, history = searchHistory.terms, suggestions = suggestions,
@@ -2059,7 +2053,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     onPickSuggestion = { query = it },
                     modifier = Modifier.weight(1f),
                 )
-            } else if (showFeed && mainTab != "home" && channel == null && playlist == null && !searchMode) {
+            } else if (showFeed && mainTab != "home" && browse.channel == null && browse.playlist == null && !searchMode) {
                 LibraryTab(
                     modifier = Modifier.weight(1f), tab = mainTab, videos = if (accountHistoryLoggedIn) accountHistoryPreview(accountHistory.entries) else watchHistory,
                     historySource = if (accountHistoryLoggedIn) "From your YouTube account" else "Watched on this device",
@@ -2098,15 +2092,15 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 error?.let { message ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-                        if (!searchMode && channel == null) TextButton(onClick = { if (category == homeChipTitle) loadHome() else selectCategory(category, true) }) { Text("Try again") }
+                        if (!searchMode && browse.channel == null) TextButton(onClick = { if (category == homeChipTitle) loadHome() else selectCategory(category, true) }) { Text("Try again") }
                     }
                 }
-                val page = channel
-                val currentPlaylist = playlist
+                val page = browse.channel
+                val currentPlaylist = browse.playlist
                 val filteredHome = remember(home, hidden.videos, hidden.channels) {
                     home.filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }
                 }
-                val visibleItems: List<InfoItem> = if (currentPlaylist != null) playlistItems else if (page != null) channelItems else if (searchMode) results else if (category == homeChipTitle) filteredHome else categoryItems
+                val visibleItems: List<InfoItem> = if (currentPlaylist != null) browse.playlistItems else if (page != null) browse.channelItems else if (searchMode) results else if (category == homeChipTitle) filteredHome else categoryItems
                 // A playlist can contain the same video more than once, so include its occurrence.
                 val itemKeys = remember(visibleItems) {
                     val counts = mutableMapOf<String, Int>()
@@ -2135,8 +2129,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         }
                     }
                 }
-                LaunchedEffect(gridState, page, currentPlaylist, visibleItems.size, browseNext, browseLoading, browseError) {
-                    if ((page != null || currentPlaylist != null) && browseNext != null && !browseLoading && browseError == null && visibleItems.isNotEmpty()) {
+                LaunchedEffect(gridState, page, currentPlaylist, visibleItems.size, browse.next, browse.loading, browse.error) {
+                    if ((page != null || currentPlaylist != null) && browse.next != null && !browse.loading && browse.error == null && visibleItems.isNotEmpty()) {
                         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.distinctUntilChanged().collect { last ->
                             if (last >= visibleItems.size - 3) loadMoreBrowse()
                         }
@@ -2187,14 +2181,14 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     if (currentPlaylist != null || page != null || searchMode) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             if (currentPlaylist != null) {
-                                Column { Text(currentPlaylist.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Text("Playlist · ${playlistItems.size} videos loaded", color = Color.LightGray, modifier = Modifier.padding(top = 8.dp)) }
+                                Column { Text(currentPlaylist.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Text("Playlist · ${browse.playlistItems.size} videos loaded", color = Color.LightGray, modifier = Modifier.padding(top = 8.dp)) }
                             } else if (page != null) {
-                                val isChannelLive = remember(page, channelItems) {
-                                    channelItems.filterIsInstance<StreamInfoItem>().any { it.isOngoingLive() } || page.videos.any { it.isOngoingLive() }
+                                val isChannelLive = remember(page, browse.channelItems) {
+                                    browse.channelItems.filterIsInstance<StreamInfoItem>().any { it.isOngoingLive() } || page.videos.any { it.isOngoingLive() }
                                 }
                                 ChannelHeader(
                                     page = page,
-                                    selectedTab = channelTab,
+                                    selectedTab = browse.channelTab,
                                     isLive = isChannelLive,
                                     onSubscribe = { subscribeChannelId(page.info.id, it, null) },
                                     onNotificationPreference = { pref -> setChannelNotificationPref(page.info.id, pref) }
@@ -2222,7 +2216,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                             }
                         } else when (item) {
                             is StreamInfoItem -> {
-                                val isMembership = channel != null && channelTab == VideoRepository.TAB_MEMBERSHIP
+                                val isMembership = browse.channel != null && browse.channelTab == VideoRepository.TAB_MEMBERSHIP
                                 VideoCard(
                                     item,
                                     isMembership = isMembership,
@@ -2239,8 +2233,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                             is PlaylistInfoItem -> PlaylistCard(item) { openPlaylist(item.url) }
                         }
                     }
-                    if (browseLoading && (page != null || currentPlaylist != null)) item(span = { GridItemSpan(maxLineSpan) }) { CircularProgressIndicator(Modifier.size(24.dp)) }
-                    if (browseError != null && (page != null || currentPlaylist != null)) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(browseError ?: "", Modifier.weight(1f)); TextButton(onClick = { loadMoreBrowse() }) { Text("Try again") } } }
+                    if (browse.loading && (page != null || currentPlaylist != null)) item(span = { GridItemSpan(maxLineSpan) }) { CircularProgressIndicator(Modifier.size(24.dp)) }
+                    if (browse.error != null && (page != null || currentPlaylist != null)) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(browse.error ?: "", Modifier.weight(1f)); TextButton(onClick = { loadMoreBrowse() }) { Text("Try again") } } }
                     if (isSearchResults && searchMoreLoading) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
                     if (isSearchResults && searchMoreError != null) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(searchMoreError ?: "", Modifier.weight(1f)); TextButton(onClick = { moreSearchResults() }) { Text("Try again") } } }
                     if (isFeed && feedLoading) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
