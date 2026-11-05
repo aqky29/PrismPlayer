@@ -139,11 +139,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
-    val preferences = remember { context.getSharedPreferences("search_history", Context.MODE_PRIVATE) }
-    var history by remember { mutableStateOf(runCatching {
-        val json = org.json.JSONArray(preferences.getString("recent", "[]"))
-        (0 until json.length()).map { json.getString(it) }
-    }.getOrDefault(emptyList())) }
+    val searchHistory = remember { SearchHistoryStore(context.getSharedPreferences("search_history", Context.MODE_PRIVATE)) }
     var searchActive by remember { mutableStateOf(false) }
     var lastSearch by remember { mutableStateOf("") }
     var searchFilter by remember { mutableStateOf("all") }
@@ -880,13 +876,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         catch (_: Exception) { /* Try the search-based feed below. */ }
                     }
                     if (items.isEmpty() || refresh) {
-                        val page = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex, history))
+                        val page = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex, searchHistory.terms))
                         topicIndex++
                         items = (items + page.items.filterIsInstance<StreamInfoItem>()).distinctBy { it.url }
                         nextHomePage = page
                     } else if (watchHistory.any { it.uploader.isNotBlank() }) {
                         try {
-                            val page = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex++, history))
+                            val page = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex++, searchHistory.terms))
                             items = (page.items.filterIsInstance<StreamInfoItem>() + items).distinctBy { it.url }
                         } catch (e: CancellationException) { throw e }
                         catch (_: Exception) { /* Keep the kiosk feed if personalization is unavailable. */ }
@@ -1056,14 +1052,14 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     } else {
                         val current = homePage
                         val page = if (current?.next != null) VideoRepository.moreSearch(current) else {
-                            val next = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex, history)); topicIndex++; next
+                            val next = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex, searchHistory.terms)); topicIndex++; next
                         }
                         if (revision != YouTubeAuth.sessionRevision || currentCategory != category) return@launch
                         homePage = page
                         val existing = home.mapTo(HashSet()) { it.url }
                         var newItems = page.items.filterIsInstance<StreamInfoItem>().filter { it.url !in existing }
                         if (newItems.isEmpty()) {
-                            val fallback = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex++, history))
+                            val fallback = VideoRepository.searchPage(HomeRecommendations.query(watchHistory, topics, topicIndex++, searchHistory.terms))
                             if (revision != YouTubeAuth.sessionRevision || currentCategory != category) return@launch
                             homePage = fallback
                             newItems = fallback.items.filterIsInstance<StreamInfoItem>().filter { it.url !in existing }
@@ -1180,8 +1176,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
         }
         mainTab = "home"; query = term; lastSearch = term; searchFilter = filter; searchActive = false; keyboard?.hide()
-        history = (listOf(term) + history.filterNot { it.equals(term, ignoreCase = true) }).take(20)
-        preferences.edit().putString("recent", org.json.JSONArray(history).toString()).apply()
+        searchHistory.add(term)
         searchGeneration++; searchMoreLoading = false
         loading = true; error = null; searchMode = true; channel = null; playlist = null; results = emptyList(); searchPage = null; searchMoreError = null
         scope.launch {
@@ -1926,7 +1921,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             var attempts = 0
             while (found.isEmpty() && attempts < 4) {
                 page = if (page?.next != null) VideoRepository.moreSearch(page) else {
-                    val topic = HomeRecommendations.query(watchHistory, topics, shortsTopicIndex++, history)
+                    val topic = HomeRecommendations.query(watchHistory, topics, shortsTopicIndex++, searchHistory.terms)
                     VideoRepository.searchPage("$topic shorts")
                 }
                 found += page.items.filterIsInstance<StreamInfoItem>().filter {
@@ -2171,9 +2166,9 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             if (loading && showFeed && (searchMode || channel != null || playlist != null || searchActive)) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (showFeed && searchActive) {
                 SearchSuggestionList(
-                    query = query, history = history, suggestions = suggestions,
+                    query = query, history = searchHistory.terms, suggestions = suggestions,
                     onSearch = { search(it) },
-                    onRemoveHistory = { term -> history = history.filterNot { it == term }; preferences.edit().putString("recent", org.json.JSONArray(history).toString()).apply() },
+                    onRemoveHistory = { searchHistory.remove(it) },
                     onPickSuggestion = { query = it },
                     modifier = Modifier.weight(1f),
                 )
