@@ -278,91 +278,9 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
         }
     }
-    var subsEntries by remember { mutableStateOf<List<SubsEntry>>(emptyList()) }
-    var subsContinuationToken by remember { mutableStateOf<String?>(null) }
-    var subsLoading by remember { mutableStateOf(false) }
-    var subsError by remember { mutableStateOf<String?>(null) }
-    var subsEnd by remember { mutableStateOf(false) }
-    var subsChannels by remember { mutableStateOf<List<SubsChannel>>(emptyList()) }
-    var subsChannelsAttempted by remember { mutableStateOf(false) }
-    var subsMembership by remember { mutableStateOf<List<SubsEntry.Video>>(emptyList()) }
-    var subsMembershipLoading by remember { mutableStateOf(false) }
-    fun loadSubscriptions(refresh: Boolean = false) {
-        if (!YouTubeAuth.isLoggedIn || subsLoading) return
-        val revision = YouTubeAuth.sessionRevision
-        subsLoading = true
-        subsError = null
-        scope.launch {
-            try {
-                val page = HomeFeed.subscriptions(revision)
-                if (revision != YouTubeAuth.sessionRevision) return@launch
-                subsEntries = page.entries
-                subsContinuationToken = page.continuationToken
-                subsEnd = page.continuationToken.isNullOrBlank()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (revision == YouTubeAuth.sessionRevision) subsError = "Failed to load subscriptions: ${e.message ?: "try again"}"
-            } finally {
-                if (revision == YouTubeAuth.sessionRevision) subsLoading = false
-            }
-        }
-    }
-    fun loadMoreSubscriptions() {
-        val token = subsContinuationToken ?: return
-        if (subsLoading || subsEnd) return
-        val revision = YouTubeAuth.sessionRevision
-        subsLoading = true
-        scope.launch {
-            try {
-                val page = HomeFeed.moreSubscriptions(token, revision)
-                if (revision != YouTubeAuth.sessionRevision || subsContinuationToken != token) return@launch
-                subsEntries = mergeSubsEntries(subsEntries, page.entries)
-                subsContinuationToken = page.continuationToken
-                subsEnd = page.continuationToken.isNullOrBlank()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (revision == YouTubeAuth.sessionRevision) subsError = "Failed to load the next page: ${e.message ?: "try again"}"
-            } finally {
-                if (revision == YouTubeAuth.sessionRevision) subsLoading = false
-            }
-        }
-    }
-    fun loadMembership() {
-        if (!YouTubeAuth.isLoggedIn || subsMembershipLoading || subsMembership.isNotEmpty()) return
-        val revision = YouTubeAuth.sessionRevision
-        // Hanya channel yang punya item "Members only" di feed; playlist UUMO-nya berisi seluruh video member channel itu.
-        val memberChannels = subsChannels.filter { channel ->
-            subsEntries.filterIsInstance<SubsEntry.Video>().any { it.meta.membersOnly && matchesSubsChannel(it.item, channel) }
-        }
-        if (memberChannels.isEmpty()) return
-        subsMembershipLoading = true
-        scope.launch {
-            try {
-                val result = mutableListOf<SubsEntry.Video>()
-                for (channel in memberChannels) {
-                    if (revision != YouTubeAuth.sessionRevision) return@launch
-                    runCatching { HomeFeed.membershipVideos(channel.id, revision) }.getOrNull()?.let { result.addAll(it) }
-                }
-                if (revision != YouTubeAuth.sessionRevision) return@launch
-                subsMembership = result.distinctBy { it.item.url }
-            } finally {
-                if (revision == YouTubeAuth.sessionRevision) subsMembershipLoading = false
-            }
-        }
-    }
+    val subs = remember { SubscriptionsState(scope) }
     LaunchedEffect(mainTab, YouTubeAuth.sessionRevision, YouTubeAuth.isLoggedIn) {
-        if (mainTab == "subscriptions" && YouTubeAuth.isLoggedIn) {
-            if (subsEntries.isEmpty() && !subsLoading) loadSubscriptions()
-            if (!subsChannelsAttempted) {
-                subsChannelsAttempted = true
-                val revision = YouTubeAuth.sessionRevision
-                scope.launch {
-                    runCatching { HomeFeed.channels(revision) }.onSuccess { if (revision == YouTubeAuth.sessionRevision) subsChannels = it }
-                }
-            }
-        }
+        if (mainTab == "subscriptions" && YouTubeAuth.isLoggedIn) subs.onTabOpened()
     }
     var shortsRequest by remember { mutableIntStateOf(0) }
     var shortsLoading by remember { mutableStateOf(false) }
@@ -915,15 +833,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             homeLoadJob?.cancel()
             loading = false
             home = emptyList()
-            subsEntries = emptyList()
-            subsChannels = emptyList()
-            subsChannelsAttempted = false
-            subsMembership = emptyList()
-            subsContinuationToken = null
-            subsLoading = false
-            subsMembershipLoading = false
-            subsError = null
-            subsEnd = false
+            subs.reset()
             homeContinuationToken = null
             feedLoading = false
         }
@@ -936,7 +846,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         categoryContinuation = null
         lastAccountState = loggedIn
         loadHome()
-        if (loggedIn && mainTab == "subscriptions") loadSubscriptions()
+        if (loggedIn && mainTab == "subscriptions") subs.load()
     }
     fun startFallbackCategory(value: String, force: Boolean) {
         loading = true
@@ -2189,17 +2099,17 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     onSearchShorts = { error = null; shortsRequest++ },
                     subscriptionsContent = {
                         SubscriptionsScreen(
-                            entries = subsEntries,
-                            channels = subsChannels,
-                            membershipEntries = subsMembership,
-                            membershipLoading = subsMembershipLoading,
+                            entries = subs.entries,
+                            channels = subs.channels,
+                            membershipEntries = subs.membership,
+                            membershipLoading = subs.membershipLoading,
                             watchedUrls = watchHistory.map { it.url }.toSet(),
-                            loading = subsLoading,
-                            error = subsError,
-                            canLoadMore = !subsEnd,
-                            onRefresh = { loadSubscriptions(true) },
-                            onLoadMore = { loadMoreSubscriptions() },
-                            onLoadMembership = { loadMembership() },
+                            loading = subs.loading,
+                            error = subs.error,
+                            canLoadMore = !subs.end,
+                            onRefresh = { subs.load(true) },
+                            onLoadMore = { subs.loadMore() },
+                            onLoadMembership = { subs.loadMembership() },
                             onVideo = { open(it) },
                             onChannel = { openChannel(it) },
                             onShorts = { cards, index -> openShortsShelf(cards, index) },
