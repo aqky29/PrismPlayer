@@ -140,23 +140,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val searchHistory = remember { SearchHistoryStore(context.getSharedPreferences("search_history", Context.MODE_PRIVATE)) }
-    var searchActive by remember { mutableStateOf(false) }
-    var lastSearch by remember { mutableStateOf("") }
-    var searchFilter by remember { mutableStateOf("all") }
-    var query by remember { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<InfoItem>>(emptyList()) }
-    var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
-    var searchPage by remember { mutableStateOf<SearchPage?>(null) }
-    var searchMoreLoading by remember { mutableStateOf(false) }
-    var searchMoreError by remember { mutableStateOf<String?>(null) }
-    var searchGeneration by remember { mutableIntStateOf(0) }
+    val searchState = remember { SearchState() }
     val homeCachePrefs = remember(YouTubeAuth.sessionScopeId) { context.getSharedPreferences("home_feed_cache_v2_${YouTubeAuth.sessionScopeId}", Context.MODE_PRIVATE) }
     val relatedCachePrefs = remember(YouTubeAuth.sessionScopeId) { context.getSharedPreferences("home_related_cache_v2_${YouTubeAuth.sessionScopeId}", Context.MODE_PRIVATE) }
     var home by remember(YouTubeAuth.sessionScopeId) { mutableStateOf(HomeFeedCache.read(homeCachePrefs)) }
     var lastAccountState by remember { mutableStateOf(YouTubeAuth.isLoggedIn) }
     var homeSessionRevision by remember { mutableIntStateOf(YouTubeAuth.sessionRevision) }
     var homeLoadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var searchMode by remember { mutableStateOf(false) }
     var showLoginDialog by remember { mutableStateOf(false) }
     var addLoginAccount by remember { mutableStateOf(false) }
     var showAccountDialog by remember { mutableStateOf(false) }
@@ -174,14 +164,14 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
         )
     }
-    LaunchedEffect(searchActive, query) {
-        suggestions = emptyList()
-        val term = query.trim()
-        if (searchActive && term.isNotBlank()) {
+    LaunchedEffect(searchState.active, searchState.query) {
+        searchState.suggestions = emptyList()
+        val term = searchState.query.trim()
+        if (searchState.active && term.isNotBlank()) {
             delay(350)
-            try { suggestions = VideoRepository.suggestions(term).distinct().take(10) }
+            try { searchState.suggestions = VideoRepository.suggestions(term).distinct().take(10) }
             catch (e: CancellationException) { throw e }
-            catch (_: Exception) { suggestions = emptyList() }
+            catch (_: Exception) { searchState.suggestions = emptyList() }
         }
     }
     val browse = remember { BrowseState() }
@@ -632,13 +622,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         when {
             fullscreen -> setFullscreen(false)
             shortsMode && !minimized -> { closePlayer(); if (shorts.tabQueue && mainTab == "shorts") mainTab = "home" }
-            searchActive -> { searchActive = false; keyboard?.hide() }
+            searchState.active -> { searchState.active = false; keyboard?.hide() }
             showHistory -> showHistory = false
             selected != null && !minimized -> minimized = true
             accountPlaylist != null -> accountPlaylist = null
             browse.playlist != null -> browse.playlist = null
             browse.channel != null -> { browse.channel = null; if (mainTab == "shorts" && shorts.tabQueue && queue.isNotEmpty()) shortsMode = true }
-            searchMode -> { searchMode = false; query = "" }
+            searchState.mode -> { searchState.mode = false; searchState.query = "" }
             mainTab != "home" -> mainTab = "home"
         }
         error = null
@@ -711,7 +701,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             android.widget.Toast.makeText(context, "Captions failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
-    BackHandler(shortsMode || showHistory || fullscreen || searchActive || (selected != null && !minimized) || accountPlaylist != null || browse.playlist != null || browse.channel != null || searchMode || mainTab != "home") { back() }
+    BackHandler(shortsMode || showHistory || fullscreen || searchState.active || (selected != null && !minimized) || accountPlaylist != null || browse.playlist != null || browse.channel != null || searchState.mode || mainTab != "home") { back() }
     fun loadHome(refresh: Boolean = false) {
         if (loading || feedLoading) return
         val revision = YouTubeAuth.sessionRevision
@@ -906,7 +896,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         if (chip != null) selectChip(chip, force) else selectFallbackCategory(value, force)
     }
     fun loadMoreFeed() {
-        if (loading || feedLoading || feedEnd || searchMode || browse.channel != null || browse.playlist != null || searchActive || (selected != null && !minimized)) return
+        if (loading || feedLoading || feedEnd || searchState.mode || browse.channel != null || browse.playlist != null || searchState.active || (selected != null && !minimized)) return
         val revision = YouTubeAuth.sessionRevision
         feedLoading = true; feedError = null
         val currentCategory = category
@@ -1025,7 +1015,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             finally { loading = false }
         }
     }
-    fun search(text: String = query, filter: String = "all") {
+    fun search(text: String = searchState.query, filter: String = "all") {
         val term = text.trim()
         if (term.isBlank() || loading) return
         val looksLikeUrl = term.startsWith("http://", ignoreCase = true) ||
@@ -1040,45 +1030,45 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 val listId = uri.getQueryParameter("list")?.takeIf { it.isNotBlank() }
                 val vid = InnerTubePlayer.videoIdOf(uri.toString())
                 if (listId != null && vid == null && !listId.startsWith("RD")) {
-                    searchActive = false; keyboard?.hide()
+                    searchState.active = false; keyboard?.hide()
                     showHistory = false
                     accountPlaylist = AccountPlaylist(listId.removePrefix("VL"), "Playlist")
                     return
                 } else if (listId != null) {
-                    searchActive = false; keyboard?.hide()
+                    searchState.active = false; keyboard?.hide()
                     (context as? MainActivity)?.incomingVideo = uri.toString()
                     return
                 } else if (vid != null) {
-                    searchActive = false; keyboard?.hide()
+                    searchState.active = false; keyboard?.hide()
                     (context as? MainActivity)?.incomingVideo = "https://www.youtube.com/watch?v=$vid"
                     return
                 }
             }
         }
-        mainTab = "home"; query = term; lastSearch = term; searchFilter = filter; searchActive = false; keyboard?.hide()
+        mainTab = "home"; searchState.query = term; searchState.lastSearch = term; searchState.filter = filter; searchState.active = false; keyboard?.hide()
         searchHistory.add(term)
-        searchGeneration++; searchMoreLoading = false
-        loading = true; error = null; searchMode = true; browse.channel = null; browse.playlist = null; results = emptyList(); searchPage = null; searchMoreError = null
+        searchState.generation++; searchState.moreLoading = false
+        loading = true; error = null; searchState.mode = true; browse.channel = null; browse.playlist = null; searchState.results = emptyList(); searchState.page = null; searchState.moreError = null
         scope.launch {
-            try { val page = VideoRepository.searchPage(term, filter); searchPage = page; results = page.items; if (results.isEmpty()) error = "No results found." }
+            try { val page = VideoRepository.searchPage(term, filter); searchState.page = page; searchState.results = page.items; if (searchState.results.isEmpty()) error = "No results found." }
             catch (e: Exception) { error = "Search failed: ${e.message ?: "try again"}" }
             finally { loading = false }
         }
     }
     fun moreSearchResults() {
-        val page = searchPage ?: return
-        if (page.next == null || searchMoreLoading || loading) return
-        searchMoreLoading = true; searchMoreError = null
-        val generation = searchGeneration
+        val page = searchState.page ?: return
+        if (page.next == null || searchState.moreLoading || loading) return
+        searchState.moreLoading = true; searchState.moreError = null
+        val generation = searchState.generation
         scope.launch {
             try {
                 val next = VideoRepository.moreSearch(page)
-                if (generation != searchGeneration) return@launch
-                val updated = (results + next.items).distinctBy { it.url }
-                searchPage = if (updated.size == results.size) next.copy(next = null) else next
-                results = updated
-            } catch (e: Exception) { if (generation == searchGeneration) searchMoreError = "Failed to load more results: ${e.message ?: "try again"}" }
-            finally { if (generation == searchGeneration) searchMoreLoading = false }
+                if (generation != searchState.generation) return@launch
+                val updated = (searchState.results + next.items).distinctBy { it.url }
+                searchState.page = if (updated.size == searchState.results.size) next.copy(next = null) else next
+                searchState.results = updated
+            } catch (e: Exception) { if (generation == searchState.generation) searchState.moreError = "Failed to load more results: ${e.message ?: "try again"}" }
+            finally { if (generation == searchState.generation) searchState.moreLoading = false }
         }
     }
     fun loadChannelTab(filter: String) {
@@ -1640,7 +1630,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             return
         }
         val list = if (browse.playlist != null) browse.playlistItems.filterIsInstance<StreamInfoItem>()
-            else if (short) (if (browse.channel != null) browse.channelItems else results).filterIsInstance<StreamInfoItem>().filter { it.isShortFormContent || (browse.channel != null && browse.channelTab == ChannelTabs.SHORTS) }
+            else if (short) (if (browse.channel != null) browse.channelItems else searchState.results).filterIsInstance<StreamInfoItem>().filter { it.isShortFormContent || (browse.channel != null && browse.channelTab == ChannelTabs.SHORTS) }
             else emptyList()
         if (short) {
             if (pendingVideo != null) closePlayer()
@@ -1972,7 +1962,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     val selectTab: (String) -> Unit = { tab ->
         if (tab == "search") {
             if (shortsMode && !minimized) closePlayer()
-            searchActive = true
+            searchState.active = true
         } else {
             if (tab != "shorts" && shortsMode && !minimized) closePlayer()
             if (tab == "shorts" && mainTab != "shorts") {
@@ -1982,7 +1972,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 minimized = false; shortsMode = true; shorts.tabQueue = true
                 queue = emptyList(); shorts.index = 0; shorts.error = null; shorts.loading = true
             }
-            mainTab = tab; showHistory = false; accountPlaylist = null; searchMode = false; searchActive = false; browse.channel = null; browse.playlist = null; category = homeChipTitle; selectedChip = null; categoryItems = emptyList(); categoryContinuation = null; error = null
+            mainTab = tab; showHistory = false; accountPlaylist = null; searchState.mode = false; searchState.active = false; browse.channel = null; browse.playlist = null; category = homeChipTitle; selectedChip = null; categoryItems = emptyList(); categoryContinuation = null; error = null
         }
     }
     val offlineMini = OfflinePlaybackBridge.session
@@ -2034,26 +2024,26 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
           Box(if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Column(Modifier.fillMaxSize().frostedGlassSource(glassBackdrop)) {
             if (showFeed) FeedTopBar(
-                searchActive = searchActive, query = query, onQueryChange = { query = it }, onSearch = { search() },
-                onCloseSearch = { searchActive = false; keyboard?.hide() },
-                showBack = browse.playlist != null || browse.channel != null || searchMode, onBack = { back() },
-                searchTitle = lastSearch.takeIf { searchMode && browse.playlist == null && browse.channel == null },
-                onEditSearch = { query = lastSearch; searchActive = true },
+                searchActive = searchState.active, query = searchState.query, onQueryChange = { searchState.query = it }, onSearch = { search() },
+                onCloseSearch = { searchState.active = false; keyboard?.hide() },
+                showBack = browse.playlist != null || browse.channel != null || searchState.mode, onBack = { back() },
+                searchTitle = searchState.lastSearch.takeIf { searchState.mode && browse.playlist == null && browse.channel == null },
+                onEditSearch = { searchState.query = searchState.lastSearch; searchState.active = true },
                 channelShareUrl = browse.channel?.info?.url,
             )
-            val showTopTabs = showFeed && !searchActive && browse.playlist == null && browse.channel == null && !searchMode && (mainTab == "home" || mainTab == "subscriptions")
+            val showTopTabs = showFeed && !searchState.active && browse.playlist == null && browse.channel == null && !searchState.mode && (mainTab == "home" || mainTab == "subscriptions")
             if (showTopTabs) HomeTopTabs(mainTab, category, homeChipTitle, visibleChips, selectTab, { selectCategory(it) }, { selectChip(it) })
             if (downloadState.message.isNotBlank() && showFeed) DownloadStatusBanner(downloadState, onOpen = { saved -> player.pause(); SavedDownloads.open(context, saved) })
-            if (loading && showFeed && (searchMode || browse.channel != null || browse.playlist != null || searchActive)) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if (showFeed && searchActive) {
+            if (loading && showFeed && (searchState.mode || browse.channel != null || browse.playlist != null || searchState.active)) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (showFeed && searchState.active) {
                 SearchSuggestionList(
-                    query = query, history = searchHistory.terms, suggestions = suggestions,
+                    query = searchState.query, history = searchHistory.terms, suggestions = searchState.suggestions,
                     onSearch = { search(it) },
                     onRemoveHistory = { searchHistory.remove(it) },
-                    onPickSuggestion = { query = it },
+                    onPickSuggestion = { searchState.query = it },
                     modifier = Modifier.weight(1f),
                 )
-            } else if (showFeed && mainTab != "home" && browse.channel == null && browse.playlist == null && !searchMode) {
+            } else if (showFeed && mainTab != "home" && browse.channel == null && browse.playlist == null && !searchState.mode) {
                 LibraryTab(
                     modifier = Modifier.weight(1f), tab = mainTab, videos = if (accountHistoryLoggedIn) accountHistoryPreview(accountHistory.entries) else watchHistory,
                     historySource = if (accountHistoryLoggedIn) "From your YouTube account" else "Watched on this device",
@@ -2092,7 +2082,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 error?.let { message ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-                        if (!searchMode && browse.channel == null) TextButton(onClick = { if (category == homeChipTitle) loadHome() else selectCategory(category, true) }) { Text("Try again") }
+                        if (!searchState.mode && browse.channel == null) TextButton(onClick = { if (category == homeChipTitle) loadHome() else selectCategory(category, true) }) { Text("Try again") }
                     }
                 }
                 val page = browse.channel
@@ -2100,7 +2090,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 val filteredHome = remember(home, hidden.videos, hidden.channels) {
                     home.filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }
                 }
-                val visibleItems: List<InfoItem> = if (currentPlaylist != null) browse.playlistItems else if (page != null) browse.channelItems else if (searchMode) results else if (category == homeChipTitle) filteredHome else categoryItems
+                val visibleItems: List<InfoItem> = if (currentPlaylist != null) browse.playlistItems else if (page != null) browse.channelItems else if (searchState.mode) searchState.results else if (category == homeChipTitle) filteredHome else categoryItems
                 // A playlist can contain the same video more than once, so include its occurrence.
                 val itemKeys = remember(visibleItems) {
                     val counts = mutableMapOf<String, Int>()
@@ -2111,7 +2101,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         "feed:$identity:$occurrence"
                     }
                 }
-                val isFeed = currentPlaylist == null && page == null && !searchMode
+                val isFeed = currentPlaylist == null && page == null && !searchState.mode
                 LaunchedEffect(gridState, isFeed, category, visibleItems.size, feedLoading, feedError, feedEnd, loading) {
                     if (isFeed && !feedLoading && feedError == null && !feedEnd && !loading && visibleItems.isNotEmpty()) {
                         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
@@ -2120,12 +2110,12 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                             }
                     }
                 }
-                val isSearchResults = searchMode && page == null && currentPlaylist == null
-                LaunchedEffect(lastSearch, searchFilter, isSearchResults) { if (isSearchResults) gridState.scrollToItem(0) }
-                LaunchedEffect(gridState, isSearchResults, results.size, searchMoreLoading, searchMoreError, searchPage, loading) {
-                    if (isSearchResults && !loading && !searchMoreLoading && searchMoreError == null && searchPage?.next != null && results.isNotEmpty()) {
+                val isSearchResults = searchState.mode && page == null && currentPlaylist == null
+                LaunchedEffect(searchState.lastSearch, searchState.filter, isSearchResults) { if (isSearchResults) gridState.scrollToItem(0) }
+                LaunchedEffect(gridState, isSearchResults, searchState.results.size, searchState.moreLoading, searchState.moreError, searchState.page, loading) {
+                    if (isSearchResults && !loading && !searchState.moreLoading && searchState.moreError == null && searchState.page?.next != null && searchState.results.isNotEmpty()) {
                         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.distinctUntilChanged().collect { last ->
-                            if (last >= results.size - 3) moreSearchResults()
+                            if (last >= searchState.results.size - 3) moreSearchResults()
                         }
                     }
                 }
@@ -2144,7 +2134,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     enabled = !showHistory && (selected == null || minimized) && !feedLoading,
                     onRefresh = { if (category == homeChipTitle) loadHome(refresh = true) else selectCategory(category, true) }
                 ) else Modifier
-                val isHomeFeed = isFeed && !searchMode && currentPlaylist == null && page == null
+                val isHomeFeed = isFeed && !searchState.mode && currentPlaylist == null && page == null
                 val isWideScreen = screenWidth >= 600.dp
                 val homeColumns = when {
                     screenWidth >= 1600.dp -> 4
@@ -2178,7 +2168,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     horizontalArrangement = Arrangement.spacedBy(feedHorizontalSpacing),
                     verticalArrangement = Arrangement.spacedBy(feedVerticalSpacing)
                 ) {
-                    if (currentPlaylist != null || page != null || searchMode) {
+                    if (currentPlaylist != null || page != null || searchState.mode) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             if (currentPlaylist != null) {
                                 Column { Text(currentPlaylist.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Text("Playlist · ${browse.playlistItems.size} videos loaded", color = Color.LightGray, modifier = Modifier.padding(top = 8.dp)) }
@@ -2193,10 +2183,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                                     onSubscribe = { subscribeChannelId(page.info.id, it, null) },
                                     onNotificationPreference = { pref -> setChannelNotificationPref(page.info.id, pref) }
                                 ) { loadChannelTab(it) }
-                            } else if (searchMode) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            } else if (searchState.mode) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 listOf("all" to "All", "videos" to "Video", "channels" to "Channel", "playlists" to "Playlist").forEach { (value, label) ->
-                                    val active = searchFilter == value
-                                    Text(label, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (active) Color.White else Surface).clickable(enabled = !loading && !searchMoreLoading) { if (value != searchFilter) search(lastSearch, value) }.padding(horizontal = 13.dp, vertical = 8.dp), color = if (active) Color.Black else Color.White, style = MaterialTheme.typography.labelLarge)
+                                    val active = searchState.filter == value
+                                    Text(label, modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (active) Color.White else Surface).clickable(enabled = !loading && !searchState.moreLoading) { if (value != searchState.filter) search(searchState.lastSearch, value) }.padding(horizontal = 13.dp, vertical = 8.dp), color = if (active) Color.Black else Color.White, style = MaterialTheme.typography.labelLarge)
                                 }
                             }
                         }
@@ -2235,8 +2225,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     }
                     if (browse.loading && (page != null || currentPlaylist != null)) item(span = { GridItemSpan(maxLineSpan) }) { CircularProgressIndicator(Modifier.size(24.dp)) }
                     if (browse.error != null && (page != null || currentPlaylist != null)) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(browse.error ?: "", Modifier.weight(1f)); TextButton(onClick = { loadMoreBrowse() }) { Text("Try again") } } }
-                    if (isSearchResults && searchMoreLoading) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
-                    if (isSearchResults && searchMoreError != null) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(searchMoreError ?: "", Modifier.weight(1f)); TextButton(onClick = { moreSearchResults() }) { Text("Try again") } } }
+                    if (isSearchResults && searchState.moreLoading) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
+                    if (isSearchResults && searchState.moreError != null) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(searchState.moreError ?: "", Modifier.weight(1f)); TextButton(onClick = { moreSearchResults() }) { Text("Try again") } } }
                     if (isFeed && feedLoading) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) } }
                     if (isFeed && feedError != null) item(span = { GridItemSpan(maxLineSpan) }) { Row(verticalAlignment = Alignment.CenterVertically) { Text(feedError ?: "", Modifier.weight(1f), color = Color.LightGray); TextButton(onClick = { loadMoreFeed() }) { Text("Try again") } } }
                     if (!loading && error == null && visibleItems.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text(if (page != null) "No videos available yet." else "No results.", color = Color.LightGray) }
@@ -2245,7 +2235,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 }
             }
             }
-            val currentNavTab = if (searchActive || (searchMode && !shortsMode)) "search" else if (mainTab == "subscriptions") "home" else mainTab
+            val currentNavTab = if (searchState.active || (searchState.mode && !shortsMode)) "search" else if (mainTab == "subscriptions") "home" else mainTab
             if (showFeed) {
                 Box(Modifier.align(Alignment.BottomCenter)) {
                     HomeNavigation(selected = currentNavTab, onSelect = selectTab)
@@ -2452,7 +2442,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 onClose = if (inTab) null else {{ closePlayer() }},
                 onShare = { shareVideo(it) },
                 onSave = { id -> if (YouTubeAuth.isLoggedIn) savePlaylistVideoId = id else showLoginDialog = true },
-                onSearch = { selectTab("home"); searchActive = true },
+                onSearch = { selectTab("home"); searchState.active = true },
                 onDownload = { shorts.downloadInfo = it },
                 bottomBar = { if (inTab) HomeNavigation(selected = "shorts", onSelect = selectTab) },
             )
@@ -2478,7 +2468,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 val inlineWidth = if (wide) wideWatchPlayerWidth(maxWidth) else maxWidth
                 val inlineHeight = inlineWidth / watchAspect
                 val startX = 0.dp
-                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchActive || fullscreen) 0.dp else 78.dp)
+                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active || fullscreen) 0.dp else 78.dp)
                 miniState.limits = limits
                 LaunchedEffect(limits) { miniState.settle(animate = minimized) }
                 val miniWidth = miniState.width.value.dp
@@ -2562,7 +2552,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 val wide = isWideWatchLayout(maxWidth, maxHeight)
                 val inlineWidth = if (wide) wideWatchPlayerWidth(maxWidth) else maxWidth
                 val inlineHeight = inlineWidth * 9f / 16f
-                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchActive) 0.dp else 78.dp)
+                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active) 0.dp else 78.dp)
                 miniState.limits = limits
                 LaunchedEffect(limits) { miniState.settle(animate = minimized) }
                 val miniWidth = (miniState.width.value.takeIf { it > 0f } ?: limits.default).dp
