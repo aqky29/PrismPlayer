@@ -213,9 +213,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     var accountRequest by remember(accountHistorySession, accountHistoryLoggedIn) { mutableIntStateOf(0) }
     var accountNextRequest by remember(accountHistorySession, accountHistoryLoggedIn) { mutableIntStateOf(0) }
     var deviceHistory by remember(accountHistorySession, accountHistoryLoggedIn) { mutableStateOf(false) }
-    val recommendationPrefs = remember { context.getSharedPreferences("home_recommendations", Context.MODE_PRIVATE) }
-    var hiddenVideos by remember { mutableStateOf(HomeRecommendations.read(recommendationPrefs, "videos")) }
-    var hiddenChannels by remember { mutableStateOf(HomeRecommendations.read(recommendationPrefs, "channels")) }
+    val hidden = remember { HiddenFeedItems(context.getSharedPreferences("home_recommendations", Context.MODE_PRIVATE)) }
     var showHistory by remember { mutableStateOf(false) }
     var mainTab by remember { mutableStateOf("home") }
     LaunchedEffect(accountHistorySession, accountHistoryLoggedIn, mainTab, showHistory, accountRequest) {
@@ -812,7 +810,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     error = if (home.isEmpty()) "Feed is unavailable." else "Cannot refresh feed. Showing the latest videos."
                 } else {
                     home = if (nextContinuation != null || (YouTubeAuth.isLoggedIn && nextHomePage == null)) {
-                        items.filter { it.url !in hiddenVideos && it.uploaderUrl.orEmpty() !in hiddenChannels }
+                        items.filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }
                     } else {
                         HomeRecommendations.rank(items, watchHistory, emptySet(), emptySet())
                     }
@@ -824,7 +822,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             catch (e: Exception) { if (revision == YouTubeAuth.sessionRevision) error = if (home.isEmpty()) "Failed to load feed: ${e.message ?: "try again"}" else "Cannot refresh feed. Showing the latest videos." }
             finally { if (revision == YouTubeAuth.sessionRevision) loading = false }
             val live = liveJob.await()
-            if (revision == YouTubeAuth.sessionRevision && live.isNotEmpty()) home = HomeRecommendations.withLive(home, live, hiddenVideos, hiddenChannels)
+            if (revision == YouTubeAuth.sessionRevision && live.isNotEmpty()) home = HomeRecommendations.withLive(home, live, hidden.videos, hidden.channels)
         }
     }
     LaunchedEffect(YouTubeAuth.sessionRevision, YouTubeAuth.isLoggedIn) {
@@ -862,7 +860,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     }
                     val kiosk = VideoRepository.liveKiosk()
                     val items = (mine.await() + kiosk.items.filterIsInstance<StreamInfoItem>())
-                        .filter { it.url !in hiddenVideos && it.uploaderUrl.orEmpty() !in hiddenChannels }.distinctBy { it.url }
+                        .filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }.distinctBy { it.url }
                     if (items.isNotEmpty() || !force) {
                         categoryPage = null
                         liveNext = kiosk.next
@@ -907,7 +905,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             try {
                 val page = HomeFeed.chip(chip, revision)
                 if (revision != YouTubeAuth.sessionRevision || selectedChip != chip || category != chip.title) return@launch
-                val items = page.items.filter { it.url !in hiddenVideos && it.uploaderUrl.orEmpty() !in hiddenChannels }.distinctBy { it.url }
+                val items = page.items.filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }.distinctBy { it.url }
                 if (items.isNotEmpty() || !force) {
                     categoryItems = items
                     categoryContinuation = page.continuationToken
@@ -952,7 +950,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                             if (revision != YouTubeAuth.sessionRevision || token != homeContinuationToken || currentCategory != category) return@launch
                             homeContinuationToken = nextPage.continuationToken
                             val existing = home.mapTo(HashSet()) { it.url }
-                            val newItems = nextPage.items.filter { it.url !in existing && it.url !in hiddenVideos && it.uploaderUrl.orEmpty() !in hiddenChannels }
+                            val newItems = nextPage.items.filter { it.url !in existing && it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }
                             feedEnd = newItems.isEmpty() && nextPage.continuationToken == null
                             home = home + newItems
                         } catch (e: CancellationException) { throw e }
@@ -985,7 +983,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         if (revision != YouTubeAuth.sessionRevision || currentChip != selectedChip || currentCategory != category || token != categoryContinuation) return@launch
                         categoryContinuation = page.continuationToken
                         val updated = (categoryItems + page.items.filter {
-                            it.url !in hiddenVideos && it.uploaderUrl.orEmpty() !in hiddenChannels
+                            it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels
                         }).distinctBy { it.url }
                         feedEnd = page.continuationToken == null || updated.size == categoryItems.size
                         categoryItems = updated
@@ -998,7 +996,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         if (revision != YouTubeAuth.sessionRevision || currentCategory != category) return@launch
                         liveNext = page.next
                         val updated = (categoryItems + page.items.filterIsInstance<StreamInfoItem>()
-                            .filter { it.url !in hiddenVideos && it.uploaderUrl.orEmpty() !in hiddenChannels }).distinctBy { it.url }
+                            .filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }).distinctBy { it.url }
                         feedEnd = page.next == null || updated.size == categoryItems.size
                         categoryItems = updated
                     }
@@ -1745,7 +1743,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             val feed = try {
                 ShortsFeed.start { seed -> withContext(Dispatchers.Main) { if (queue.isEmpty()) { queue = listOf(seed); seedShown = true } } }
             } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
-            val feedItems = feed?.items.orEmpty().filter { it.url !in hiddenVideos }.distinctBy { videoKey(it.url) }
+            val feedItems = feed?.items.orEmpty().filter { it.url !in hidden.videos }.distinctBy { videoKey(it.url) }
             if (feedItems.isNotEmpty()) {
                 shortsFromFeed = true
                 shortsSeqNext = feed?.next
@@ -1763,7 +1761,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     page = VideoRepository.moreSearch(page)
                 }
                 shortsPage = page
-                queue = HomeRecommendations.rank(found.distinctBy { videoKey(it.url) }, watchHistory, hiddenVideos, hiddenChannels)
+                queue = HomeRecommendations.rank(found.distinctBy { videoKey(it.url) }, watchHistory, hidden.videos, hidden.channels)
             }
             if (queue.isEmpty()) shortsError = "Shorts are unavailable. Try again."
         } catch (e: CancellationException) { throw e }
@@ -1820,7 +1818,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         val token = shortsSeqNext ?: break
                         val feed = ShortsFeed.more(token)
                         shortsSeqNext = feed.next
-                        found += feed.items.filter { it.url !in hiddenVideos && existing.add(videoKey(it.url)) }
+                        found += feed.items.filter { it.url !in hidden.videos && existing.add(videoKey(it.url)) }
                         feedAttempts++
                     }
                 } catch (e: CancellationException) { throw e }
@@ -1840,7 +1838,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 attempts++
             }
             shortsPage = page
-            val additions = if (fromFeed) found.toList() else HomeRecommendations.rank(found, watchHistory, hiddenVideos, hiddenChannels)
+            val additions = if (fromFeed) found.toList() else HomeRecommendations.rank(found, watchHistory, hidden.videos, hidden.channels)
             queue = queue + additions
             if (additions.isEmpty()) shortsMoreError = "No new Shorts. Tap to try again."
         } catch (e: CancellationException) { throw e }
@@ -2113,7 +2111,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                             onVideo = { open(it) },
                             onChannel = { openChannel(it) },
                             onShorts = { cards, index -> openShortsShelf(cards, index) },
-                            onNotInterested = { item -> hiddenVideos = HomeRecommendations.hide(recommendationPrefs, "videos", item.url) }
+                            onNotInterested = { item -> hidden.hideVideo(item.url) }
                         )
                     }
                 )
@@ -2126,8 +2124,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 }
                 val page = channel
                 val currentPlaylist = playlist
-                val filteredHome = remember(home, hiddenVideos, hiddenChannels) {
-                    home.filter { it.url !in hiddenVideos && it.uploaderUrl.orEmpty() !in hiddenChannels }
+                val filteredHome = remember(home, hidden.videos, hidden.channels) {
+                    home.filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }
                 }
                 val visibleItems: List<InfoItem> = if (currentPlaylist != null) playlistItems else if (page != null) channelItems else if (searchMode) results else if (category == homeChipTitle) filteredHome else categoryItems
                 // A playlist can contain the same video more than once, so include its occurrence.
@@ -2250,10 +2248,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                                     item,
                                     isMembership = isMembership,
                                     onNotInterested = if (isFeed && category == homeChipTitle) {
-                                        { hiddenVideos = HomeRecommendations.hide(recommendationPrefs, "videos", item.url) }
+                                        { hidden.hideVideo(item.url) }
                                     } else null,
                                     onHideChannel = if (isFeed && category == homeChipTitle && !item.uploaderUrl.isNullOrBlank()) {
-                                        { hiddenChannels = HomeRecommendations.hide(recommendationPrefs, "channels", item.uploaderUrl) }
+                                        { hidden.hideChannel(item.uploaderUrl) }
                                     } else null,
                                     onChannel = { openChannel(it) }
                                 ) { open(item) }
@@ -2289,7 +2287,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 onRefresh = { accountRequest++ }, onMore = { accountNextRequest++ }, onDeviceHistory = { deviceHistory = true },
                 onManage = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/feed/history"))) } },
                 onNavigate = { selectTab(it) }, historyActions = historyActions,
-            ) else WatchHistoryScreen(watchHistory, onBack = { if (accountHistoryLoggedIn && deviceHistory) deviceHistory = false else showHistory = false }, onOpen = { entry -> openHistoryEntry(entry) }, onClear = { WatchHistory.clear(watchPrefs); watchHistory = emptyList() }, onRemove = { entry -> WatchHistory.remove(watchPrefs, entry.url); watchHistory = WatchHistory.read(watchPrefs) }, historyActions = historyActions, onResetRecommendations = if (hiddenVideos.isNotEmpty() || hiddenChannels.isNotEmpty()) {{ recommendationPrefs.edit().clear().apply(); hiddenVideos = emptySet(); hiddenChannels = emptySet() }} else null)
+            ) else WatchHistoryScreen(watchHistory, onBack = { if (accountHistoryLoggedIn && deviceHistory) deviceHistory = false else showHistory = false }, onOpen = { entry -> openHistoryEntry(entry) }, onClear = { WatchHistory.clear(watchPrefs); watchHistory = emptyList() }, onRemove = { entry -> WatchHistory.remove(watchPrefs, entry.url); watchHistory = WatchHistory.read(watchPrefs) }, historyActions = historyActions, onResetRecommendations = if (hidden.videos.isNotEmpty() || hidden.channels.isNotEmpty()) {{ hidden.reset() }} else null)
         }
         accountPlaylist?.takeIf { !showHistory && !shortsMode && (selected == null || minimized) }?.let { collection ->
             AccountPlaylistScreen(collection, onBack = { accountPlaylist = null }, onNavigate = selectTab,
@@ -2476,7 +2474,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 },
                 onRate = { info, direction -> rateWatch(info, direction) },
                 onNeedLogin = { showLoginDialog = true },
-                onNotInterested = { item -> hiddenVideos = HomeRecommendations.hide(recommendationPrefs, "videos", item.url) },
+                onNotInterested = { item -> hidden.hideVideo(item.url) },
                 onLink = { info, link -> openLink(info, link) }, onChannel = { openChannel(it) },
                 onClose = if (inTab) null else {{ closePlayer() }},
                 onShare = { shareVideo(it) },
