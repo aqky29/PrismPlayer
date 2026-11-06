@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+# pixeltablet — nyalakan emulator Pixel Tablet (Android 16 / API 36, Play Store, 2560x1600) dengan cepat.
+#
+#   pixeltablet                 nyalakan (quickboot) lalu tunggu sampai siap
+#   pixeltablet app [komponen]  nyalakan + langsung buka FlufPlay (atau komponen lain)
+#   pixeltablet install [apk]   nyalakan + pasang APK FlufPlay + buka aplikasinya
+#   pixeltablet stop            matikan (snapshot disimpan supaya start berikutnya cepat)
+#   pixeltablet restart         matikan lalu nyalakan lagi
+#   pixeltablet status          cek status emulator
+#   pixeltablet logs [-f]       lihat log emulator
+#   pixeltablet shot [file]     screenshot layar ke PNG
+#   pixeltablet shell [cmd]     masuk adb shell
+#
+# Opsi: --cold | --wipe | --headless | --gpu host|swiftshader | --timeout <detik>
+set -uo pipefail
+
+SDK="${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}"
+export ANDROID_HOME="$SDK" ANDROID_SDK_ROOT="$SDK"
+export PATH="$SDK/emulator:$SDK/platform-tools:$PATH"
+
+ADB="$SDK/platform-tools/adb"
+EMULATOR="$SDK/emulator/emulator"
+AVD="${AVD_NAME:-Pixel_Tablet}"
+PORT="${PIXELTABLET_PORT:-5556}"
+SERIAL="emulator-$PORT"
+GPU="${PIXELTABLET_GPU:-host}"
+LOG="${PIXELTABLET_LOG:-/tmp/pixeltablet-emu.log}"
+SHOTDIR="${PIXELTABLET_SHOTS:-$HOME/Pictures/pixeltablet}"
+FLUFPLAY="id.flufclip.player/.MainActivity"
+RAM="${PIXELTABLET_RAM:-2048}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DEFAULT_APK="$REPO_ROOT/app/build/outputs/apk/debug/app-debug.apk"
+
+COLD=0 WIPE=0 HEADLESS="${PIXELTABLET_HEADLESS:-0}" TIMEOUT="${PIXELTABLET_TIMEOUT:-240}"
+
+if [[ -t 1 ]]; then
+  B=$'\033[1m'; D=$'\033[2m'; R=$'\033[0m'
+  CY=$'\033[1;36m'; GR=$'\033[1;32m'; YL=$'\033[1;33m'; RD=$'\033[1;31m'
+else
+  B='' D='' R='' CY='' GR='' YL='' RD=''
+fi
+say()  { printf '%s▸%s %s\n' "$CY" "$R" "$*"; }
+ok()   { printf '%s✔%s %s\n' "$GR" "$R" "$*"; }
+warn() { printf '%s!%s %s\n' "$YL" "$R" "$*"; }
+die()  { printf '%s✘%s %s\n' "$RD" "$R" "$*" >&2; exit 1; }
+
+usage() { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; }
+
+is_running() { "$ADB" -s "$SERIAL" get-state >/dev/null 2>&1; }
+is_booted()  { [[ "$("$ADB" -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; }
+emu_alive()  { pgrep -f "[-]avd $AVD" >/dev/null 2>&1; }
+getprop()    { "$ADB" -s "$SERIAL" shell getprop "$1" 2>/dev/null | tr -d '\r'; }
+
+# Jendela GUI butuh DISPLAY + cookie X milik sesi GNOME (Xwayland).
+setup_display() {
+  (( HEADLESS )) && return 0
+  if [[ -z "${DISPLAY:-}" ]]; then
+    if [[ -S /tmp/.X11-unix/X0 ]]; then
+      export DISPLAY=:0
+    else
+      HEADLESS=1
+      warn "tidak ada display X — jalan headless"
+      return 0
+    fi
+  fi
+  if [[ -z "${XAUTHORITY:-}" || ! -r "${XAUTHORITY:-/nonexistent}" ]]; then
+    local auth
+    auth=$(ls -t "/run/user/$(id -u)"/.mutter-Xwaylandauth.* 2>/dev/null | head -1)
+    [[ -n "$auth" ]] && export XAUTHORITY="$auth"
+  fi
+  return 0
+}
+
+focus_window() {
+  command -v wmctrl >/dev/null 2>&1 && wmctrl -a "Android Emulator" 2>/dev/null
+  return 0
+}
+
+start_emu() {
+  if is_running; then
+    ok "emulator sudah jalan ($SERIAL)"
+    focus_window
+    return 0
+  fi
+  setup_display
+  local args=(-avd "$AVD" -port "$PORT" -gpu "$GPU" -netdelay none -netspeed full -no-metrics -memory "$RAM" -lowram)
+  (( COLD )) && args+=(-no-snapshot-load)
+  (( WIPE )) && args+=(-wipe-data)
+  (( HEADLESS )) && args+=(-no-window)
+  mkdir -p "$(dirname "$LOG")"
+  : >"$LOG"
+  say "menyalakan ${B}$AVD${R} (port=$PORT, gpu=$GPU$([[ $HEADLESS == 1 ]] && echo ', headless'))"
+  nohup setsid "$EMULATOR" "${args[@]}" >>"$LOG" 2>&1 </dev/null &
+  disown 2>/dev/null || true
+}
+
+wait_boot() {
+  local t0=$SECONDS dots='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏' i=0
+  while (( SECONDS - t0 < TIMEOUT )); do
+    if is_booted; then
+      (( i )) && printf '\r%*s\r' 30 ''
+      ok "siap dalam $((SECONDS - t0))s"
+      return 0
+    fi
+    if ! emu_alive; then
+      printf '\r%*s\r' 30 ''
+      bad_postmortem
+      return 1
+    fi
+    if [[ -t 1 ]]; then printf '\r%s booting… %ds' "${dots:i++%10:1}" $((SECONDS - t0)); fi
+    sleep 1
+  done
+  printf '\r%*s\r' 30 ''
+  warn "timeout ${TIMEOUT}s. 20 baris log terakhir:"
+  tail -20 "$LOG" >&2
+  return 1
+}
+
+bad_postmortem() {
+  local msg="emulator berhenti saat boot"
+  if grep -qi 'cannot be used for hardware rendering' "$LOG" 2>/dev/null; then
+    msg+=" — GPU host ditolak; coba: pixeltablet --gpu swiftshader"
+  fi
+  die "$msg (log: $LOG)"
+}
+
+wake_screen() {
+  "$ADB" -s "$SERIAL" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1
+  "$ADB" -s "$SERIAL" shell wm dismiss-keyguard >/dev/null 2>&1
+}
+
+summary() {
+  local ver size dpi
+  ver=$(getprop ro.build.version.release)
+  size=$("$ADB" -s "$SERIAL" shell wm size 2>/dev/null | tr -d '\r' | awk '{print $NF}')
+  dpi=$("$ADB" -s "$SERIAL" shell wm density 2>/dev/null | tr -d '\r' | awk '{print $NF}')
+  ok "Pixel Tablet · Android $ver · ${size:-?} @ ${dpi:-?}dpi · $SERIAL"
+}
+
+open_app() {
+  local comp="${1:-$FLUFPLAY}"
+  say "membuka $comp"
+  "$ADB" -s "$SERIAL" shell am start -W -n "$comp" >/dev/null 2>&1 \
+    && ok "terbuka: $comp" \
+    || warn "gagal membuka $comp (cek nama package/activity)"
+}
+
+install_apk() {
+  local apk="${1:-$DEFAULT_APK}"
+  if [[ ! -f "$apk" ]]; then
+    say "APK belum ada, mem-build dengan gradle..."
+    (cd "$REPO_ROOT" && ./gradlew assembleDebug) || die "gagal mem-build APK"
+  fi
+  say "memasang APK: $apk"
+  "$ADB" -s "$SERIAL" install -r "$apk" && ok "APK terpasang di $SERIAL" || die "gagal memasang APK"
+}
+
+stop_emu() {
+  if is_running; then
+    say "mematikan emulator $AVD (snapshot disimpan)…"
+    "$ADB" -s "$SERIAL" emu kill >/dev/null 2>&1
+  elif ! emu_alive; then
+    say "emulator $AVD memang tidak jalan"
+    return 0
+  fi
+  local t0=$SECONDS
+  while (( SECONDS - t0 < 30 )); do
+    emu_alive || { ok "emulator $AVD mati"; return 0; }
+    sleep 1
+  done
+  warn "tidak mau mati, paksa…"
+  pkill -f "[-]avd $AVD" 2>/dev/null
+  sleep 1
+  ok "emulator $AVD dihentikan paksa"
+}
+
+status_emu() {
+  if ! is_running; then
+    printf '%-9s %s\n' "emulator" "mati"
+    return 0
+  fi
+  local boot cpu pid host_ram guest_ram
+  boot=$(is_booted && echo "siap" || echo "masih boot")
+  pid=$(pgrep -f "[q]emu-system-x86_64 -avd $AVD" | head -1)
+  if [[ -n "$pid" ]]; then
+    cpu=$(ps -o %cpu= -p "$pid" 2>/dev/null | tr -d ' ')
+    host_ram=$(ps -o rss= -p "$pid" 2>/dev/null | awk '{printf "%.1f GB", $1/1024/1024}')
+  fi
+  guest_ram=$("$ADB" -s "$SERIAL" shell cat /proc/meminfo 2>/dev/null | grep MemTotal | awk '{printf "%.1f GB", $2/1024/1024}')
+  printf '%-9s %s\n' "emulator" "jalan ($SERIAL)"
+  printf '%-9s %s\n' "boot" "$boot"
+  printf '%-9s %s\n' "android" "Android $(getprop ro.build.version.release) (API $(getprop ro.build.version.sdk))"
+  printf '%-9s %s\n' "layar" "$("$ADB" -s "$SERIAL" shell wm size 2>/dev/null | tr -d '\r' | awk '{print $NF}')"
+  printf '%-9s %s%%\n' "cpu" "${cpu:-?}"
+  printf '%-9s %s\n' "ram_guest" "${guest_ram:-?}"
+  printf '%-9s %s\n' "ram_host" "${host_ram:-?}"
+  printf '%-9s %s\n' "gpu" "$GPU"
+}
+
+take_shot() {
+  local out="${1:-}"
+  [[ -z "$out" ]] && { mkdir -p "$SHOTDIR"; out="$SHOTDIR/shot-$(date +%Y%m%d-%H%M%S).png"; }
+  mkdir -p "$(dirname "$out")"
+  "$ADB" -s "$SERIAL" exec-out screencap -p >"$out" || die "gagal screenshot"
+  [[ -s "$out" ]] && ok "screenshot: $out" || die "screenshot kosong"
+}
+
+cmd="start"
+while (( $# )); do
+  case "$1" in
+    --cold)      COLD=1; shift ;;
+    --wipe)      WIPE=1; shift ;;
+    --headless)  HEADLESS=1; shift ;;
+    --gpu)       GPU="${2:-host}"; shift 2 ;;
+    --timeout)   TIMEOUT="${2:-240}"; shift 2 ;;
+    -h|--help|help) usage; exit 0 ;;
+    start|run|app|flufplay|install|stop|kill|restart|status|logs|shot|shell) cmd="$1"; shift; break ;;
+    *) die "perintah tidak dikenal: $1 (coba: pixeltablet --help)" ;;
+  esac
+done
+
+case "$cmd" in
+  start|run)
+    start_emu
+    is_running && is_booted || wait_boot || exit 1
+    wake_screen; focus_window; summary
+    ;;
+  app|flufplay)
+    start_emu
+    is_running && is_booted || wait_boot || exit 1
+    wake_screen; focus_window; summary
+    open_app "${1:-$FLUFPLAY}"
+    ;;
+  install)
+    start_emu
+    is_running && is_booted || wait_boot || exit 1
+    wake_screen; focus_window; summary
+    install_apk "${1:-$DEFAULT_APK}"
+    open_app "$FLUFPLAY"
+    ;;
+  stop|kill)  stop_emu ;;
+  restart)
+    stop_emu
+    start_emu
+    is_running && is_booted || wait_boot || exit 1
+    wake_screen; focus_window; summary
+    ;;
+  status)  status_emu ;;
+  logs)
+    [[ -f "$LOG" ]] || die "belum ada log: $LOG"
+    if [[ "${1:-}" == "-f" ]]; then tail -f "$LOG"; else tail -n "${1:-40}" "$LOG"; fi
+    ;;
+  shot)    is_booted || die "emulator belum siap"; take_shot "${1:-}" ;;
+  shell)   shift; "$ADB" -s "$SERIAL" shell "$@" ;;
+esac

@@ -1,0 +1,5 @@
+N: android=http://schemas.android.com/apk/res/android (line=2)
+  E: FrameLayout (line=2)
+    A: http://schemas.android.com/apk/res/android:id(0x010100d0)=@0x7f0b0699
+    A: http://schemas.android.com/apk/res/android:layout_width(0x010100f4)=-2
+    A: http://schemas.android.com/apk/res/android:layout_height(0x010100f5)=-2

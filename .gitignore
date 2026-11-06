@@ -1,7 +1,35 @@
+# Gradle & build caches
 .gradle/
 .kotlin/
 build/
 app/build/
+buildOutput/
+
+# Local SDK configuration
 local.properties
+
+# Build outputs
+*.apk
+*.aab
+*.aar
+
+# Log files & verification logs
+*.log
+.verification/
+
+# IntelliJ / Android Studio IDE files
 .idea/
 *.iml
+*.ipr
+*.iws
+out/
+captures/
+.navigation/
+
+# Keystores & keys
+*.jks
+*.keystore
+
+# OS & temp files
+.DS_Store
+Thumbs.db

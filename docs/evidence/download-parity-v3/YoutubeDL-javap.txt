@@ -1,0 +1,1092 @@
+Compiled from "YoutubeDL.kt"
+public final class com.yausername.youtubedl_android.YoutubeDL {
+  public static final com.yausername.youtubedl_android.YoutubeDL INSTANCE;
+
+  private static boolean initialized;
+
+  private static java.io.File pythonPath;
+
+  private static java.io.File ffmpegPath;
+
+  private static java.io.File quickJsPath;
+
+  private static java.io.File ytdlpPath;
+
+  private static java.io.File binDir;
+
+  private static java.lang.String ENV_LD_LIBRARY_PATH;
+
+  private static java.lang.String ENV_SSL_CERT_FILE;
+
+  private static java.lang.String ENV_PYTHONHOME;
+
+  private static java.lang.String TMPDIR;
+
+  private static final java.util.Map<java.lang.String, java.lang.Process> idProcessMap;
+
+  public static final java.lang.String baseName;
+
+  private static final java.lang.String packagesRoot;
+
+  private static final java.lang.String pythonBinName;
+
+  private static final java.lang.String pythonLibName;
+
+  private static final java.lang.String pythonDirName;
+
+  private static final java.lang.String ffmpegDirName;
+
+  private static final java.lang.String ffmpegBinName;
+
+  private static final java.lang.String quickJsBinName;
+
+  private static final java.lang.String aria2cDirName;
+
+  public static final java.lang.String ytdlpDirName;
+
+  public static final java.lang.String ytdlpBin;
+
+  private static final java.lang.String pythonLibVersion;
+
+  private static final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+  private com.yausername.youtubedl_android.YoutubeDL();
+    Code:
+       0: aload_0
+       1: invokespecial #8                  // Method java/lang/Object."<init>":()V
+       4: return
+
+  public final synchronized void init(android.content.Context) throws com.yausername.youtubedl_android.YoutubeDLException;
+    Code:
+       0: aload_1
+       1: ldc           #17                 // String appContext
+       3: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       6: getstatic     #27                 // Field initialized:Z
+       9: ifeq          13
+      12: return
+      13: new           #29                 // class java/io/File
+      16: dup
+      17: aload_1
+      18: invokevirtual #35                 // Method android/content/Context.getNoBackupFilesDir:()Ljava/io/File;
+      21: ldc           #37                 // String youtubedl-android
+      23: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+      26: astore_2
+      27: aload_2
+      28: invokevirtual #44                 // Method java/io/File.exists:()Z
+      31: ifne          39
+      34: aload_2
+      35: invokevirtual #47                 // Method java/io/File.mkdir:()Z
+      38: pop
+      39: new           #29                 // class java/io/File
+      42: dup
+      43: aload_2
+      44: ldc           #49                 // String packages
+      46: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+      49: astore_3
+      50: new           #29                 // class java/io/File
+      53: dup
+      54: aload_1
+      55: invokevirtual #53                 // Method android/content/Context.getApplicationInfo:()Landroid/content/pm/ApplicationInfo;
+      58: getfield      #59                 // Field android/content/pm/ApplicationInfo.nativeLibraryDir:Ljava/lang/String;
+      61: invokespecial #62                 // Method java/io/File."<init>":(Ljava/lang/String;)V
+      64: putstatic     #66                 // Field binDir:Ljava/io/File;
+      67: new           #29                 // class java/io/File
+      70: dup
+      71: getstatic     #66                 // Field binDir:Ljava/io/File;
+      74: ldc           #68                 // String libpython.so
+      76: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+      79: putstatic     #71                 // Field pythonPath:Ljava/io/File;
+      82: new           #29                 // class java/io/File
+      85: dup
+      86: getstatic     #66                 // Field binDir:Ljava/io/File;
+      89: ldc           #73                 // String libffmpeg.so
+      91: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+      94: putstatic     #76                 // Field ffmpegPath:Ljava/io/File;
+      97: new           #29                 // class java/io/File
+     100: dup
+     101: getstatic     #66                 // Field binDir:Ljava/io/File;
+     104: ldc           #78                 // String libqjs.so
+     106: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+     109: putstatic     #81                 // Field quickJsPath:Ljava/io/File;
+     112: new           #29                 // class java/io/File
+     115: dup
+     116: aload_3
+     117: ldc           #83                 // String python
+     119: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+     122: astore        4
+     124: new           #29                 // class java/io/File
+     127: dup
+     128: aload_3
+     129: ldc           #85                 // String ffmpeg
+     131: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+     134: astore        5
+     136: new           #29                 // class java/io/File
+     139: dup
+     140: aload_3
+     141: ldc           #87                 // String aria2c
+     143: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+     146: astore        6
+     148: new           #29                 // class java/io/File
+     151: dup
+     152: aload_2
+     153: ldc           #89                 // String yt-dlp
+     155: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+     158: astore        7
+     160: new           #29                 // class java/io/File
+     163: dup
+     164: aload         7
+     166: ldc           #89                 // String yt-dlp
+     168: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+     171: putstatic     #92                 // Field ytdlpPath:Ljava/io/File;
+     174: new           #94                 // class java/lang/StringBuilder
+     177: dup
+     178: invokespecial #95                 // Method java/lang/StringBuilder."<init>":()V
+     181: aload         4
+     183: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     186: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     189: ldc           #105                // String /usr/lib:
+     191: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     194: aload         5
+     196: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     199: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     202: ldc           #105                // String /usr/lib:
+     204: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     207: aload         6
+     209: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     212: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     215: ldc           #107                // String /usr/lib
+     217: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     220: invokevirtual #110                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+     223: putstatic     #113                // Field ENV_LD_LIBRARY_PATH:Ljava/lang/String;
+     226: new           #94                 // class java/lang/StringBuilder
+     229: dup
+     230: invokespecial #95                 // Method java/lang/StringBuilder."<init>":()V
+     233: aload         4
+     235: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     238: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     241: ldc           #115                // String /usr/etc/tls/cert.pem
+     243: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     246: invokevirtual #110                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+     249: putstatic     #118                // Field ENV_SSL_CERT_FILE:Ljava/lang/String;
+     252: new           #94                 // class java/lang/StringBuilder
+     255: dup
+     256: invokespecial #95                 // Method java/lang/StringBuilder."<init>":()V
+     259: aload         4
+     261: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     264: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     267: ldc           #120                // String /usr
+     269: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     272: invokevirtual #110                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+     275: putstatic     #123                // Field ENV_PYTHONHOME:Ljava/lang/String;
+     278: aload_1
+     279: invokevirtual #126                // Method android/content/Context.getCacheDir:()Ljava/io/File;
+     282: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     285: dup
+     286: ldc           #128                // String appContext.cacheDir.absolutePath
+     288: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+     291: putstatic     #134                // Field TMPDIR:Ljava/lang/String;
+     294: aload_0
+     295: aload_1
+     296: aload         4
+     298: invokevirtual #138                // Method initPython:(Landroid/content/Context;Ljava/io/File;)V
+     301: aload_0
+     302: aload_1
+     303: aload         7
+     305: invokevirtual #141                // Method init_ytdlp:(Landroid/content/Context;Ljava/io/File;)V
+     308: iconst_1
+     309: putstatic     #27                 // Field initialized:Z
+     312: return
+
+  public final void init_ytdlp(android.content.Context, java.io.File) throws com.yausername.youtubedl_android.YoutubeDLException;
+    Code:
+       0: aload_1
+       1: ldc           #17                 // String appContext
+       3: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       6: aload_2
+       7: ldc           #151                // String ytdlpDir
+       9: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+      12: aload_2
+      13: invokevirtual #44                 // Method java/io/File.exists:()Z
+      16: ifne          24
+      19: aload_2
+      20: invokevirtual #154                // Method java/io/File.mkdirs:()Z
+      23: pop
+      24: new           #29                 // class java/io/File
+      27: dup
+      28: aload_2
+      29: ldc           #89                 // String yt-dlp
+      31: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+      34: astore_3
+      35: aload_3
+      36: invokevirtual #44                 // Method java/io/File.exists:()Z
+      39: ifne          92
+      42: nop
+      43: aload_1
+      44: invokevirtual #158                // Method android/content/Context.getResources:()Landroid/content/res/Resources;
+      47: getstatic     #164                // Field com/yausername/youtubedl_android/R$raw.ytdlp:I
+      50: invokevirtual #170                // Method android/content/res/Resources.openRawResource:(I)Ljava/io/InputStream;
+      53: dup
+      54: ldc           #172                // String appContext.resources.openRawResource(R.raw.ytdlp)
+      56: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+      59: astore        4
+      61: aload         4
+      63: aload_3
+      64: invokestatic  #178                // Method org/apache/commons/io/FileUtils.copyInputStreamToFile:(Ljava/io/InputStream;Ljava/io/File;)V
+      67: goto          92
+      70: astore        4
+      72: aload_2
+      73: invokestatic  #182                // Method org/apache/commons/io/FileUtils.deleteQuietly:(Ljava/io/File;)Z
+      76: pop
+      77: new           #14                 // class com/yausername/youtubedl_android/YoutubeDLException
+      80: dup
+      81: ldc           #184                // String failed to initialize
+      83: aload         4
+      85: checkcast     #186                // class java/lang/Throwable
+      88: invokespecial #189                // Method com/yausername/youtubedl_android/YoutubeDLException."<init>":(Ljava/lang/String;Ljava/lang/Throwable;)V
+      91: athrow
+      92: return
+    Exception table:
+       from    to  target type
+          42    67    70   Class java/lang/Exception
+
+  public final void initPython(android.content.Context, java.io.File) throws com.yausername.youtubedl_android.YoutubeDLException;
+    Code:
+       0: aload_1
+       1: ldc           #17                 // String appContext
+       3: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       6: aload_2
+       7: ldc           #195                // String pythonDir
+       9: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+      12: new           #29                 // class java/io/File
+      15: dup
+      16: getstatic     #66                 // Field binDir:Ljava/io/File;
+      19: ldc           #197                // String libpython.zip.so
+      21: invokespecial #40                 // Method java/io/File."<init>":(Ljava/io/File;Ljava/lang/String;)V
+      24: astore_3
+      25: aload_3
+      26: invokevirtual #201                // Method java/io/File.length:()J
+      29: invokestatic  #207                // Method java/lang/String.valueOf:(J)Ljava/lang/String;
+      32: astore        4
+      34: aload_2
+      35: invokevirtual #44                 // Method java/io/File.exists:()Z
+      38: ifeq          51
+      41: aload_0
+      42: aload_1
+      43: aload         4
+      45: invokespecial #211                // Method shouldUpdatePython:(Landroid/content/Context;Ljava/lang/String;)Z
+      48: ifeq          102
+      51: aload_2
+      52: invokestatic  #182                // Method org/apache/commons/io/FileUtils.deleteQuietly:(Ljava/io/File;)Z
+      55: pop
+      56: aload_2
+      57: invokevirtual #154                // Method java/io/File.mkdirs:()Z
+      60: pop
+      61: nop
+      62: getstatic     #217                // Field com/yausername/youtubedl_common/utils/ZipUtils.INSTANCE:Lcom/yausername/youtubedl_common/utils/ZipUtils;
+      65: aload_3
+      66: aload_2
+      67: invokevirtual #221                // Method com/yausername/youtubedl_common/utils/ZipUtils.unzip:(Ljava/io/File;Ljava/io/File;)V
+      70: goto          95
+      73: astore        5
+      75: aload_2
+      76: invokestatic  #182                // Method org/apache/commons/io/FileUtils.deleteQuietly:(Ljava/io/File;)Z
+      79: pop
+      80: new           #14                 // class com/yausername/youtubedl_android/YoutubeDLException
+      83: dup
+      84: ldc           #184                // String failed to initialize
+      86: aload         5
+      88: checkcast     #186                // class java/lang/Throwable
+      91: invokespecial #189                // Method com/yausername/youtubedl_android/YoutubeDLException."<init>":(Ljava/lang/String;Ljava/lang/Throwable;)V
+      94: athrow
+      95: aload_0
+      96: aload_1
+      97: aload         4
+      99: invokespecial #225                // Method updatePython:(Landroid/content/Context;Ljava/lang/String;)V
+     102: return
+    Exception table:
+       from    to  target type
+          61    70    73   Class java/lang/Exception
+
+  private final boolean shouldUpdatePython(android.content.Context, java.lang.String);
+    Code:
+       0: aload_2
+       1: aload_1
+       2: ldc           #229                // String pythonLibVersion
+       4: invokestatic  #235                // Method com/yausername/youtubedl_common/SharedPrefsHelper.get:(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;
+       7: invokestatic  #239                // Method kotlin/jvm/internal/Intrinsics.areEqual:(Ljava/lang/Object;Ljava/lang/Object;)Z
+      10: ifne          17
+      13: iconst_1
+      14: goto          18
+      17: iconst_0
+      18: ireturn
+
+  private final void updatePython(android.content.Context, java.lang.String);
+    Code:
+       0: aload_1
+       1: ldc           #229                // String pythonLibVersion
+       3: aload_2
+       4: invokestatic  #244                // Method com/yausername/youtubedl_common/SharedPrefsHelper.update:(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;)V
+       7: return
+
+  private final void assertInit();
+    Code:
+       0: getstatic     #27                 // Field initialized:Z
+       3: ifne          23
+       6: iconst_0
+       7: istore_1
+       8: ldc           #247                // String instance not initialized
+      10: astore_1
+      11: new           #249                // class java/lang/IllegalStateException
+      14: dup
+      15: aload_1
+      16: invokevirtual #250                // Method java/lang/Object.toString:()Ljava/lang/String;
+      19: invokespecial #251                // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+      22: athrow
+      23: return
+
+  public final com.yausername.youtubedl_android.mapper.VideoInfo getInfo(java.lang.String) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: aload_1
+       1: ldc_w         #260                // String url
+       4: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: new           #262                // class com/yausername/youtubedl_android/YoutubeDLRequest
+      10: dup
+      11: aload_1
+      12: invokespecial #263                // Method com/yausername/youtubedl_android/YoutubeDLRequest."<init>":(Ljava/lang/String;)V
+      15: astore_2
+      16: aload_0
+      17: aload_2
+      18: invokevirtual #266                // Method getInfo:(Lcom/yausername/youtubedl_android/YoutubeDLRequest;)Lcom/yausername/youtubedl_android/mapper/VideoInfo;
+      21: areturn
+
+  public final com.yausername.youtubedl_android.mapper.VideoInfo getInfo(com.yausername.youtubedl_android.YoutubeDLRequest) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: aload_1
+       1: ldc_w         #271                // String request
+       4: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: aload_1
+       8: ldc_w         #273                // String --dump-json
+      11: invokevirtual #277                // Method com/yausername/youtubedl_android/YoutubeDLRequest.addOption:(Ljava/lang/String;)Lcom/yausername/youtubedl_android/YoutubeDLRequest;
+      14: pop
+      15: aload_0
+      16: aload_1
+      17: aconst_null
+      18: aconst_null
+      19: invokevirtual #281                // Method execute:(Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;Lkotlin/jvm/functions/Function3;)Lcom/yausername/youtubedl_android/YoutubeDLResponse;
+      22: astore_2
+      23: nop
+      24: getstatic     #285                // Field objectMapper:Lcom/fasterxml/jackson/databind/ObjectMapper;
+      27: aload_2
+      28: invokevirtual #290                // Method com/yausername/youtubedl_android/YoutubeDLResponse.getOut:()Ljava/lang/String;
+      31: ldc_w         #292                // class com/yausername/youtubedl_android/mapper/VideoInfo
+      34: invokevirtual #298                // Method com/fasterxml/jackson/databind/ObjectMapper.readValue:(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;
+      37: checkcast     #292                // class com/yausername/youtubedl_android/mapper/VideoInfo
+      40: astore        5
+      42: goto          63
+      45: astore        6
+      47: new           #14                 // class com/yausername/youtubedl_android/YoutubeDLException
+      50: dup
+      51: ldc_w         #300                // String Unable to parse video information
+      54: aload         6
+      56: checkcast     #186                // class java/lang/Throwable
+      59: invokespecial #189                // Method com/yausername/youtubedl_android/YoutubeDLException."<init>":(Ljava/lang/String;Ljava/lang/Throwable;)V
+      62: athrow
+      63: aload         5
+      65: astore        4
+      67: aload         4
+      69: ifnonnull     83
+      72: new           #14                 // class com/yausername/youtubedl_android/YoutubeDLException
+      75: dup
+      76: ldc_w         #302                // String Failed to fetch video information
+      79: invokespecial #303                // Method com/yausername/youtubedl_android/YoutubeDLException."<init>":(Ljava/lang/String;)V
+      82: athrow
+      83: aload         4
+      85: astore_3
+      86: aload_3
+      87: areturn
+    Exception table:
+       from    to  target type
+          23    42    45   Class java/io/IOException
+
+  private final boolean ignoreErrors(com.yausername.youtubedl_android.YoutubeDLRequest, java.lang.String);
+    Code:
+       0: aload_1
+       1: ldc_w         #273                // String --dump-json
+       4: invokevirtual #314                // Method com/yausername/youtubedl_android/YoutubeDLRequest.hasOption:(Ljava/lang/String;)Z
+       7: ifeq          44
+      10: aload_2
+      11: checkcast     #316                // class java/lang/CharSequence
+      14: invokeinterface #319,  1          // InterfaceMethod java/lang/CharSequence.length:()I
+      19: ifne          26
+      22: iconst_1
+      23: goto          27
+      26: iconst_0
+      27: ifne          44
+      30: aload_1
+      31: ldc_w         #321                // String --ignore-errors
+      34: invokevirtual #314                // Method com/yausername/youtubedl_android/YoutubeDLRequest.hasOption:(Ljava/lang/String;)Z
+      37: ifeq          44
+      40: iconst_1
+      41: goto          45
+      44: iconst_0
+      45: ireturn
+
+  public final boolean destroyProcessById(java.lang.String);
+    Code:
+       0: aload_1
+       1: ldc_w         #325                // String id
+       4: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: getstatic     #329                // Field idProcessMap:Ljava/util/Map;
+      10: aload_1
+      11: invokeinterface #335,  2          // InterfaceMethod java/util/Map.containsKey:(Ljava/lang/Object;)Z
+      16: ifeq          85
+      19: getstatic     #329                // Field idProcessMap:Ljava/util/Map;
+      22: aload_1
+      23: invokeinterface #338,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      28: checkcast     #340                // class java/lang/Process
+      31: astore_2
+      32: iconst_1
+      33: istore_3
+      34: getstatic     #345                // Field android/os/Build$VERSION.SDK_INT:I
+      37: bipush        26
+      39: if_icmplt     51
+      42: aload_2
+      43: dup
+      44: invokestatic  #349                // Method kotlin/jvm/internal/Intrinsics.checkNotNull:(Ljava/lang/Object;)V
+      47: invokevirtual #352                // Method java/lang/Process.isAlive:()Z
+      50: istore_3
+      51: iload_3
+      52: ifeq          85
+      55: aload_0
+      56: aload_1
+      57: invokespecial #355                // Method destroyChildProcesses:(Ljava/lang/String;)Z
+      60: pop
+      61: aload_2
+      62: dup
+      63: ifnull        72
+      66: invokevirtual #358                // Method java/lang/Process.destroy:()V
+      69: goto          73
+      72: pop
+      73: getstatic     #329                // Field idProcessMap:Ljava/util/Map;
+      76: aload_1
+      77: invokeinterface #361,  2          // InterfaceMethod java/util/Map.remove:(Ljava/lang/Object;)Ljava/lang/Object;
+      82: pop
+      83: iconst_1
+      84: ireturn
+      85: iconst_0
+      86: ireturn
+
+  private final boolean destroyChildProcesses(java.lang.String);
+    Code:
+       0: nop
+       1: new           #94                 // class java/lang/StringBuilder
+       4: dup
+       5: invokespecial #95                 // Method java/lang/StringBuilder."<init>":()V
+       8: ldc_w         #366                // String pstree -p
+      11: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      14: aload_1
+      15: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      18: ldc_w         #368                // String  | grep -oP \'\\(\\K[^\\)]+\' | xargs kill
+      21: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+      24: invokevirtual #110                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+      27: astore_2
+      28: new           #370                // class java/lang/ProcessBuilder
+      31: dup
+      32: iconst_3
+      33: anewarray     #203                // class java/lang/String
+      36: astore        4
+      38: aload         4
+      40: iconst_0
+      41: ldc_w         #372                // String /system/bin/sh
+      44: aastore
+      45: aload         4
+      47: iconst_1
+      48: ldc_w         #374                // String -c
+      51: aastore
+      52: aload         4
+      54: iconst_2
+      55: aload_2
+      56: aastore
+      57: aload         4
+      59: invokespecial #377                // Method java/lang/ProcessBuilder."<init>":([Ljava/lang/String;)V
+      62: astore_3
+      63: aload_3
+      64: invokevirtual #381                // Method java/lang/ProcessBuilder.start:()Ljava/lang/Process;
+      67: astore        4
+      69: aload         4
+      71: invokevirtual #384                // Method java/lang/Process.waitFor:()I
+      74: istore        5
+      76: iload         5
+      78: ifne          85
+      81: iconst_1
+      82: goto          86
+      85: iconst_0
+      86: ireturn
+      87: astore_2
+      88: iconst_0
+      89: ireturn
+    Exception table:
+       from    to  target type
+           0    87    87   Class java/lang/Exception
+
+  public final com.yausername.youtubedl_android.YoutubeDLResponse execute(com.yausername.youtubedl_android.YoutubeDLRequest, java.lang.String, kotlin.jvm.functions.Function3<? super java.lang.Float, ? super java.lang.Long, ? super java.lang.String, kotlin.Unit>) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: aload_1
+       1: ldc_w         #271                // String request
+       4: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: aload_0
+       8: aload_1
+       9: aload_2
+      10: iconst_0
+      11: aload_3
+      12: invokespecial #395                // Method executeImpl:(Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;ZLkotlin/jvm/functions/Function3;)Lcom/yausername/youtubedl_android/YoutubeDLResponse;
+      15: areturn
+
+  public static com.yausername.youtubedl_android.YoutubeDLResponse execute$default(com.yausername.youtubedl_android.YoutubeDL, com.yausername.youtubedl_android.YoutubeDLRequest, java.lang.String, kotlin.jvm.functions.Function3, int, java.lang.Object) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: iload         4
+       2: iconst_2
+       3: iand
+       4: ifeq          9
+       7: aconst_null
+       8: astore_2
+       9: iload         4
+      11: iconst_4
+      12: iand
+      13: ifeq          18
+      16: aconst_null
+      17: astore_3
+      18: aload_0
+      19: aload_1
+      20: aload_2
+      21: aload_3
+      22: invokevirtual #281                // Method execute:(Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;Lkotlin/jvm/functions/Function3;)Lcom/yausername/youtubedl_android/YoutubeDLResponse;
+      25: areturn
+
+  public final com.yausername.youtubedl_android.YoutubeDLResponse execute(com.yausername.youtubedl_android.YoutubeDLRequest, java.lang.String, boolean, kotlin.jvm.functions.Function3<? super java.lang.Float, ? super java.lang.Long, ? super java.lang.String, kotlin.Unit>) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: aload_1
+       1: ldc_w         #271                // String request
+       4: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: aload_0
+       8: aload_1
+       9: aload_2
+      10: iload_3
+      11: aload         4
+      13: invokespecial #395                // Method executeImpl:(Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;ZLkotlin/jvm/functions/Function3;)Lcom/yausername/youtubedl_android/YoutubeDLResponse;
+      16: areturn
+
+  public static com.yausername.youtubedl_android.YoutubeDLResponse execute$default(com.yausername.youtubedl_android.YoutubeDL, com.yausername.youtubedl_android.YoutubeDLRequest, java.lang.String, boolean, kotlin.jvm.functions.Function3, int, java.lang.Object) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: iload         5
+       2: iconst_2
+       3: iand
+       4: ifeq          9
+       7: aconst_null
+       8: astore_2
+       9: iload         5
+      11: iconst_4
+      12: iand
+      13: ifeq          18
+      16: iconst_0
+      17: istore_3
+      18: iload         5
+      20: bipush        8
+      22: iand
+      23: ifeq          29
+      26: aconst_null
+      27: astore        4
+      29: aload_0
+      30: aload_1
+      31: aload_2
+      32: iload_3
+      33: aload         4
+      35: invokevirtual #406                // Method execute:(Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;ZLkotlin/jvm/functions/Function3;)Lcom/yausername/youtubedl_android/YoutubeDLResponse;
+      38: areturn
+
+  private final com.yausername.youtubedl_android.YoutubeDLResponse executeImpl(com.yausername.youtubedl_android.YoutubeDLRequest, java.lang.String, boolean, kotlin.jvm.functions.Function3<? super java.lang.Float, ? super java.lang.Long, ? super java.lang.String, kotlin.Unit>) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: aload_0
+       1: invokespecial #408                // Method assertInit:()V
+       4: aload_2
+       5: ifnull        31
+       8: getstatic     #329                // Field idProcessMap:Ljava/util/Map;
+      11: aload_2
+      12: invokeinterface #335,  2          // InterfaceMethod java/util/Map.containsKey:(Ljava/lang/Object;)Z
+      17: ifeq          31
+      20: new           #14                 // class com/yausername/youtubedl_android/YoutubeDLException
+      23: dup
+      24: ldc_w         #410                // String Process ID already exists
+      27: invokespecial #303                // Method com/yausername/youtubedl_android/YoutubeDLException."<init>":(Ljava/lang/String;)V
+      30: athrow
+      31: aload_1
+      32: ldc_w         #412                // String --cache-dir
+      35: invokevirtual #314                // Method com/yausername/youtubedl_android/YoutubeDLRequest.hasOption:(Ljava/lang/String;)Z
+      38: ifeq          51
+      41: aload_1
+      42: ldc_w         #412                // String --cache-dir
+      45: invokevirtual #416                // Method com/yausername/youtubedl_android/YoutubeDLRequest.getOption:(Ljava/lang/String;)Ljava/lang/String;
+      48: ifnonnull     59
+      51: aload_1
+      52: ldc_w         #418                // String --no-cache-dir
+      55: invokevirtual #277                // Method com/yausername/youtubedl_android/YoutubeDLRequest.addOption:(Ljava/lang/String;)Lcom/yausername/youtubedl_android/YoutubeDLRequest;
+      58: pop
+      59: aload_1
+      60: invokevirtual #422                // Method com/yausername/youtubedl_android/YoutubeDLRequest.buildCommand:()Ljava/util/List;
+      63: ldc_w         #424                // String libaria2c.so
+      66: invokeinterface #429,  2          // InterfaceMethod java/util/List.contains:(Ljava/lang/Object;)Z
+      71: ifeq          113
+      74: aload_1
+      75: ldc_w         #431                // String --external-downloader-args
+      78: ldc_w         #433                // String aria2c:--summary-interval=1
+      81: invokevirtual #436                // Method com/yausername/youtubedl_android/YoutubeDLRequest.addOption:(Ljava/lang/String;Ljava/lang/String;)Lcom/yausername/youtubedl_android/YoutubeDLRequest;
+      84: ldc_w         #431                // String --external-downloader-args
+      87: new           #94                 // class java/lang/StringBuilder
+      90: dup
+      91: invokespecial #95                 // Method java/lang/StringBuilder."<init>":()V
+      94: ldc_w         #438                // String aria2c:--ca-certificate=
+      97: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     100: getstatic     #118                // Field ENV_SSL_CERT_FILE:Ljava/lang/String;
+     103: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     106: invokevirtual #110                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+     109: invokevirtual #436                // Method com/yausername/youtubedl_android/YoutubeDLRequest.addOption:(Ljava/lang/String;Ljava/lang/String;)Lcom/yausername/youtubedl_android/YoutubeDLRequest;
+     112: pop
+     113: aload_1
+     114: ldc_w         #440                // String --js-runtimes
+     117: new           #94                 // class java/lang/StringBuilder
+     120: dup
+     121: invokespecial #95                 // Method java/lang/StringBuilder."<init>":()V
+     124: ldc_w         #442                // String quickjs:
+     127: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     130: getstatic     #81                 // Field quickJsPath:Ljava/io/File;
+     133: dup
+     134: invokestatic  #349                // Method kotlin/jvm/internal/Intrinsics.checkNotNull:(Ljava/lang/Object;)V
+     137: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     140: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     143: invokevirtual #110                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+     146: invokevirtual #436                // Method com/yausername/youtubedl_android/YoutubeDLRequest.addOption:(Ljava/lang/String;Ljava/lang/String;)Lcom/yausername/youtubedl_android/YoutubeDLRequest;
+     149: pop
+     150: aload_1
+     151: ldc_w         #444                // String --ffmpeg-location
+     154: getstatic     #76                 // Field ffmpegPath:Ljava/io/File;
+     157: dup
+     158: invokestatic  #349                // Method kotlin/jvm/internal/Intrinsics.checkNotNull:(Ljava/lang/Object;)V
+     161: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     164: dup
+     165: ldc_w         #446                // String ffmpegPath!!.absolutePath
+     168: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+     171: invokevirtual #436                // Method com/yausername/youtubedl_android/YoutubeDLRequest.addOption:(Ljava/lang/String;Ljava/lang/String;)Lcom/yausername/youtubedl_android/YoutubeDLRequest;
+     174: pop
+     175: aconst_null
+     176: astore        5
+     178: aconst_null
+     179: astore        6
+     181: iconst_0
+     182: istore        7
+     184: new           #448                // class java/lang/StringBuffer
+     187: dup
+     188: invokespecial #449                // Method java/lang/StringBuffer."<init>":()V
+     191: astore        8
+     193: new           #448                // class java/lang/StringBuffer
+     196: dup
+     197: invokespecial #449                // Method java/lang/StringBuffer."<init>":()V
+     200: astore        9
+     202: invokestatic  #454                // Method java/lang/System.currentTimeMillis:()J
+     205: lstore        10
+     207: aload_1
+     208: invokevirtual #422                // Method com/yausername/youtubedl_android/YoutubeDLRequest.buildCommand:()Ljava/util/List;
+     211: astore        12
+     213: new           #456                // class java/util/ArrayList
+     216: dup
+     217: invokespecial #457                // Method java/util/ArrayList."<init>":()V
+     220: checkcast     #426                // class java/util/List
+     223: astore        13
+     225: aload         13
+     227: iconst_2
+     228: anewarray     #203                // class java/lang/String
+     231: astore        14
+     233: aload         14
+     235: iconst_0
+     236: getstatic     #71                 // Field pythonPath:Ljava/io/File;
+     239: dup
+     240: invokestatic  #349                // Method kotlin/jvm/internal/Intrinsics.checkNotNull:(Ljava/lang/Object;)V
+     243: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     246: aastore
+     247: aload         14
+     249: iconst_1
+     250: getstatic     #92                 // Field ytdlpPath:Ljava/io/File;
+     253: dup
+     254: invokestatic  #349                // Method kotlin/jvm/internal/Intrinsics.checkNotNull:(Ljava/lang/Object;)V
+     257: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     260: aastore
+     261: aload         14
+     263: invokestatic  #463                // Method kotlin/collections/CollectionsKt.listOf:([Ljava/lang/Object;)Ljava/util/List;
+     266: checkcast     #465                // class java/util/Collection
+     269: invokeinterface #469,  2          // InterfaceMethod java/util/List.addAll:(Ljava/util/Collection;)Z
+     274: pop
+     275: aload         13
+     277: aload         12
+     279: checkcast     #465                // class java/util/Collection
+     282: invokeinterface #469,  2          // InterfaceMethod java/util/List.addAll:(Ljava/util/Collection;)Z
+     287: pop
+     288: new           #370                // class java/lang/ProcessBuilder
+     291: dup
+     292: aload         13
+     294: invokespecial #472                // Method java/lang/ProcessBuilder."<init>":(Ljava/util/List;)V
+     297: iload_3
+     298: invokevirtual #475                // Method java/lang/ProcessBuilder.redirectErrorStream:(Z)Ljava/lang/ProcessBuilder;
+     301: astore        14
+     303: aload         14
+     305: invokevirtual #479                // Method java/lang/ProcessBuilder.environment:()Ljava/util/Map;
+     308: astore        15
+     310: aload         15
+     312: astore        16
+     314: iconst_0
+     315: istore        17
+     317: aload         16
+     319: ldc_w         #480                // String this
+     322: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+     325: aload         16
+     327: ldc_w         #482                // String LD_LIBRARY_PATH
+     330: getstatic     #113                // Field ENV_LD_LIBRARY_PATH:Ljava/lang/String;
+     333: invokeinterface #486,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+     338: pop
+     339: aload         16
+     341: ldc_w         #488                // String SSL_CERT_FILE
+     344: getstatic     #118                // Field ENV_SSL_CERT_FILE:Ljava/lang/String;
+     347: invokeinterface #486,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+     352: pop
+     353: aload         16
+     355: ldc_w         #490                // String PATH
+     358: new           #94                 // class java/lang/StringBuilder
+     361: dup
+     362: invokespecial #95                 // Method java/lang/StringBuilder."<init>":()V
+     365: ldc_w         #490                // String PATH
+     368: invokestatic  #493                // Method java/lang/System.getenv:(Ljava/lang/String;)Ljava/lang/String;
+     371: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     374: bipush        58
+     376: invokevirtual #496                // Method java/lang/StringBuilder.append:(C)Ljava/lang/StringBuilder;
+     379: getstatic     #66                 // Field binDir:Ljava/io/File;
+     382: dup
+     383: invokestatic  #349                // Method kotlin/jvm/internal/Intrinsics.checkNotNull:(Ljava/lang/Object;)V
+     386: invokevirtual #99                 // Method java/io/File.getAbsolutePath:()Ljava/lang/String;
+     389: invokevirtual #103                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+     392: invokevirtual #110                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+     395: invokeinterface #486,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+     400: pop
+     401: aload         16
+     403: ldc_w         #498                // String PYTHONHOME
+     406: getstatic     #123                // Field ENV_PYTHONHOME:Ljava/lang/String;
+     409: invokeinterface #486,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+     414: pop
+     415: aload         16
+     417: ldc_w         #500                // String HOME
+     420: getstatic     #123                // Field ENV_PYTHONHOME:Ljava/lang/String;
+     423: invokeinterface #486,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+     428: pop
+     429: aload         16
+     431: ldc_w         #501                // String TMPDIR
+     434: getstatic     #134                // Field TMPDIR:Ljava/lang/String;
+     437: invokeinterface #486,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+     442: pop
+     443: nop
+     444: nop
+     445: nop
+     446: aload         14
+     448: invokevirtual #381                // Method java/lang/ProcessBuilder.start:()Ljava/lang/Process;
+     451: dup
+     452: ldc_w         #503                // String {\n            processBuilder.start()\n        }
+     455: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+     458: astore        15
+     460: goto          478
+     463: astore        16
+     465: new           #14                 // class com/yausername/youtubedl_android/YoutubeDLException
+     468: dup
+     469: aload         16
+     471: checkcast     #186                // class java/lang/Throwable
+     474: invokespecial #506                // Method com/yausername/youtubedl_android/YoutubeDLException."<init>":(Ljava/lang/Throwable;)V
+     477: athrow
+     478: aload         15
+     480: astore        6
+     482: aload_2
+     483: ifnull        505
+     486: getstatic     #329                // Field idProcessMap:Ljava/util/Map;
+     489: dup
+     490: ldc_w         #507                // String idProcessMap
+     493: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+     496: aload_2
+     497: aload         6
+     499: invokeinterface #486,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+     504: pop
+     505: aload         6
+     507: invokevirtual #511                // Method java/lang/Process.getInputStream:()Ljava/io/InputStream;
+     510: astore        15
+     512: aload         6
+     514: invokevirtual #514                // Method java/lang/Process.getErrorStream:()Ljava/io/InputStream;
+     517: astore        16
+     519: new           #516                // class com/yausername/youtubedl_android/StreamProcessExtractor
+     522: dup
+     523: aload         8
+     525: aload         15
+     527: ldc_w         #518                // String outStream
+     530: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+     533: aload         15
+     535: aload         4
+     537: invokespecial #521                // Method com/yausername/youtubedl_android/StreamProcessExtractor."<init>":(Ljava/lang/StringBuffer;Ljava/io/InputStream;Lkotlin/jvm/functions/Function3;)V
+     540: astore        17
+     542: new           #523                // class com/yausername/youtubedl_android/StreamGobbler
+     545: dup
+     546: aload         9
+     548: aload         16
+     550: ldc_w         #525                // String errStream
+     553: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+     556: aload         16
+     558: invokespecial #528                // Method com/yausername/youtubedl_android/StreamGobbler."<init>":(Ljava/lang/StringBuffer;Ljava/io/InputStream;)V
+     561: astore        18
+     563: nop
+     564: aload         17
+     566: invokevirtual #531                // Method com/yausername/youtubedl_android/StreamProcessExtractor.join:()V
+     569: aload         18
+     571: invokevirtual #532                // Method com/yausername/youtubedl_android/StreamGobbler.join:()V
+     574: aload         6
+     576: invokevirtual #384                // Method java/lang/Process.waitFor:()I
+     579: istore        19
+     581: goto          608
+     584: astore        20
+     586: aload         6
+     588: invokevirtual #358                // Method java/lang/Process.destroy:()V
+     591: aload_2
+     592: ifnull        605
+     595: getstatic     #329                // Field idProcessMap:Ljava/util/Map;
+     598: aload_2
+     599: invokeinterface #361,  2          // InterfaceMethod java/util/Map.remove:(Ljava/lang/Object;)Ljava/lang/Object;
+     604: pop
+     605: aload         20
+     607: athrow
+     608: iload         19
+     610: istore        7
+     612: aload         8
+     614: invokevirtual #533                // Method java/lang/StringBuffer.toString:()Ljava/lang/String;
+     617: dup
+     618: ldc_w         #535                // String outBuffer.toString()
+     621: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+     624: astore        19
+     626: aload         9
+     628: invokevirtual #533                // Method java/lang/StringBuffer.toString:()Ljava/lang/String;
+     631: dup
+     632: ldc_w         #537                // String errBuffer.toString()
+     635: invokestatic  #131                // Method kotlin/jvm/internal/Intrinsics.checkNotNullExpressionValue:(Ljava/lang/Object;Ljava/lang/String;)V
+     638: astore        20
+     640: iload         7
+     642: ifle          699
+     645: aload_2
+     646: ifnull        669
+     649: getstatic     #329                // Field idProcessMap:Ljava/util/Map;
+     652: aload_2
+     653: invokeinterface #335,  2          // InterfaceMethod java/util/Map.containsKey:(Ljava/lang/Object;)Z
+     658: ifne          669
+     661: new           #258                // class com/yausername/youtubedl_android/YoutubeDL$CanceledException
+     664: dup
+     665: invokespecial #538                // Method com/yausername/youtubedl_android/YoutubeDL$CanceledException."<init>":()V
+     668: athrow
+     669: aload_0
+     670: aload_1
+     671: aload         19
+     673: invokespecial #540                // Method ignoreErrors:(Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;)Z
+     676: ifne          699
+     679: getstatic     #329                // Field idProcessMap:Ljava/util/Map;
+     682: aload_2
+     683: invokeinterface #361,  2          // InterfaceMethod java/util/Map.remove:(Ljava/lang/Object;)Ljava/lang/Object;
+     688: pop
+     689: new           #14                 // class com/yausername/youtubedl_android/YoutubeDLException
+     692: dup
+     693: aload         20
+     695: invokespecial #303                // Method com/yausername/youtubedl_android/YoutubeDLException."<init>":(Ljava/lang/String;)V
+     698: athrow
+     699: getstatic     #329                // Field idProcessMap:Ljava/util/Map;
+     702: aload_2
+     703: invokeinterface #361,  2          // InterfaceMethod java/util/Map.remove:(Ljava/lang/Object;)Ljava/lang/Object;
+     708: pop
+     709: invokestatic  #454                // Method java/lang/System.currentTimeMillis:()J
+     712: lload         10
+     714: lsub
+     715: lstore        21
+     717: new           #287                // class com/yausername/youtubedl_android/YoutubeDLResponse
+     720: dup
+     721: aload         13
+     723: iload         7
+     725: lload         21
+     727: aload         19
+     729: aload         20
+     731: invokespecial #543                // Method com/yausername/youtubedl_android/YoutubeDLResponse."<init>":(Ljava/util/List;IJLjava/lang/String;Ljava/lang/String;)V
+     734: astore        5
+     736: aload         5
+     738: areturn
+    Exception table:
+       from    to  target type
+         445   460   463   Class java/io/IOException
+         563   581   584   Class java/lang/InterruptedException
+
+  static com.yausername.youtubedl_android.YoutubeDLResponse executeImpl$default(com.yausername.youtubedl_android.YoutubeDL, com.yausername.youtubedl_android.YoutubeDLRequest, java.lang.String, boolean, kotlin.jvm.functions.Function3, int, java.lang.Object) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: iload         5
+       2: iconst_2
+       3: iand
+       4: ifeq          9
+       7: aconst_null
+       8: astore_2
+       9: iload         5
+      11: iconst_4
+      12: iand
+      13: ifeq          18
+      16: iconst_0
+      17: istore_3
+      18: iload         5
+      20: bipush        8
+      22: iand
+      23: ifeq          29
+      26: aconst_null
+      27: astore        4
+      29: aload_0
+      30: aload_1
+      31: aload_2
+      32: iload_3
+      33: aload         4
+      35: invokespecial #395                // Method executeImpl:(Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;ZLkotlin/jvm/functions/Function3;)Lcom/yausername/youtubedl_android/YoutubeDLResponse;
+      38: areturn
+
+  public final synchronized com.yausername.youtubedl_android.YoutubeDL$UpdateStatus updateYoutubeDL(android.content.Context, com.yausername.youtubedl_android.YoutubeDL$UpdateChannel) throws com.yausername.youtubedl_android.YoutubeDLException;
+    Code:
+       0: aload_1
+       1: ldc           #17                 // String appContext
+       3: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       6: aload_2
+       7: ldc_w         #570                // String updateChannel
+      10: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+      13: aload_0
+      14: invokespecial #408                // Method assertInit:()V
+      17: nop
+      18: getstatic     #575                // Field com/yausername/youtubedl_android/YoutubeDLUpdater.INSTANCE:Lcom/yausername/youtubedl_android/YoutubeDLUpdater;
+      21: aload_1
+      22: aload_2
+      23: invokevirtual #578                // Method com/yausername/youtubedl_android/YoutubeDLUpdater.update$library_release:(Landroid/content/Context;Lcom/yausername/youtubedl_android/YoutubeDL$UpdateChannel;)Lcom/yausername/youtubedl_android/YoutubeDL$UpdateStatus;
+      26: astore_3
+      27: goto          48
+      30: astore        4
+      32: new           #14                 // class com/yausername/youtubedl_android/YoutubeDLException
+      35: dup
+      36: ldc_w         #580                // String failed to update youtube-dl
+      39: aload         4
+      41: checkcast     #186                // class java/lang/Throwable
+      44: invokespecial #189                // Method com/yausername/youtubedl_android/YoutubeDLException."<init>":(Ljava/lang/String;Ljava/lang/Throwable;)V
+      47: athrow
+      48: aload_3
+      49: areturn
+    Exception table:
+       from    to  target type
+          17    27    30   Class java/io/IOException
+
+  public static com.yausername.youtubedl_android.YoutubeDL$UpdateStatus updateYoutubeDL$default(com.yausername.youtubedl_android.YoutubeDL, android.content.Context, com.yausername.youtubedl_android.YoutubeDL$UpdateChannel, int, java.lang.Object) throws com.yausername.youtubedl_android.YoutubeDLException;
+    Code:
+       0: iload_3
+       1: iconst_2
+       2: iand
+       3: ifeq          13
+       6: getstatic     #590                // Field com/yausername/youtubedl_android/YoutubeDL$UpdateChannel$STABLE.INSTANCE:Lcom/yausername/youtubedl_android/YoutubeDL$UpdateChannel$STABLE;
+       9: checkcast     #592                // class com/yausername/youtubedl_android/YoutubeDL$UpdateChannel
+      12: astore_2
+      13: aload_0
+      14: aload_1
+      15: aload_2
+      16: invokevirtual #594                // Method updateYoutubeDL:(Landroid/content/Context;Lcom/yausername/youtubedl_android/YoutubeDL$UpdateChannel;)Lcom/yausername/youtubedl_android/YoutubeDL$UpdateStatus;
+      19: areturn
+
+  public final java.lang.String version(android.content.Context);
+    Code:
+       0: getstatic     #575                // Field com/yausername/youtubedl_android/YoutubeDLUpdater.INSTANCE:Lcom/yausername/youtubedl_android/YoutubeDLUpdater;
+       3: aload_1
+       4: invokevirtual #597                // Method com/yausername/youtubedl_android/YoutubeDLUpdater.version:(Landroid/content/Context;)Ljava/lang/String;
+       7: areturn
+
+  public final java.lang.String versionName(android.content.Context);
+    Code:
+       0: getstatic     #575                // Field com/yausername/youtubedl_android/YoutubeDLUpdater.INSTANCE:Lcom/yausername/youtubedl_android/YoutubeDLUpdater;
+       3: aload_1
+       4: invokevirtual #600                // Method com/yausername/youtubedl_android/YoutubeDLUpdater.versionName:(Landroid/content/Context;)Ljava/lang/String;
+       7: areturn
+
+  public final com.fasterxml.jackson.databind.ObjectMapper getObjectMapper();
+    Code:
+       0: getstatic     #285                // Field objectMapper:Lcom/fasterxml/jackson/databind/ObjectMapper;
+       3: areturn
+
+  public static final com.yausername.youtubedl_android.YoutubeDL getInstance();
+    Code:
+       0: getstatic     #607                // Field INSTANCE:Lcom/yausername/youtubedl_android/YoutubeDL;
+       3: areturn
+
+  public final com.yausername.youtubedl_android.YoutubeDLResponse execute(com.yausername.youtubedl_android.YoutubeDLRequest, java.lang.String, boolean) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: aload_1
+       1: ldc_w         #271                // String request
+       4: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: aload_0
+       8: aload_1
+       9: aload_2
+      10: iload_3
+      11: aconst_null
+      12: bipush        8
+      14: aconst_null
+      15: invokestatic  #610                // Method execute$default:(Lcom/yausername/youtubedl_android/YoutubeDL;Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;ZLkotlin/jvm/functions/Function3;ILjava/lang/Object;)Lcom/yausername/youtubedl_android/YoutubeDLResponse;
+      18: areturn
+
+  public final com.yausername.youtubedl_android.YoutubeDLResponse execute(com.yausername.youtubedl_android.YoutubeDLRequest, java.lang.String) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: aload_1
+       1: ldc_w         #271                // String request
+       4: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: aload_0
+       8: aload_1
+       9: aload_2
+      10: iconst_0
+      11: aconst_null
+      12: bipush        12
+      14: aconst_null
+      15: invokestatic  #610                // Method execute$default:(Lcom/yausername/youtubedl_android/YoutubeDL;Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;ZLkotlin/jvm/functions/Function3;ILjava/lang/Object;)Lcom/yausername/youtubedl_android/YoutubeDLResponse;
+      18: areturn
+
+  public final com.yausername.youtubedl_android.YoutubeDLResponse execute(com.yausername.youtubedl_android.YoutubeDLRequest) throws com.yausername.youtubedl_android.YoutubeDLException, java.lang.InterruptedException, com.yausername.youtubedl_android.YoutubeDL$CanceledException;
+    Code:
+       0: aload_1
+       1: ldc_w         #271                // String request
+       4: invokestatic  #23                 // Method kotlin/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: aload_0
+       8: aload_1
+       9: aconst_null
+      10: iconst_0
+      11: aconst_null
+      12: bipush        14
+      14: aconst_null
+      15: invokestatic  #610                // Method execute$default:(Lcom/yausername/youtubedl_android/YoutubeDL;Lcom/yausername/youtubedl_android/YoutubeDLRequest;Ljava/lang/String;ZLkotlin/jvm/functions/Function3;ILjava/lang/Object;)Lcom/yausername/youtubedl_android/YoutubeDLResponse;
+      18: areturn
+
+  static {};
+    Code:
+       0: new           #2                  // class com/yausername/youtubedl_android/YoutubeDL
+       3: dup
+       4: invokespecial #614                // Method "<init>":()V
+       7: putstatic     #607                // Field INSTANCE:Lcom/yausername/youtubedl_android/YoutubeDL;
+      10: ldc_w         #616                // String
+      13: putstatic     #134                // Field TMPDIR:Ljava/lang/String;
+      16: new           #618                // class java/util/HashMap
+      19: dup
+      20: invokespecial #619                // Method java/util/HashMap."<init>":()V
+      23: checkcast     #331                // class java/util/Map
+      26: invokestatic  #625                // Method java/util/Collections.synchronizedMap:(Ljava/util/Map;)Ljava/util/Map;
+      29: putstatic     #329                // Field idProcessMap:Ljava/util/Map;
+      32: new           #294                // class com/fasterxml/jackson/databind/ObjectMapper
+      35: dup
+      36: invokespecial #626                // Method com/fasterxml/jackson/databind/ObjectMapper."<init>":()V
+      39: putstatic     #285                // Field objectMapper:Lcom/fasterxml/jackson/databind/ObjectMapper;
+      42: return
+}

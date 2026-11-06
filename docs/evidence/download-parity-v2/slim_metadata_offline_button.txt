@@ -1,0 +1,33 @@
+N: android=http://schemas.android.com/apk/res/android (line=2)
+  N: yt=http://schemas.android.com/apk/res-auto (line=2)
+    E: LinearLayout (line=2)
+      A: http://schemas.android.com/apk/res/android:gravity(0x010100af)=0x00000001
+      A: http://schemas.android.com/apk/res/android:orientation(0x010100c4)=1
+      A: http://schemas.android.com/apk/res/android:background(0x010100d4)=?0x7f040b6c
+      A: http://schemas.android.com/apk/res/android:paddingTop(0x010100d7)=8.000000dp
+      A: http://schemas.android.com/apk/res/android:paddingBottom(0x010100d9)=8.000000dp
+      A: http://schemas.android.com/apk/res/android:layout_width(0x010100f4)=-2
+      A: http://schemas.android.com/apk/res/android:layout_height(0x010100f5)=-2
+      A: http://schemas.android.com/apk/res/android:layout_centerVertical(0x01010191)=true
+      A: http://schemas.android.com/apk/res/android:contentDescription(0x01010273)=@null
+      A: http://schemas.android.com/apk/res/android:paddingStart(0x010103b3)=2.000000dp
+      A: http://schemas.android.com/apk/res/android:paddingEnd(0x010103b4)=2.000000dp
+        E: com.google.android.apps.youtube.app.offline.ui.OfflineArrowView (line=17)
+          A: http://schemas.android.com/apk/res/android:id(0x010100d0)=@0x7f0b02fa
+          A: http://schemas.android.com/apk/res/android:paddingTop(0x010100d7)=4.000000dp
+          A: http://schemas.android.com/apk/res/android:paddingBottom(0x010100d9)=4.000000dp
+          A: http://schemas.android.com/apk/res/android:layout_width(0x010100f4)=@0x7f071946
+          A: http://schemas.android.com/apk/res/android:layout_height(0x010100f5)=@0x7f071963
+          A: http://schemas.android.com/apk/res-auto:defaultTint(0x7f0402eb)=?0x7f040b58
+        E: com.google.android.libraries.youtube.common.ui.YouTubeTextView (line=25)
+          A: http://schemas.android.com/apk/res/android:textSize(0x01010095)=@0x7f0705b4
+          A: http://schemas.android.com/apk/res/android:textColor(0x01010098)=?0x7f040b58
+          A: http://schemas.android.com/apk/res/android:id(0x010100d0)=@0x7f0b0304
+          A: http://schemas.android.com/apk/res/android:paddingTop(0x010100d7)=0.000000dp
+          A: http://schemas.android.com/apk/res/android:paddingBottom(0x010100d9)=4.000000dp
+          A: http://schemas.android.com/apk/res/android:layout_width(0x010100f4)=-2
+          A: http://schemas.android.com/apk/res/android:layout_height(0x010100f5)=-2
+          A: http://schemas.android.com/apk/res/android:singleLine(0x0101015d)=true
+          A: http://schemas.android.com/apk/res/android:textAlignment(0x010103b1)=4
+          A: http://schemas.android.com/apk/res-auto:robotoFont(0x7f040774)=0
+          A: style=@0x7f1504d7

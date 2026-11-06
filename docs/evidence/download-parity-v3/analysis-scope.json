@@ -1,0 +1,7 @@
+{
+  "library": "io.github.junkfood02.youtubedl-android:library:0.18.1",
+  "classes_jar_sha256": "a72b6dd55b767fadbb65d4528c7cb814fa471c9054f094b7013577bad14d049f",
+  "reference_apk_sha256": "4410cf3e9a37db09e8bd0fcc2176d047284ce95192598e9118a5249194c1b84c",
+  "probe": "host Java 21, kotlin-stdlib 2.2.21, synthetic stdout lines, Android Log stub",
+  "limits": "one CPU via taskset -c 0, nice 15, javap/javac/java heap 192 MiB, no app build or device access"
+}

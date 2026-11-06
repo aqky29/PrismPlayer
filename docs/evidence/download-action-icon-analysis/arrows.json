@@ -1,0 +1,152 @@
+[
+  {
+    "name": "arrow_circle",
+    "path": "res/mrg.png",
+    "size": [
+      24,
+      24
+    ],
+    "sha256": "d98d0fad5948494caa125b83dbed2d95a66e113c7c57fdeca670bf89fe459446",
+    "local": "/tmp/re/download-action-icons/arrow_circle-0.png"
+  },
+  {
+    "name": "arrow_circle",
+    "path": "res/JFp.png",
+    "size": [
+      36,
+      36
+    ],
+    "sha256": "1e884b695eee41d7a969cd9eb0e67b663f759f96e608dffa2e09b5e597b37c02",
+    "local": "/tmp/re/download-action-icons/arrow_circle-1.png"
+  },
+  {
+    "name": "arrow_circle",
+    "path": "res/L5C.png",
+    "size": [
+      48,
+      48
+    ],
+    "sha256": "36a1b43f18c941312bcf7da06e7722d3a3b1745a3c44fa44d790867003c61a49",
+    "local": "/tmp/re/download-action-icons/arrow_circle-2.png"
+  },
+  {
+    "name": "arrow_circle",
+    "path": "res/d-m.png",
+    "size": [
+      72,
+      72
+    ],
+    "sha256": "23c7949d35c39d7e842881425dc568c40b7dbec75b46f429851e1d9b836a58a7",
+    "local": "/tmp/re/download-action-icons/arrow_circle-3.png"
+  },
+  {
+    "name": "arrow_circle",
+    "path": "res/S7G.png",
+    "size": [
+      96,
+      96
+    ],
+    "sha256": "c75daf6f1027e627e5983260a45ff5a9e8063133cd5c4459e34ae682df0bbb34",
+    "local": "/tmp/re/download-action-icons/arrow_circle-4.png"
+  },
+  {
+    "name": "experimental_circle",
+    "path": "res/d1d.png",
+    "size": [
+      24,
+      24
+    ],
+    "sha256": "378d03c03ad70970024f44eeef97308c67c903747d9c4dfb4fb7f99c1fd02fa6",
+    "local": "/tmp/re/download-action-icons/experimental_circle-0.png"
+  },
+  {
+    "name": "experimental_circle",
+    "path": "res/iSt.png",
+    "size": [
+      36,
+      36
+    ],
+    "sha256": "62e411f83e8c90786d086ce39e750aa8de7cad91db4519aadfd5be80aaf860fc",
+    "local": "/tmp/re/download-action-icons/experimental_circle-1.png"
+  },
+  {
+    "name": "experimental_circle",
+    "path": "res/IhX.png",
+    "size": [
+      48,
+      48
+    ],
+    "sha256": "d33b62705397f95519dab4664c719f64ee6ea61dd478f543dc709c9644225a97",
+    "local": "/tmp/re/download-action-icons/experimental_circle-2.png"
+  },
+  {
+    "name": "experimental_circle",
+    "path": "res/0ir.png",
+    "size": [
+      72,
+      72
+    ],
+    "sha256": "605190660ab3ba975499878602c50951ada3e19bdd594a260e79a5a6bcb9b968",
+    "local": "/tmp/re/download-action-icons/experimental_circle-3.png"
+  },
+  {
+    "name": "experimental_circle",
+    "path": "res/yvd.png",
+    "size": [
+      96,
+      96
+    ],
+    "sha256": "05076f49658233583d21a3eba5a4dea96faa17d4e946a6e0332a94e6f5a9c8ff",
+    "local": "/tmp/re/download-action-icons/experimental_circle-4.png"
+  },
+  {
+    "name": "fill_download",
+    "path": "res/7KB.png",
+    "size": [
+      24,
+      24
+    ],
+    "sha256": "a804329c6074a42469b7036af0d1a9a327305820f2b4fcca103273ae89da3ba5",
+    "local": "/tmp/re/download-action-icons/fill_download-0.png"
+  },
+  {
+    "name": "fill_download",
+    "path": "res/dSR.png",
+    "size": [
+      36,
+      36
+    ],
+    "sha256": "a0d48bcdd740c23b4f6e735a7b5c07967eb650ca693b174474fa23d30b0c2772",
+    "local": "/tmp/re/download-action-icons/fill_download-1.png"
+  },
+  {
+    "name": "fill_download",
+    "path": "res/yzU.png",
+    "size": [
+      48,
+      48
+    ],
+    "sha256": "d816b9453c236cc5453a081ab92c1449a289308499419557788a7ad371e39009",
+    "local": "/tmp/re/download-action-icons/fill_download-2.png"
+  },
+  {
+    "name": "fill_download",
+    "path": "res/NfQ.png",
+    "size": [
+      72,
+      72
+    ],
+    "sha256": "969f1b8d017db183e06981721042b775edf57a2b9ab07c74cb5007840ac1f187",
+    "local": "/tmp/re/download-action-icons/fill_download-3.png"
+  },
+  {
+    "name": "fill_download",
+    "path": "res/6Eb.png",
+    "size": [
+      96,
+      96
+    ],
+    "sha256": "a88c52e2b82c19d66144c41c8e9ef16551dda291ce4d312a985b909a64942e5d",
+    "local": "/tmp/re/download-action-icons/fill_download-4.png"
+  }
+]

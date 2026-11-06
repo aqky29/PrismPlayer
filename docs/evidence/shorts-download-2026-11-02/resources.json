@@ -1,0 +1,164 @@
+{
+  "yt_fill_experimental_thumb_up_black_24": [
+    {
+      "density": "mdpi",
+      "apk_path": "res/evP.png",
+      "sha256": "f955659f0000a03f4f06fdf5c560a1567d4dfc8e0927ba4da64580026e4af548"
+    },
+    {
+      "density": "hdpi",
+      "apk_path": "res/hxm.png",
+      "sha256": "2856711d794090019422b7663ae143b2cf5989e46821c5060eb377d276bff2a0"
+    },
+    {
+      "density": "xhdpi",
+      "apk_path": "res/LiZ.png",
+      "sha256": "c63008ad135db4f1ee86f70f7a5adc359e919916c03896990787ef46e703914b"
+    },
+    {
+      "density": "xxhdpi",
+      "apk_path": "res/Fll.png",
+      "sha256": "adbbbfd7bf72c8ed089cfa7a1a01a78f2ffba9dcd1782f656dec217ea352e812"
+    },
+    {
+      "density": "xxxhdpi",
+      "apk_path": "res/5i8.png",
+      "sha256": "c788e39f7ea52c538a098980312eb872c2763238c0570139d626f87efff9be3d"
+    }
+  ],
+  "yt_fill_experimental_thumb_down_black_24": [
+    {
+      "density": "mdpi",
+      "apk_path": "res/FLm.png",
+      "sha256": "2a5309916882a9d45e0ada3c3292148fb5221efc744be0451092b87e1f07a5a4"
+    },
+    {
+      "density": "hdpi",
+      "apk_path": "res/IFf.png",
+      "sha256": "dbdf61b64c2ef79437a6e966f954086a1cfeaa86974a5e155f3bddd2550642a7"
+    },
+    {
+      "density": "xhdpi",
+      "apk_path": "res/0dt.png",
+      "sha256": "86fef56404f254774ec4c57d4c110f830c1702eb34f94615d7186e6959826df0"
+    },
+    {
+      "density": "xxhdpi",
+      "apk_path": "res/HmO.png",
+      "sha256": "622454cd8f7bcf1d31efae0d0e29225b843f60ecd411ce0e4998d81fcb34fe87"
+    },
+    {
+      "density": "xxxhdpi",
+      "apk_path": "res/sX4.png",
+      "sha256": "592a3442c584596c0bb3ddca29228deafbfcaadd29e95aaf8c2e22ecee3cfcf7"
+    }
+  ],
+  "yt_fill_experimental_text_bubble_black_24": [
+    {
+      "density": "mdpi",
+      "apk_path": "res/185.png",
+      "sha256": "1eb912da9d121f1fae78cbaa6191b752892d503d17a235df3ce82795f904fd87"
+    },
+    {
+      "density": "hdpi",
+      "apk_path": "res/eU2.png",
+      "sha256": "d124328c07a1b900971146f71d6e097e626f688a9761e73deeca3068347bcf48"
+    },
+    {
+      "density": "xhdpi",
+      "apk_path": "res/_Oa.png",
+      "sha256": "ecf92b4f3ee1455aab191f637144740d13c8cc410737e5665bceb22f81949dd0"
+    },
+    {
+      "density": "xxhdpi",
+      "apk_path": "res/FeJ.png",
+      "sha256": "51510563c37b389da7450013e5885c066a82f7daac42f7774f5febb08297ddcf"
+    },
+    {
+      "density": "xxxhdpi",
+      "apk_path": "res/s21.png",
+      "sha256": "a8d327fadc6801e63e3310fe5399f38feb9857c65409c6a378eca003bc5f63ce"
+    }
+  ],
+  "yt_fill_experimental_sandbox_share_black_24": [
+    {
+      "density": "mdpi",
+      "apk_path": "res/19I.png",
+      "sha256": "2aaa332917fc71af79d004f0e85f21953c66687b9d512c9be850a8e0dd6f9bdf"
+    },
+    {
+      "density": "hdpi",
+      "apk_path": "res/iO1.png",
+      "sha256": "980a9c5b974c6d26b5d2185145c7dda664670a10a147008d8d0cb257e60d66b2"
+    },
+    {
+      "density": "xhdpi",
+      "apk_path": "res/Rjp.png",
+      "sha256": "4e72ea474f52070ef03825aef2549306e84af28fa0e69efe3036f1e3149992c5"
+    },
+    {
+      "density": "xxhdpi",
+      "apk_path": "res/NnF.png",
+      "sha256": "ca77d8a822072e0e00d5188920cb4c3e51ea3ccdd6aad5193486076f75eab28e"
+    },
+    {
+      "density": "xxxhdpi",
+      "apk_path": "res/_Bn.png",
+      "sha256": "62890eeea16d05b6ca03333631cab085aef1d02ad7d0d641fc4bc5ed99022721"
+    }
+  ],
+  "ic_right_like_off_shadowed": [
+    {
+      "density": "mdpi",
+      "apk_path": "res/d-Y.webp",
+      "sha256": "3f77fb183cfa0acba1de6a07dded0c2e6b12b6bc60626fceb2ca32ba712c3486"
+    },
+    {
+      "density": "hdpi",
+      "apk_path": "res/4_s.webp",
+      "sha256": "988ef429a50d4aaf38fdd42bf2282836b753b0e4c1728ab997bfa26e0a58af58"
+    },
+    {
+      "density": "xhdpi",
+      "apk_path": "res/Kc7.webp",
+      "sha256": "6e683b7bb52bf3127b24907a6d607f3c1d428c24ccec53da18c5423db5e3532e"
+    },
+    {
+      "density": "xxhdpi",
+      "apk_path": "res/6wU.webp",
+      "sha256": "2659847b020ba36f54f024f4418e742fd428e6b4a4beb0fda0deec695fd70597"
+    },
+    {
+      "density": "xxxhdpi",
+      "apk_path": "res/2_D.webp",
+      "sha256": "5e854e35c8a00ccf304fd055989e79c737e5edcd827aca225742a166e28011ad"
+    }
+  ],
+  "ic_right_like_on_shadowed": [
+    {
+      "density": "mdpi",
+      "apk_path": "res/1mU.webp",
+      "sha256": "c0769547e09b55e4583ab68081e31e4ab46a786cb59bb914178284822b39e751"
+    },
+    {
+      "density": "hdpi",
+      "apk_path": "res/F97.webp",
+      "sha256": "6ced2070fb27002acf45260152bc9705f3681269d2e788c78dcf8fcc2f3b2062"
+    },
+    {
+      "density": "xhdpi",
+      "apk_path": "res/gc6.webp",
+      "sha256": "a33613d3e12b4c621e9dd75e7abf4d04bf0aac3cee9858612185c1ae2d5d7bec"
+    },
+    {
+      "density": "xxhdpi",
+      "apk_path": "res/tmT.webp",
+      "sha256": "93a6c85e18187940e892a3ec1b312ac56079025875dc6a783992a0696d3e9aa6"
+    },
+    {
+      "density": "xxxhdpi",
+      "apk_path": "res/iPn.webp",
+      "sha256": "b2affe07edefdf62564322979d2c190f2a13a6f918654c8aee9172efc3ba0246"
+    }
+  ]
+}

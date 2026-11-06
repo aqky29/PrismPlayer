@@ -1,0 +1,1193 @@
+  Class descriptor  : 'Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;'
+  Access flags      : 0x0001 (PUBLIC)
+  Superclass        : 'Lktq;'
+  Interfaces        -
+  Static fields     -
+  Instance fields   -
+    #0              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'm'
+      type          : 'Lcom/google/android/libraries/youtube/common/ui/CircularImageView;'
+      access        : 0x0001 (PUBLIC)
+    #1              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'n'
+      type          : 'I'
+      access        : 0x0001 (PUBLIC)
+    #2              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'o'
+      type          : 'Landroid/content/res/ColorStateList;'
+      access        : 0x0001 (PUBLIC)
+    #3              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'p'
+      type          : 'I'
+      access        : 0x0001 (PUBLIC)
+    #4              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'q'
+      type          : 'Landroid/graphics/drawable/Drawable;'
+      access        : 0x0002 (PRIVATE)
+    #5              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'r'
+      type          : 'I'
+      access        : 0x0002 (PRIVATE)
+    #6              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 's'
+      type          : 'I'
+      access        : 0x0002 (PRIVATE)
+  Direct methods    -
+    #0              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : '<init>'
+      type          : '(Landroid/content/Context;)V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 4
+      ins           : 2
+      outs          : 3
+      insns size    : 16 16-bit code units
+23e95c:                                        |[23e95c] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.<init>:(Landroid/content/Context;)V
+23e96c: 7020 51a4 3200                         |0000: invoke-direct {v2, v3}, Lktq;.<init>:(Landroid/content/Context;)V // method@a451
+23e972: 1210                                   |0003: const/4 v0, #int 1 // #1
+23e974: 5920 8654                              |0004: iput v0, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.p:I // field@5486
+23e978: 1200                                   |0006: const/4 v0, #int 0 // #0
+23e97a: 1201                                   |0007: const/4 v1, #int 0 // #0
+23e97c: 7130 340a 1300                         |0008: invoke-static {v3, v1, v0}, Lafvn;.o:(Landroid/content/Context;Landroid/util/AttributeSet;I)Landroid/content/Context; // method@0a34
+23e982: 0c03                                   |000b: move-result-object v3
+23e984: 7030 c75a 3201                         |000c: invoke-direct {v2, v3, v1}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.l:(Landroid/content/Context;Landroid/util/AttributeSet;)V // method@5ac7
+23e98a: 0e00                                   |000f: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+        0x0007 line=8
+        0x0008 line=9
+        0x0009 line=10
+        0x000a line=11
+        0x000b line=12
+        0x000c line=13
+        0x000d line=14
+        0x000e line=15
+        0x000f line=16
+      locals        :
+        0x0000 - 0x0010 reg=2 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+        0x0000 - 0x0010 reg=3 (null) Landroid/content/Context;
+
+    #1              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : '<init>'
+      type          : '(Landroid/content/Context;Landroid/util/AttributeSet;)V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 4
+      ins           : 3
+      outs          : 3
+      insns size    : 15 16-bit code units
+23e98c:                                        |[23e98c] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.<init>:(Landroid/content/Context;Landroid/util/AttributeSet;)V
+23e99c: 7030 52a4 2103                         |0000: invoke-direct {v1, v2, v3}, Lktq;.<init>:(Landroid/content/Context;Landroid/util/AttributeSet;)V // method@a452
+23e9a2: 1210                                   |0003: const/4 v0, #int 1 // #1
+23e9a4: 5910 8654                              |0004: iput v0, v1, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.p:I // field@5486
+23e9a8: 1200                                   |0006: const/4 v0, #int 0 // #0
+23e9aa: 7130 340a 3200                         |0007: invoke-static {v2, v3, v0}, Lafvn;.o:(Landroid/content/Context;Landroid/util/AttributeSet;I)Landroid/content/Context; // method@0a34
+23e9b0: 0c02                                   |000a: move-result-object v2
+23e9b2: 7030 c75a 2103                         |000b: invoke-direct {v1, v2, v3}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.l:(Landroid/content/Context;Landroid/util/AttributeSet;)V // method@5ac7
+23e9b8: 0e00                                   |000e: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=17
+        0x0007 line=18
+      locals        :
+        0x0000 - 0x000f reg=1 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+        0x0000 - 0x000f reg=2 (null) Landroid/content/Context;
+        0x0000 - 0x000f reg=3 (null) Landroid/util/AttributeSet;
+
+    #2              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : '<init>'
+      type          : '(Landroid/content/Context;Landroid/util/AttributeSet;I)V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 4
+      ins           : 4
+      outs          : 4
+      insns size    : 15 16-bit code units
+23e9bc:                                        |[23e9bc] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.<init>:(Landroid/content/Context;Landroid/util/AttributeSet;I)V
+23e9cc: 7040 53a4 1032                         |0000: invoke-direct {v0, v1, v2, v3}, Lktq;.<init>:(Landroid/content/Context;Landroid/util/AttributeSet;I)V // method@a453
+23e9d2: 1213                                   |0003: const/4 v3, #int 1 // #1
+23e9d4: 5903 8654                              |0004: iput v3, v0, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.p:I // field@5486
+23e9d8: 1203                                   |0006: const/4 v3, #int 0 // #0
+23e9da: 7130 340a 2103                         |0007: invoke-static {v1, v2, v3}, Lafvn;.o:(Landroid/content/Context;Landroid/util/AttributeSet;I)Landroid/content/Context; // method@0a34
+23e9e0: 0c01                                   |000a: move-result-object v1
+23e9e2: 7030 c75a 1002                         |000b: invoke-direct {v0, v1, v2}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.l:(Landroid/content/Context;Landroid/util/AttributeSet;)V // method@5ac7
+23e9e8: 0e00                                   |000e: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=19
+        0x0007 line=20
+      locals        :
+        0x0000 - 0x000f reg=0 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+        0x0000 - 0x000f reg=1 (null) Landroid/content/Context;
+        0x0000 - 0x000f reg=2 (null) Landroid/util/AttributeSet;
+        0x0000 - 0x000f reg=3 (null) I
+
+    #3              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : '<init>'
+      type          : '(Landroid/content/Context;Landroid/util/AttributeSet;II)V'
+      access        : 0x10001 (PUBLIC CONSTRUCTOR)
+      code          -
+      registers     : 5
+      ins           : 5
+      outs          : 5
+      insns size    : 15 16-bit code units
+23e9ec:                                        |[23e9ec] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.<init>:(Landroid/content/Context;Landroid/util/AttributeSet;II)V
+23e9fc: 7054 54a4 1032                         |0000: invoke-direct {v0, v1, v2, v3, v4}, Lktq;.<init>:(Landroid/content/Context;Landroid/util/AttributeSet;II)V // method@a454
+23ea02: 1213                                   |0003: const/4 v3, #int 1 // #1
+23ea04: 5903 8654                              |0004: iput v3, v0, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.p:I // field@5486
+23ea08: 1203                                   |0006: const/4 v3, #int 0 // #0
+23ea0a: 7130 340a 2103                         |0007: invoke-static {v1, v2, v3}, Lafvn;.o:(Landroid/content/Context;Landroid/util/AttributeSet;I)Landroid/content/Context; // method@0a34
+23ea10: 0c01                                   |000a: move-result-object v1
+23ea12: 7030 c75a 1002                         |000b: invoke-direct {v0, v1, v2}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.l:(Landroid/content/Context;Landroid/util/AttributeSet;)V // method@5ac7
+23ea18: 0e00                                   |000e: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=21
+        0x0007 line=22
+      locals        :
+        0x0000 - 0x000f reg=0 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+        0x0000 - 0x000f reg=1 (null) Landroid/content/Context;
+        0x0000 - 0x000f reg=2 (null) Landroid/util/AttributeSet;
+        0x0000 - 0x000f reg=3 (null) I
+        0x0000 - 0x000f reg=4 (null) I
+
+    #4              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'l'
+      type          : '(Landroid/content/Context;Landroid/util/AttributeSet;)V'
+      access        : 0x0012 (PRIVATE FINAL)
+      code          -
+      registers     : 11
+      ins           : 3
+      outs          : 5
+      insns size    : 318 16-bit code units
+468e60:                                        |[468e60] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.l:(Landroid/content/Context;Landroid/util/AttributeSet;)V
+468e70: 6e10 e016 0900                         |0000: invoke-virtual {v9}, Landroid/content/Context;.getResources:()Landroid/content/res/Resources; // method@16e0
+468e76: 0c00                                   |0003: move-result-object v0
+468e78: 6201 6eb3                              |0004: sget-object v1, Lnud;.a:[I // field@b36e
+468e7c: 6e30 e916 a901                         |0006: invoke-virtual {v9, v10, v1}, Landroid/content/Context;.obtainStyledAttributes:(Landroid/util/AttributeSet;[I)Landroid/content/res/TypedArray; // method@16e9
+468e82: 0c0a                                   |0009: move-result-object v10
+468e84: 1221                                   |000a: const/4 v1, #int 2 // #2
+468e86: 1402 cb10 087f                         |000b: const v2, #float 1.80862e+38 // #7f0810cb
+468e8c: 6e30 8817 1a02                         |000e: invoke-virtual {v10, v1, v2}, Landroid/content/res/TypedArray;.getResourceId:(II)I // method@1788
+468e92: 0a01                                   |0011: move-result v1
+468e94: 5981 7e54                              |0012: iput v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.h:I // field@547e
+468e98: 1401 c105 087f                         |0014: const v1, #float 1.80805e+38 // #7f0805c1
+468e9e: 1302 0800                              |0017: const/16 v2, #int 8 // #8
+468ea2: 6e30 8817 2a01                         |0019: invoke-virtual {v10, v2, v1}, Landroid/content/res/TypedArray;.getResourceId:(II)I // method@1788
+468ea8: 0a01                                   |001c: move-result v1
+468eaa: 5981 8854                              |001d: iput v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.r:I // field@5488
+468eae: 1201                                   |001f: const/4 v1, #int 0 // #0
+468eb0: 1403 b805 087f                         |0020: const v3, #float 1.80805e+38 // #7f0805b8
+468eb6: 6e30 8817 1a03                         |0023: invoke-virtual {v10, v1, v3}, Landroid/content/res/TypedArray;.getResourceId:(II)I // method@1788
+468ebc: 0a01                                   |0026: move-result v1
+468ebe: 5981 8954                              |0027: iput v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.s:I // field@5489
+468ec2: 1211                                   |0029: const/4 v1, #int 1 // #1
+468ec4: 1403 d30d 087f                         |002a: const v3, #float 1.80847e+38 // #7f080dd3
+468eca: 6e30 8817 1a03                         |002d: invoke-virtual {v10, v1, v3}, Landroid/content/res/TypedArray;.getResourceId:(II)I // method@1788
+468ed0: 0a01                                   |0030: move-result v1
+468ed2: 5981 7f54                              |0031: iput v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.i:I // field@547f
+468ed6: 1241                                   |0033: const/4 v1, #int 4 // #4
+468ed8: 1403 c405 087f                         |0034: const v3, #float 1.80805e+38 // #7f0805c4
+468ede: 6e30 8817 1a03                         |0037: invoke-virtual {v10, v1, v3}, Landroid/content/res/TypedArray;.getResourceId:(II)I // method@1788
+468ee4: 0a01                                   |003a: move-result v1
+468ee6: 5981 8454                              |003b: iput v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.n:I // field@5484
+468eea: 1271                                   |003d: const/4 v1, #int 7 // #7
+468eec: 1403 700a 087f                         |003e: const v3, #float 1.80829e+38 // #7f080a70
+468ef2: 6e30 8817 1a03                         |0041: invoke-virtual {v10, v1, v3}, Landroid/content/res/TypedArray;.getResourceId:(II)I // method@1788
+468ef8: 1251                                   |0044: const/4 v1, #int 5 // #5
+468efa: 1403 b005 087f                         |0045: const v3, #float 1.80805e+38 // #7f0805b0
+468f00: 6e30 8817 1a03                         |0048: invoke-virtual {v10, v1, v3}, Landroid/content/res/TypedArray;.getResourceId:(II)I // method@1788
+468f06: 0a01                                   |004b: move-result v1
+468f08: 5981 8054                              |004c: iput v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.j:I // field@5480
+468f0c: 1261                                   |004e: const/4 v1, #int 6 // #6
+468f0e: 6e20 7e17 1a00                         |004f: invoke-virtual {v10, v1}, Landroid/content/res/TypedArray;.getColorStateList:(I)Landroid/content/res/ColorStateList; // method@177e
+468f14: 0c01                                   |0052: move-result-object v1
+468f16: 5b81 8554                              |0053: iput-object v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.o:Landroid/content/res/ColorStateList; // field@5485
+468f1a: 1231                                   |0055: const/4 v1, #int 3 // #3
+468f1c: 6e20 7e17 1a00                         |0056: invoke-virtual {v10, v1}, Landroid/content/res/TypedArray;.getColorStateList:(I)Landroid/content/res/ColorStateList; // method@177e
+468f22: 0c01                                   |0059: move-result-object v1
+468f24: 5b81 8254                              |005a: iput-object v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.l:Landroid/content/res/ColorStateList; // field@5482
+468f28: 6e10 8c17 0a00                         |005c: invoke-virtual {v10}, Landroid/content/res/TypedArray;.recycle:()V // method@178c
+468f2e: 140a 5e08 087f                         |005f: const v10, #float 1.80818e+38 // #7f08085e
+468f34: 6e20 db16 a900                         |0062: invoke-virtual {v9, v10}, Landroid/content/Context;.getDrawable:(I)Landroid/graphics/drawable/Drawable; // method@16db
+468f3a: 0c0a                                   |0065: move-result-object v10
+468f3c: 5b8a 7d54                              |0066: iput-object v10, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.g:Landroid/graphics/drawable/Drawable; // field@547d
+468f40: 140a 1009 087f                         |0068: const v10, #float 1.80822e+38 // #7f080910
+468f46: 6e20 db16 a900                         |006b: invoke-virtual {v9, v10}, Landroid/content/Context;.getDrawable:(I)Landroid/graphics/drawable/Drawable; // method@16db
+468f4c: 0c0a                                   |006e: move-result-object v10
+468f4e: 5b8a 8754                              |006f: iput-object v10, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.q:Landroid/graphics/drawable/Drawable; // field@5487
+468f52: 548a 8554                              |0071: iget-object v10, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.o:Landroid/content/res/ColorStateList; // field@5485
+468f56: 380a 0e00                              |0073: if-eqz v10, 0081 // +000e
+468f5a: 6e10 5417 0a00                         |0075: invoke-virtual {v10}, Landroid/content/res/ColorStateList;.getDefaultColor:()I // method@1754
+468f60: 0a0a                                   |0078: move-result v10
+468f62: 5481 7d54                              |0079: iget-object v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.g:Landroid/graphics/drawable/Drawable; // field@547d
+468f66: 5483 8554                              |007b: iget-object v3, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.o:Landroid/content/res/ColorStateList; // field@5485
+468f6a: 6e20 dc18 3100                         |007d: invoke-virtual {v1, v3}, Landroid/graphics/drawable/Drawable;.setTintList:(Landroid/content/res/ColorStateList;)V // method@18dc
+468f70: 2808                                   |0080: goto 0088 // +0008
+468f72: 140a 8309 067f                         |0081: const v10, #float 1.78166e+38 // #7f060983
+468f78: 6e20 6017 a000                         |0084: invoke-virtual {v0, v10}, Landroid/content/res/Resources;.getColor:(I)I // method@1760
+468f7e: 0a0a                                   |0087: move-result v10
+468f80: 2201 0429                              |0088: new-instance v1, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView; // type@2904
+468f84: 7020 3959 9100                         |008a: invoke-direct {v1, v9}, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.<init>:(Landroid/content/Context;)V // method@5939
+468f8a: 5b81 7954                              |008d: iput-object v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.b:Lcom/google/android/apps/youtube/app/common/widget/TintableImageView; // field@5479
+468f8e: 5481 7954                              |008f: iget-object v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.b:Lcom/google/android/apps/youtube/app/common/widget/TintableImageView; // field@5479
+468f92: 6203 b10e                              |0091: sget-object v3, Landroid/widget/ImageView$ScaleType;.CENTER:Landroid/widget/ImageView$ScaleType; // field@0eb1
+468f96: 6e20 4259 3100                         |0093: invoke-virtual {v1, v3}, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.setScaleType:(Landroid/widget/ImageView$ScaleType;)V // method@5942
+468f9c: 6e10 c45a 0800                         |0096: invoke-virtual {v8}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.i:()V // method@5ac4
+468fa2: 2201 6b0c                              |0099: new-instance v1, Landroid/widget/ProgressBar; // type@0c6b
+468fa6: 1403 7800 0101                         |009b: const v3, #float 2.36939e-38 // #01010078
+468fac: 1204                                   |009e: const/4 v4, #int 0 // #0
+468fae: 7040 bb20 9134                         |009f: invoke-direct {v1, v9, v4, v3}, Landroid/widget/ProgressBar;.<init>:(Landroid/content/Context;Landroid/util/AttributeSet;I)V // method@20bb
+468fb4: 5b81 7854                              |00a2: iput-object v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.a:Landroid/widget/ProgressBar; // field@5478
+468fb8: 5481 7854                              |00a4: iget-object v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.a:Landroid/widget/ProgressBar; // field@5478
+468fbc: 5483 7d54                              |00a6: iget-object v3, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.g:Landroid/graphics/drawable/Drawable; // field@547d
+468fc0: 6e20 cb20 3100                         |00a8: invoke-virtual {v1, v3}, Landroid/widget/ProgressBar;.setProgressDrawable:(Landroid/graphics/drawable/Drawable;)V // method@20cb
+468fc6: 5481 7854                              |00ab: iget-object v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.a:Landroid/widget/ProgressBar; // field@5478
+468fca: 1503 b4c2                              |00ad: const/high16 v3, #int -1028390912 // #c2b4
+468fce: 6e20 cd20 3100                         |00af: invoke-virtual {v1, v3}, Landroid/widget/ProgressBar;.setRotation:(F)V // method@20cd
+468fd4: 2201 6b0c                              |00b2: new-instance v1, Landroid/widget/ProgressBar; // type@0c6b
+468fd8: 7020 ba20 9100                         |00b4: invoke-direct {v1, v9}, Landroid/widget/ProgressBar;.<init>:(Landroid/content/Context;)V // method@20ba
+468fde: 5b81 7a54                              |00b7: iput-object v1, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.c:Landroid/widget/ProgressBar; // field@547a
+468fe2: 2203 f24b                              |00b9: new-instance v3, Lxnm; // type@4bf2
+468fe6: 1405 a611 077f                         |00bb: const v5, #float 1.79537e+38 // #7f0711a6
+468fec: 6e20 6617 5000                         |00be: invoke-virtual {v0, v5}, Landroid/content/res/Resources;.getDimensionPixelSize:(I)I // method@1766
+468ff2: 0a05                                   |00c1: move-result v5
+468ff4: 1406 a411 077f                         |00c2: const v6, #float 1.79537e+38 // #7f0711a4
+468ffa: 6e20 6617 6000                         |00c5: invoke-virtual {v0, v6}, Landroid/content/res/Resources;.getDimensionPixelSize:(I)I // method@1766
+469000: 0a06                                   |00c8: move-result v6
+469002: 2410 ad4c 0a00                         |00c9: filled-new-array {v10}, [I // type@4cad
+469008: 0c0a                                   |00cc: move-result-object v10
+46900a: 1507 80bf                              |00cd: const/high16 v7, #int -1082130432 // #bf80
+46900e: 705a 6ffe 7365                         |00cf: invoke-direct {v3, v7, v5, v6, v10}, Lxnm;.<init>:(FII[I)V // method@fe6f
+469014: 6e20 c620 3100                         |00d2: invoke-virtual {v1, v3}, Landroid/widget/ProgressBar;.setIndeterminateDrawable:(Landroid/graphics/drawable/Drawable;)V // method@20c6
+46901a: 6e20 d020 2100                         |00d5: invoke-virtual {v1, v2}, Landroid/widget/ProgressBar;.setVisibility:(I)V // method@20d0
+469020: 140a a511 077f                         |00d8: const v10, #float 1.79537e+38 // #7f0711a5
+469026: 6e20 6617 a000                         |00db: invoke-virtual {v0, v10}, Landroid/content/res/Resources;.getDimensionPixelSize:(I)I // method@1766
+46902c: 0a0a                                   |00de: move-result v10
+46902e: 2202 590c                              |00df: new-instance v2, Landroid/widget/FrameLayout$LayoutParams; // type@0c59
+469032: 1303 1100                              |00e1: const/16 v3, #int 17 // #11
+469036: 7040 781f a23a                         |00e3: invoke-direct {v2, v10, v10, v3}, Landroid/widget/FrameLayout$LayoutParams;.<init>:(III)V // method@1f78
+46903c: 220a c829                              |00e6: new-instance v10, Lcom/google/android/libraries/youtube/common/ui/CircularImageView; // type@29c8
+469040: 7030 8b5e 9a04                         |00e8: invoke-direct {v10, v9, v4}, Lcom/google/android/libraries/youtube/common/ui/CircularImageView;.<init>:(Landroid/content/Context;Landroid/util/AttributeSet;)V // method@5e8b
+469046: 5b8a 8354                              |00eb: iput-object v10, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.m:Lcom/google/android/libraries/youtube/common/ui/CircularImageView; // field@5483
+46904a: 6e10 e016 0900                         |00ed: invoke-virtual {v9}, Landroid/content/Context;.getResources:()Landroid/content/res/Resources; // method@16e0
+469050: 0c04                                   |00f0: move-result-object v4
+469052: 1405 f90d 067f                         |00f1: const v5, #float 1.78189e+38 // #7f060df9
+469058: 6e20 6017 5400                         |00f4: invoke-virtual {v4, v5}, Landroid/content/res/Resources;.getColor:(I)I // method@1760
+46905e: 0a04                                   |00f7: move-result v4
+469060: 6e20 8c5e 4a00                         |00f8: invoke-virtual {v10, v4}, Lcom/google/android/libraries/youtube/common/ui/CircularImageView;.setBackgroundColor:(I)V // method@5e8c
+469066: 1404 2c10 077f                         |00fb: const v4, #float 1.7953e+38 // #7f07102c
+46906c: 6e20 6617 4000                         |00fe: invoke-virtual {v0, v4}, Landroid/content/res/Resources;.getDimensionPixelSize:(I)I // method@1766
+469072: 0a04                                   |0101: move-result v4
+469074: 2205 590c                              |0102: new-instance v5, Landroid/widget/FrameLayout$LayoutParams; // type@0c59
+469078: 7040 781f 4534                         |0104: invoke-direct {v5, v4, v4, v3}, Landroid/widget/FrameLayout$LayoutParams;.<init>:(III)V // method@1f78
+46907e: 2204 c228                              |0107: new-instance v4, Lcom/airbnb/lottie/LottieAnimationView; // type@28c2
+469082: 7020 3d56 9400                         |0109: invoke-direct {v4, v9}, Lcom/airbnb/lottie/LottieAnimationView;.<init>:(Landroid/content/Context;)V // method@563d
+469088: 5b84 7c54                              |010c: iput-object v4, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.e:Lcom/airbnb/lottie/LottieAnimationView; // field@547c
+46908c: 1409 8000 137f                         |010e: const v9, #float 1.95399e+38 // #7f130080
+469092: 6e20 5456 9400                         |0111: invoke-virtual {v4, v9}, Lcom/airbnb/lottie/LottieAnimationView;.k:(I)V // method@5654
+469098: 12f9                                   |0114: const/4 v9, #int -1 // #ff
+46909a: 6e20 6956 9400                         |0115: invoke-virtual {v4, v9}, Lcom/airbnb/lottie/LottieAnimationView;.t:(I)V // method@5669
+4690a0: 1409 a211 077f                         |0118: const v9, #float 1.79537e+38 // #7f0711a2
+4690a6: 6e20 6617 9000                         |011b: invoke-virtual {v0, v9}, Landroid/content/res/Resources;.getDimensionPixelSize:(I)I // method@1766
+4690ac: 0a09                                   |011e: move-result v9
+4690ae: 2200 590c                              |011f: new-instance v0, Landroid/widget/FrameLayout$LayoutParams; // type@0c59
+4690b2: 7040 781f 9039                         |0121: invoke-direct {v0, v9, v9, v3}, Landroid/widget/FrameLayout$LayoutParams;.<init>:(III)V // method@1f78
+4690b8: 6e30 bb5a a805                         |0124: invoke-virtual {v8, v10, v5}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.addView:(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V // method@5abb
+4690be: 6e30 bb5a 1802                         |0127: invoke-virtual {v8, v1, v2}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.addView:(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V // method@5abb
+4690c4: 5489 7854                              |012a: iget-object v9, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.a:Landroid/widget/ProgressBar; // field@5478
+4690c8: 6e30 bb5a 9802                         |012c: invoke-virtual {v8, v9, v2}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.addView:(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V // method@5abb
+4690ce: 6e30 bb5a 4800                         |012f: invoke-virtual {v8, v4, v0}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.addView:(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V // method@5abb
+4690d4: 5489 7954                              |0132: iget-object v9, v8, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.b:Lcom/google/android/apps/youtube/app/common/widget/TintableImageView; // field@5479
+4690d8: 220a 590c                              |0134: new-instance v10, Landroid/widget/FrameLayout$LayoutParams; // type@0c59
+4690dc: 12e0                                   |0136: const/4 v0, #int -2 // #fe
+4690de: 7040 781f 0a30                         |0137: invoke-direct {v10, v0, v0, v3}, Landroid/widget/FrameLayout$LayoutParams;.<init>:(III)V // method@1f78
+4690e4: 6e30 bb5a 980a                         |013a: invoke-virtual {v8, v9, v10}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.addView:(Landroid/view/View;Landroid/view/ViewGroup$LayoutParams;)V // method@5abb
+4690ea: 0e00                                   |013d: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+        0x0007 line=8
+        0x0008 line=9
+        0x0009 line=10
+        0x000a line=11
+        0x000b line=12
+        0x000c line=13
+        0x000d line=14
+        0x000e line=15
+        0x000f line=16
+        0x0010 line=17
+        0x0011 line=18
+        0x0012 line=19
+        0x0013 line=20
+        0x0014 line=21
+        0x0015 line=22
+        0x0016 line=23
+        0x0017 line=24
+        0x0018 line=25
+        0x0019 line=26
+        0x001a line=27
+        0x001b line=28
+        0x001c line=29
+        0x001d line=30
+        0x001e line=31
+        0x001f line=32
+        0x0020 line=33
+        0x0021 line=34
+        0x0022 line=35
+        0x0023 line=36
+        0x0024 line=37
+        0x0025 line=38
+        0x0026 line=39
+        0x0027 line=40
+        0x0028 line=41
+        0x0029 line=42
+        0x002a line=43
+        0x002b line=44
+        0x002c line=45
+        0x002d line=46
+        0x002e line=47
+        0x002f line=48
+        0x0030 line=49
+        0x0031 line=50
+        0x0032 line=51
+        0x0033 line=52
+        0x0034 line=53
+        0x0035 line=54
+        0x0036 line=55
+        0x0037 line=56
+        0x0038 line=57
+        0x0039 line=58
+        0x003a line=59
+        0x003b line=60
+        0x003c line=61
+        0x003d line=62
+        0x003e line=63
+        0x003f line=64
+        0x0040 line=65
+        0x0041 line=66
+        0x0042 line=67
+        0x0043 line=68
+        0x0044 line=69
+        0x0045 line=70
+        0x0046 line=71
+        0x0047 line=72
+        0x0048 line=73
+        0x0049 line=74
+        0x004a line=75
+        0x004b line=76
+        0x004c line=77
+        0x004d line=78
+        0x004e line=79
+        0x004f line=80
+        0x0050 line=81
+        0x0051 line=82
+        0x0052 line=83
+        0x0053 line=84
+        0x0054 line=85
+        0x0055 line=86
+        0x0056 line=87
+        0x0057 line=88
+        0x0058 line=89
+        0x0059 line=90
+        0x005a line=91
+        0x005b line=92
+        0x005c line=93
+        0x005d line=94
+        0x005e line=95
+        0x005f line=96
+        0x0060 line=97
+        0x0061 line=98
+        0x0062 line=99
+        0x0063 line=100
+        0x0064 line=101
+        0x0065 line=102
+        0x0066 line=103
+        0x0067 line=104
+        0x0068 line=105
+        0x0069 line=106
+        0x006a line=107
+        0x006b line=108
+        0x006c line=109
+        0x006d line=110
+        0x006e line=111
+        0x006f line=112
+        0x0070 line=113
+        0x0071 line=114
+        0x0072 line=115
+        0x0073 line=116
+        0x0074 line=117
+        0x0075 line=118
+        0x0076 line=119
+        0x0077 line=120
+        0x0078 line=121
+        0x0079 line=122
+        0x007a line=123
+        0x007b line=124
+        0x007c line=125
+        0x007d line=126
+        0x007e line=127
+        0x007f line=128
+        0x0080 line=129
+        0x0081 line=130
+        0x0082 line=131
+        0x0083 line=132
+        0x0084 line=133
+        0x0085 line=134
+        0x0086 line=135
+        0x0087 line=136
+        0x0088 line=137
+        0x0089 line=138
+        0x008a line=139
+        0x008b line=140
+        0x008c line=141
+        0x008d line=142
+        0x008e line=143
+        0x008f line=144
+        0x0090 line=145
+        0x0091 line=146
+        0x0092 line=147
+        0x0093 line=148
+        0x0094 line=149
+        0x0095 line=150
+        0x0096 line=151
+        0x0097 line=152
+        0x0098 line=153
+        0x0099 line=154
+        0x009a line=155
+        0x009b line=156
+        0x009c line=157
+        0x009d line=158
+        0x009e line=159
+        0x009f line=160
+        0x00a0 line=161
+        0x00a1 line=162
+        0x00a2 line=163
+        0x00a3 line=164
+        0x00a4 line=165
+        0x00a5 line=166
+        0x00a6 line=167
+        0x00a7 line=168
+        0x00a8 line=169
+        0x00a9 line=170
+        0x00aa line=171
+        0x00ab line=172
+        0x00ac line=173
+        0x00ad line=174
+        0x00ae line=175
+        0x00af line=176
+        0x00b0 line=177
+        0x00b1 line=178
+        0x00b2 line=179
+        0x00b3 line=180
+        0x00b4 line=181
+        0x00b5 line=182
+        0x00b6 line=183
+        0x00b7 line=184
+        0x00b8 line=185
+        0x00b9 line=186
+        0x00ba line=187
+        0x00bb line=188
+        0x00bc line=189
+        0x00bd line=190
+        0x00be line=191
+        0x00bf line=192
+        0x00c0 line=193
+        0x00c1 line=194
+        0x00c2 line=195
+        0x00c3 line=196
+        0x00c4 line=197
+        0x00c5 line=198
+        0x00c6 line=199
+        0x00c7 line=200
+        0x00c8 line=201
+        0x00c9 line=202
+        0x00ca line=203
+        0x00cb line=204
+        0x00cc line=205
+        0x00cd line=206
+        0x00ce line=207
+        0x00cf line=208
+        0x00d0 line=209
+        0x00d1 line=210
+        0x00d2 line=211
+        0x00d3 line=212
+        0x00d4 line=213
+        0x00d5 line=214
+        0x00d6 line=215
+        0x00d7 line=216
+        0x00d8 line=217
+        0x00d9 line=218
+        0x00da line=219
+        0x00db line=220
+        0x00dc line=221
+        0x00dd line=222
+        0x00de line=223
+        0x00df line=224
+        0x00e0 line=225
+        0x00e1 line=226
+        0x00e2 line=227
+        0x00e3 line=228
+        0x00e4 line=229
+        0x00e5 line=230
+        0x00e6 line=231
+        0x00e7 line=232
+        0x00e8 line=233
+        0x00e9 line=234
+        0x00ea line=235
+        0x00eb line=236
+        0x00ec line=237
+        0x00ed line=238
+        0x00ee line=239
+        0x00ef line=240
+        0x00f0 line=241
+        0x00f1 line=242
+        0x00f2 line=243
+        0x00f3 line=244
+        0x00f4 line=245
+        0x00f5 line=246
+        0x00f6 line=247
+        0x00f7 line=248
+        0x00f8 line=249
+        0x00f9 line=250
+        0x00fa line=251
+        0x00fb line=252
+        0x00fc line=253
+        0x00fd line=254
+        0x00fe line=255
+        0x00ff line=256
+        0x0100 line=257
+        0x0101 line=258
+        0x0102 line=259
+        0x0103 line=260
+        0x0104 line=261
+        0x0105 line=262
+        0x0106 line=263
+        0x0107 line=264
+        0x0108 line=265
+        0x0109 line=266
+        0x010a line=267
+        0x010b line=268
+        0x010c line=269
+        0x010d line=270
+        0x010e line=271
+        0x010f line=272
+        0x0110 line=273
+        0x0111 line=274
+        0x0112 line=275
+        0x0113 line=276
+        0x0114 line=277
+        0x0115 line=278
+        0x0116 line=279
+        0x0117 line=280
+        0x0118 line=281
+        0x0119 line=282
+        0x011a line=283
+        0x011b line=284
+        0x011c line=285
+        0x011d line=286
+        0x011e line=287
+        0x011f line=288
+        0x0120 line=289
+        0x0121 line=290
+        0x0122 line=291
+        0x0123 line=292
+        0x0124 line=293
+        0x0125 line=294
+        0x0126 line=295
+        0x0127 line=296
+        0x0128 line=297
+        0x0129 line=298
+        0x012a line=299
+        0x012b line=300
+        0x012c line=301
+        0x012d line=302
+        0x012e line=303
+        0x012f line=304
+        0x0130 line=305
+        0x0131 line=306
+        0x0132 line=307
+        0x0133 line=308
+        0x0134 line=309
+        0x0135 line=310
+        0x0136 line=311
+        0x0137 line=312
+        0x0138 line=313
+        0x0139 line=314
+        0x013a line=315
+        0x013b line=316
+        0x013c line=317
+        0x013d line=318
+      locals        :
+        0x0000 - 0x013e reg=8 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+        0x0000 - 0x013e reg=9 (null) Landroid/content/Context;
+        0x0000 - 0x013e reg=10 (null) Landroid/util/AttributeSet;
+
+    #5              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'm'
+      type          : '()V'
+      access        : 0x0012 (PRIVATE FINAL)
+      code          -
+      registers     : 3
+      ins           : 1
+      outs          : 2
+      insns size    : 19 16-bit code units
+25a014:                                        |[25a014] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.m:()V
+25a024: 5420 8354                              |0000: iget-object v0, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.m:Lcom/google/android/libraries/youtube/common/ui/CircularImageView; // field@5483
+25a028: 3800 0d00                              |0002: if-eqz v0, 000f // +000d
+25a02c: 6e10 1b1d 0000                         |0004: invoke-virtual {v0}, Landroid/view/View;.getVisibility:()I // method@1d1b
+25a032: 0a01                                   |0007: move-result v1
+25a034: 3901 0700                              |0008: if-nez v1, 000f // +0007
+25a038: 1301 0800                              |000a: const/16 v1, #int 8 // #8
+25a03c: 6e20 891d 1000                         |000c: invoke-virtual {v0, v1}, Landroid/view/View;.setVisibility:(I)V // method@1d89
+25a042: 6e10 55a4 0200                         |000f: invoke-virtual {v2}, Lktq;.a:()V // method@a455
+25a048: 0e00                                   |0012: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+        0x0007 line=8
+        0x0008 line=9
+        0x0009 line=10
+        0x000a line=11
+        0x000b line=12
+        0x000c line=13
+        0x000d line=14
+        0x000e line=15
+        0x000f line=16
+        0x0010 line=17
+        0x0011 line=18
+        0x0012 line=19
+      locals        :
+        0x0000 - 0x0013 reg=2 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+
+  Virtual methods   -
+    #0              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'd'
+      type          : '(I)V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 6
+      ins           : 2
+      outs          : 2
+      insns size    : 42 16-bit code units
+2d30d0:                                        |[2d30d0] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.d:(I)V
+2d30e0: 5440 7854                              |0000: iget-object v0, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.a:Landroid/widget/ProgressBar; // field@5478
+2d30e4: 5441 7a54                              |0002: iget-object v1, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.c:Landroid/widget/ProgressBar; // field@547a
+2d30e8: 5242 8654                              |0004: iget v2, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.p:I // field@5486
+2d30ec: 3800 2300                              |0006: if-eqz v0, 0029 // +0023
+2d30f0: 1223                                   |0008: const/4 v3, #int 2 // #2
+2d30f2: 3332 0800                              |0009: if-ne v2, v3, 0011 // +0008
+2d30f6: 5444 8754                              |000b: iget-object v4, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.q:Landroid/graphics/drawable/Drawable; // field@5487
+2d30fa: 6e20 cb20 4000                         |000d: invoke-virtual {v0, v4}, Landroid/widget/ProgressBar;.setProgressDrawable:(Landroid/graphics/drawable/Drawable;)V // method@20cb
+2d3100: 2809                                   |0010: goto 0019 // +0009
+2d3102: 7010 c85a 0400                         |0011: invoke-direct {v4}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.m:()V // method@5ac8
+2d3108: 5444 7d54                              |0014: iget-object v4, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.g:Landroid/graphics/drawable/Drawable; // field@547d
+2d310c: 6e20 cb20 4000                         |0016: invoke-virtual {v0, v4}, Landroid/widget/ProgressBar;.setProgressDrawable:(Landroid/graphics/drawable/Drawable;)V // method@20cb
+2d3112: 1214                                   |0019: const/4 v4, #int 1 // #1
+2d3114: 7120 d909 4000                         |001a: invoke-static {v0, v4}, Lafro;.s:(Landroid/view/View;Z)V // method@09d9
+2d311a: 1204                                   |001d: const/4 v4, #int 0 // #0
+2d311c: 7120 d909 4100                         |001e: invoke-static {v1, v4}, Lafro;.s:(Landroid/view/View;Z)V // method@09d9
+2d3122: 1304 6400                              |0021: const/16 v4, #int 100 // #64
+2d3126: 6e20 c920 4000                         |0023: invoke-virtual {v0, v4}, Landroid/widget/ProgressBar;.setMax:(I)V // method@20c9
+2d312c: 6e20 ca20 5000                         |0026: invoke-virtual {v0, v5}, Landroid/widget/ProgressBar;.setProgress:(I)V // method@20ca
+2d3132: 0e00                                   |0029: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+        0x0007 line=8
+        0x0008 line=9
+        0x0009 line=10
+        0x000a line=11
+        0x000b line=12
+        0x000c line=13
+        0x000d line=14
+        0x000e line=15
+        0x000f line=16
+        0x0010 line=17
+        0x0011 line=18
+        0x0012 line=19
+        0x0013 line=20
+        0x0014 line=21
+        0x0015 line=22
+        0x0016 line=23
+        0x0017 line=24
+        0x0018 line=25
+        0x0019 line=26
+        0x001a line=27
+        0x001b line=28
+        0x001c line=29
+        0x001d line=30
+        0x001e line=31
+        0x001f line=32
+        0x0020 line=33
+        0x0021 line=34
+        0x0022 line=35
+        0x0023 line=36
+        0x0024 line=37
+        0x0025 line=38
+        0x0026 line=39
+        0x0027 line=40
+        0x0028 line=41
+        0x0029 line=42
+      locals        :
+        0x0000 - 0x002a reg=4 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+        0x0000 - 0x002a reg=5 (null) I
+
+    #1              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'e'
+      type          : '(IZ)V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 5
+      ins           : 3
+      outs          : 2
+      insns size    : 60 16-bit code units
+31224c:                                        |[31224c] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.e:(IZ)V
+31225c: 5420 7954                              |0000: iget-object v0, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.b:Lcom/google/android/apps/youtube/app/common/widget/TintableImageView; // field@5479
+312260: 5421 8554                              |0002: iget-object v1, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.o:Landroid/content/res/ColorStateList; // field@5485
+312264: 3800 3700                              |0004: if-eqz v0, 003b // +0037
+312268: 3801 0600                              |0006: if-eqz v1, 000c // +0006
+31226c: 6e20 3a59 1000                         |0008: invoke-virtual {v0, v1}, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.a:(Landroid/content/res/ColorStateList;)V // method@593a
+312272: 2830                                   |000b: goto 003b // +0030
+312274: 3804 0a00                              |000c: if-eqz v4, 0016 // +000a
+312278: 5424 8254                              |000e: iget-object v4, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.l:Landroid/content/res/ColorStateList; // field@5482
+31227c: 3804 0600                              |0010: if-eqz v4, 0016 // +0006
+312280: 6e20 3a59 4000                         |0012: invoke-virtual {v0, v4}, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.a:(Landroid/content/res/ColorStateList;)V // method@593a
+312286: 2826                                   |0015: goto 003b // +0026
+312288: 5224 7e54                              |0016: iget v4, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.h:I // field@547e
+31228c: 3343 0800                              |0018: if-ne v3, v4, 0020 // +0008
+312290: 6202 8a53                              |001a: sget-object v2, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.a:Landroid/content/res/ColorStateList; // field@538a
+312294: 6e20 3a59 2000                         |001c: invoke-virtual {v0, v2}, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.a:(Landroid/content/res/ColorStateList;)V // method@593a
+31229a: 281c                                   |001f: goto 003b // +001c
+31229c: 5224 7f54                              |0020: iget v4, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.i:I // field@547f
+3122a0: 3343 1500                              |0022: if-ne v3, v4, 0037 // +0015
+3122a4: 6e10 c15a 0200                         |0024: invoke-virtual {v2}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.getContext:()Landroid/content/Context; // method@5ac1
+3122aa: 0c02                                   |0027: move-result-object v2
+3122ac: 1403 580b 047f                         |0028: const v3, #float 1.75517e+38 // #7f040b58
+3122b2: 7120 770a 3200                         |002b: invoke-static {v2, v3}, Lafyg;.d:(Landroid/content/Context;I)I // method@0a77
+3122b8: 0a02                                   |002e: move-result v2
+3122ba: 7110 5517 0200                         |002f: invoke-static {v2}, Landroid/content/res/ColorStateList;.valueOf:(I)Landroid/content/res/ColorStateList; // method@1755
+3122c0: 0c02                                   |0032: move-result-object v2
+3122c2: 6e20 3a59 2000                         |0033: invoke-virtual {v0, v2}, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.a:(Landroid/content/res/ColorStateList;)V // method@593a
+3122c8: 2805                                   |0036: goto 003b // +0005
+3122ca: 1202                                   |0037: const/4 v2, #int 0 // #0
+3122cc: 6e20 3a59 2000                         |0038: invoke-virtual {v0, v2}, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.a:(Landroid/content/res/ColorStateList;)V // method@593a
+3122d2: 0e00                                   |003b: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+        0x0007 line=8
+        0x0008 line=9
+        0x0009 line=10
+        0x000a line=11
+        0x000b line=12
+        0x000c line=13
+        0x000d line=14
+        0x000e line=15
+        0x000f line=16
+        0x0010 line=17
+        0x0011 line=18
+        0x0012 line=19
+        0x0013 line=20
+        0x0014 line=21
+        0x0015 line=22
+        0x0016 line=23
+        0x0017 line=24
+        0x0018 line=25
+        0x0019 line=26
+        0x001a line=27
+        0x001b line=28
+        0x001c line=29
+        0x001d line=30
+        0x001e line=31
+        0x001f line=32
+        0x0020 line=33
+        0x0021 line=34
+        0x0022 line=35
+        0x0023 line=36
+        0x0024 line=37
+        0x0025 line=38
+        0x0026 line=39
+        0x0027 line=40
+        0x0028 line=41
+        0x0029 line=42
+        0x002a line=43
+        0x002b line=44
+        0x002c line=45
+        0x002d line=46
+        0x002e line=47
+        0x002f line=48
+        0x0030 line=49
+        0x0031 line=50
+        0x0032 line=51
+        0x0033 line=52
+        0x0034 line=53
+        0x0035 line=54
+        0x0036 line=55
+        0x0037 line=56
+        0x0038 line=57
+        0x0039 line=58
+        0x003a line=59
+        0x003b line=60
+      locals        :
+        0x0000 - 0x003c reg=2 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+        0x0000 - 0x003c reg=3 (null) I
+        0x0000 - 0x003c reg=4 (null) Z
+
+    #2              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'f'
+      type          : '(Landroid/content/res/ColorStateList;)V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 3
+      ins           : 2
+      outs          : 3
+      insns size    : 9 16-bit code units
+206fe8:                                        |[206fe8] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.f:(Landroid/content/res/ColorStateList;)V
+206ff8: 5b12 8554                              |0000: iput-object v2, v1, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.o:Landroid/content/res/ColorStateList; // field@5485
+206ffc: 5212 8a8e                              |0002: iget v2, v1, Lktq;.k:I // field@8e8a
+207000: 1210                                   |0004: const/4 v0, #int 1 // #1
+207002: 6e30 bd5a 2100                         |0005: invoke-virtual {v1, v2, v0}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.e:(IZ)V // method@5abd
+207008: 0e00                                   |0008: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+        0x0007 line=8
+        0x0008 line=9
+      locals        :
+        0x0000 - 0x0009 reg=1 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+        0x0000 - 0x0009 reg=2 (null) Landroid/content/res/ColorStateList;
+
+    #3              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'g'
+      type          : '(IZ)V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 5
+      ins           : 3
+      outs          : 3
+      insns size    : 23 16-bit code units
+27260c:                                        |[27260c] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.g:(IZ)V
+27261c: 5420 7b54                              |0000: iget-object v0, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.d:Landroid/graphics/drawable/AnimationDrawable; // field@547b
+272620: 5421 7954                              |0002: iget-object v1, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.b:Lcom/google/android/apps/youtube/app/common/widget/TintableImageView; // field@5479
+272624: 7010 c85a 0200                         |0004: invoke-direct {v2}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.m:()V // method@5ac8
+27262a: 5923 8154                              |0007: iput v3, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.k:I // field@5481
+27262e: 3800 0500                              |0009: if-eqz v0, 000e // +0005
+272632: 6e10 a418 0000                         |000b: invoke-virtual {v0}, Landroid/graphics/drawable/AnimationDrawable;.stop:()V // method@18a4
+272638: 6e30 bd5a 3204                         |000e: invoke-virtual {v2, v3, v4}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.e:(IZ)V // method@5abd
+27263e: 3801 0500                              |0011: if-eqz v1, 0016 // +0005
+272642: 6e20 3e59 3100                         |0013: invoke-virtual {v1, v3}, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.setImageResource:(I)V // method@593e
+272648: 0e00                                   |0016: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+        0x0007 line=8
+        0x0008 line=9
+        0x0009 line=10
+        0x000a line=11
+        0x000b line=12
+        0x000c line=13
+        0x000d line=14
+        0x000e line=15
+        0x000f line=16
+        0x0010 line=17
+        0x0011 line=18
+        0x0012 line=19
+        0x0013 line=20
+        0x0014 line=21
+        0x0015 line=22
+        0x0016 line=23
+      locals        :
+        0x0000 - 0x0017 reg=2 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+        0x0000 - 0x0017 reg=3 (null) I
+        0x0000 - 0x0017 reg=4 (null) Z
+
+    #4              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'h'
+      type          : '()V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 3
+      ins           : 1
+      outs          : 3
+      insns size    : 7 16-bit code units
+1e3a7c:                                        |[1e3a7c] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.h:()V
+1e3a8c: 5220 7f54                              |0000: iget v0, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.i:I // field@547f
+1e3a90: 1211                                   |0002: const/4 v1, #int 1 // #1
+1e3a92: 6e30 bf5a 0201                         |0003: invoke-virtual {v2, v0, v1}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.g:(IZ)V // method@5abf
+1e3a98: 0e00                                   |0006: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+      locals        :
+        0x0000 - 0x0007 reg=2 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+
+    #5              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'i'
+      type          : '()V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 3
+      ins           : 1
+      outs          : 3
+      insns size    : 7 16-bit code units
+1e3a9c:                                        |[1e3a9c] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.i:()V
+1e3aac: 5220 7e54                              |0000: iget v0, v2, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.h:I // field@547e
+1e3ab0: 1211                                   |0002: const/4 v1, #int 1 // #1
+1e3ab2: 6e30 bf5a 0201                         |0003: invoke-virtual {v2, v0, v1}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.g:(IZ)V // method@5abf
+1e3ab8: 0e00                                   |0006: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+      locals        :
+        0x0000 - 0x0007 reg=2 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+
+    #6              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'j'
+      type          : '()V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 5
+      ins           : 1
+      outs          : 3
+      insns size    : 84 16-bit code units
+35539c:                                        |[35539c] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.j:()V
+3553ac: 5240 8654                              |0000: iget v0, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.p:I // field@5486
+3553b0: 1221                                   |0002: const/4 v1, #int 2 // #2
+3553b2: 1202                                   |0003: const/4 v2, #int 0 // #0
+3553b4: 3310 1e00                              |0004: if-ne v0, v1, 0022 // +001e
+3553b8: 5440 7954                              |0006: iget-object v0, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.b:Lcom/google/android/apps/youtube/app/common/widget/TintableImageView; // field@5479
+3553bc: 5441 7c54                              |0008: iget-object v1, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.e:Lcom/airbnb/lottie/LottieAnimationView; // field@547c
+3553c0: 5444 8354                              |000a: iget-object v4, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.m:Lcom/google/android/libraries/youtube/common/ui/CircularImageView; // field@5483
+3553c4: 7120 d909 2000                         |000c: invoke-static {v0, v2}, Lafro;.s:(Landroid/view/View;Z)V // method@09d9
+3553ca: 1210                                   |000f: const/4 v0, #int 1 // #1
+3553cc: 7120 d909 0100                         |0010: invoke-static {v1, v0}, Lafro;.s:(Landroid/view/View;Z)V // method@09d9
+3553d2: 7120 d909 0400                         |0013: invoke-static {v4, v0}, Lafro;.s:(Landroid/view/View;Z)V // method@09d9
+3553d8: 3801 3d00                              |0016: if-eqz v1, 0053 // +003d
+3553dc: 6e10 6e56 0100                         |0018: invoke-virtual {v1}, Lcom/airbnb/lottie/LottieAnimationView;.x:()Z // method@566e
+3553e2: 0a04                                   |001b: move-result v4
+3553e4: 3904 3700                              |001c: if-nez v4, 0053 // +0037
+3553e8: 6e10 4e56 0100                         |001e: invoke-virtual {v1}, Lcom/airbnb/lottie/LottieAnimationView;.h:()V // method@564e
+3553ee: 2832                                   |0021: goto 0053 // +0032
+3553f0: 7010 c85a 0400                         |0022: invoke-direct {v4}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.m:()V // method@5ac8
+3553f6: 5440 7954                              |0025: iget-object v0, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.b:Lcom/google/android/apps/youtube/app/common/widget/TintableImageView; // field@5479
+3553fa: 5441 7b54                              |0027: iget-object v1, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.d:Landroid/graphics/drawable/AnimationDrawable; // field@547b
+3553fe: 3901 1300                              |0029: if-nez v1, 003c // +0013
+355402: 6e10 c15a 0400                         |002b: invoke-virtual {v4}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.getContext:()Landroid/content/Context; // method@5ac1
+355408: 0c01                                   |002e: move-result-object v1
+35540a: 5243 8954                              |002f: iget v3, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.s:I // field@5489
+35540e: 6e20 db16 3100                         |0031: invoke-virtual {v1, v3}, Landroid/content/Context;.getDrawable:(I)Landroid/graphics/drawable/Drawable; // method@16db
+355414: 0c01                                   |0034: move-result-object v1
+355416: 6e10 df91 0100                         |0035: invoke-virtual {v1}, Ljava/lang/Object;.getClass:()Ljava/lang/Class; // method@91df
+35541c: 1f01 d30a                              |0038: check-cast v1, Landroid/graphics/drawable/AnimationDrawable; // type@0ad3
+355420: 5b41 7b54                              |003a: iput-object v1, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.d:Landroid/graphics/drawable/AnimationDrawable; // field@547b
+355424: 5243 8954                              |003c: iget v3, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.s:I // field@5489
+355428: 6e30 bd5a 3402                         |003e: invoke-virtual {v4, v3, v2}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.e:(IZ)V // method@5abd
+35542e: 3800 0500                              |0041: if-eqz v0, 0046 // +0005
+355432: 6e20 3d59 1000                         |0043: invoke-virtual {v0, v1}, Lcom/google/android/apps/youtube/app/common/widget/TintableImageView;.setImageDrawable:(Landroid/graphics/drawable/Drawable;)V // method@593d
+355438: 5240 8954                              |0046: iget v0, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.s:I // field@5489
+35543c: 5940 8154                              |0048: iput v0, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.k:I // field@5481
+355440: 6e10 a218 0100                         |004a: invoke-virtual {v1}, Landroid/graphics/drawable/AnimationDrawable;.isRunning:()Z // method@18a2
+355446: 0a04                                   |004d: move-result v4
+355448: 3904 0500                              |004e: if-nez v4, 0053 // +0005
+35544c: 6e10 a318 0100                         |0050: invoke-virtual {v1}, Landroid/graphics/drawable/AnimationDrawable;.start:()V // method@18a3
+355452: 0e00                                   |0053: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+        0x0007 line=8
+        0x0008 line=9
+        0x0009 line=10
+        0x000a line=11
+        0x000b line=12
+        0x000c line=13
+        0x000d line=14
+        0x000e line=15
+        0x000f line=16
+        0x0010 line=17
+        0x0011 line=18
+        0x0012 line=19
+        0x0013 line=20
+        0x0014 line=21
+        0x0015 line=22
+        0x0016 line=23
+        0x0017 line=24
+        0x0018 line=25
+        0x0019 line=26
+        0x001a line=27
+        0x001b line=28
+        0x001c line=29
+        0x001d line=30
+        0x001e line=31
+        0x001f line=32
+        0x0020 line=33
+        0x0021 line=34
+        0x0022 line=35
+        0x0023 line=36
+        0x0024 line=37
+        0x0025 line=38
+        0x0026 line=39
+        0x0027 line=40
+        0x0028 line=41
+        0x0029 line=42
+        0x002a line=43
+        0x002b line=44
+        0x002c line=45
+        0x002d line=46
+        0x002e line=47
+        0x002f line=48
+        0x0030 line=49
+        0x0031 line=50
+        0x0032 line=51
+        0x0033 line=52
+        0x0034 line=53
+        0x0035 line=54
+        0x0036 line=55
+        0x0037 line=56
+        0x0038 line=57
+        0x0039 line=58
+        0x003a line=59
+        0x003b line=60
+        0x003c line=61
+        0x003d line=62
+        0x003e line=63
+        0x003f line=64
+        0x0040 line=65
+        0x0041 line=66
+        0x0042 line=67
+        0x0043 line=68
+        0x0044 line=69
+        0x0045 line=70
+        0x0046 line=71
+        0x0047 line=72
+        0x0048 line=73
+        0x0049 line=74
+        0x004a line=75
+        0x004b line=76
+        0x004c line=77
+        0x004d line=78
+        0x004e line=79
+        0x004f line=80
+        0x0050 line=81
+        0x0051 line=82
+        0x0052 line=83
+        0x0053 line=84
+      locals        :
+        0x0000 - 0x0054 reg=4 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+
+    #7              : (in Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;)
+      name          : 'k'
+      type          : '()V'
+      access        : 0x0011 (PUBLIC FINAL)
+      code          -
+      registers     : 5
+      ins           : 1
+      outs          : 3
+      insns size    : 25 16-bit code units
+27d95c:                                        |[27d95c] com.google.android.apps.youtube.app.offline.ui.OfflineArrowView.k:()V
+27d96c: 5440 8354                              |0000: iget-object v0, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.m:Lcom/google/android/libraries/youtube/common/ui/CircularImageView; // field@5483
+27d970: 5241 8654                              |0002: iget v1, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.p:I // field@5486
+27d974: 1222                                   |0004: const/4 v2, #int 2 // #2
+27d976: 1203                                   |0005: const/4 v3, #int 0 // #0
+27d978: 3321 0d00                              |0006: if-ne v1, v2, 0013 // +000d
+27d97c: 1401 c205 087f                         |0008: const v1, #float 1.80805e+38 // #7f0805c2
+27d982: 6e30 bf5a 1403                         |000b: invoke-virtual {v4, v1, v3}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.g:(IZ)V // method@5abf
+27d988: 1214                                   |000e: const/4 v4, #int 1 // #1
+27d98a: 7120 d909 4000                         |000f: invoke-static {v0, v4}, Lafro;.s:(Landroid/view/View;Z)V // method@09d9
+27d990: 2806                                   |0012: goto 0018 // +0006
+27d992: 5240 8854                              |0013: iget v0, v4, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.r:I // field@5488
+27d996: 6e30 bf5a 0403                         |0015: invoke-virtual {v4, v0, v3}, Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;.g:(IZ)V // method@5abf
+27d99c: 0e00                                   |0018: return-void
+      catches       : (none)
+      positions     :
+        0x0000 line=1
+        0x0001 line=2
+        0x0002 line=3
+        0x0003 line=4
+        0x0004 line=5
+        0x0005 line=6
+        0x0006 line=7
+        0x0007 line=8
+        0x0008 line=9
+        0x0009 line=10
+        0x000a line=11
+        0x000b line=12
+        0x000c line=13
+        0x000d line=14
+        0x000e line=15
+        0x000f line=16
+        0x0010 line=17
+        0x0011 line=18
+        0x0012 line=19
+        0x0013 line=20
+        0x0014 line=21
+        0x0015 line=22
+        0x0016 line=23
+        0x0017 line=24
+        0x0018 line=25
+      locals        :
+        0x0000 - 0x0019 reg=4 this Lcom/google/android/apps/youtube/app/offline/ui/OfflineArrowView;
+
+  source_file_idx   : 25669 (PG)
+

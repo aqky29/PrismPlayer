@@ -1,0 +1,332 @@
+[
+  {
+    "name": "outline",
+    "index": 0,
+    "path": "res/jdB.png",
+    "size": [
+      24,
+      24
+    ],
+    "sha256": "56b6f64c034724c8c6e9785b70a4e1acddc1ac707b1f64b7d51483cc367acd8a",
+    "local": "/tmp/re/download-action-icons/outline-0.png"
+  },
+  {
+    "name": "outline",
+    "index": 1,
+    "path": "res/Bl_.png",
+    "size": [
+      36,
+      36
+    ],
+    "sha256": "6b2c66043e2ae7f0198103f99baf9639790334ea73a8a159d28234845b00a240",
+    "local": "/tmp/re/download-action-icons/outline-1.png"
+  },
+  {
+    "name": "outline",
+    "index": 2,
+    "path": "res/khW.png",
+    "size": [
+      48,
+      48
+    ],
+    "sha256": "2f947bad71449a3475456e0ae2a6a472e834092ce83223e8c0494a7513e9c146",
+    "local": "/tmp/re/download-action-icons/outline-2.png"
+  },
+  {
+    "name": "outline",
+    "index": 3,
+    "path": "res/SCg.png",
+    "size": [
+      72,
+      72
+    ],
+    "sha256": "7809f2a9ec46244f36d93c0b2e5a43a12cc60c1b36835fd2cb4462957bc8cd0e",
+    "local": "/tmp/re/download-action-icons/outline-3.png"
+  },
+  {
+    "name": "outline",
+    "index": 4,
+    "path": "res/Okw.png",
+    "size": [
+      96,
+      96
+    ],
+    "sha256": "d558e1c8ae8ee5a0aa6c1cf02b2aaf46feb1f623167379041597cc04f98128ca",
+    "local": "/tmp/re/download-action-icons/outline-4.png"
+  },
+  {
+    "name": "downloaded",
+    "index": 0,
+    "path": "res/lwe.png",
+    "size": [
+      24,
+      24
+    ],
+    "sha256": "680ef40eff22fb9a51e18a57085cba3689313c260d359d4216d03f9e34a040b2",
+    "local": "/tmp/re/download-action-icons/downloaded-0.png"
+  },
+  {
+    "name": "downloaded",
+    "index": 1,
+    "path": "res/AAd.png",
+    "size": [
+      36,
+      36
+    ],
+    "sha256": "1c334b132408c4a42be14f1893a67cfec87d0c5c84e9e74b2b9650b9fc82333a",
+    "local": "/tmp/re/download-action-icons/downloaded-1.png"
+  },
+  {
+    "name": "downloaded",
+    "index": 2,
+    "path": "res/u8D1.png",
+    "size": [
+      48,
+      48
+    ],
+    "sha256": "dbb4e83a1b0bb7836a75eae588797b057f8ba144de7d0ff1c4569cbf6af763d5",
+    "local": "/tmp/re/download-action-icons/downloaded-2.png"
+  },
+  {
+    "name": "downloaded",
+    "index": 3,
+    "path": "res/aiO.png",
+    "size": [
+      72,
+      72
+    ],
+    "sha256": "f615206e962d7aacfc0a5aabf952740de3e2a7a61a01280d6b6bd24624a63260",
+    "local": "/tmp/re/download-action-icons/downloaded-3.png"
+  },
+  {
+    "name": "downloaded",
+    "index": 4,
+    "path": "res/Eqx.png",
+    "size": [
+      96,
+      96
+    ],
+    "sha256": "daa845e1958e7a0f1bc6f5a81fa81bb9dcf5fdca8b755908836fe2a54e2e4134",
+    "local": "/tmp/re/download-action-icons/downloaded-4.png"
+  },
+  {
+    "name": "experimental",
+    "index": 0,
+    "path": "res/Lcp.png",
+    "size": [
+      24,
+      24
+    ],
+    "sha256": "1ba007cf641c3d5f3321d4b5880ac61da50771742a700af365a53de7e4f0bcc4",
+    "local": "/tmp/re/download-action-icons/experimental-0.png"
+  },
+  {
+    "name": "experimental",
+    "index": 1,
+    "path": "res/hHo.png",
+    "size": [
+      36,
+      36
+    ],
+    "sha256": "3baef100ca1bb48bfaa1b1c1871af22b6a2c009c92ada77602d78db9711f80ca",
+    "local": "/tmp/re/download-action-icons/experimental-1.png"
+  },
+  {
+    "name": "experimental",
+    "index": 2,
+    "path": "res/wEY.png",
+    "size": [
+      48,
+      48
+    ],
+    "sha256": "f69b06fc5945a7d0ab80e8702843b85e7696dbd79b75a634c516d2881688d194",
+    "local": "/tmp/re/download-action-icons/experimental-2.png"
+  },
+  {
+    "name": "experimental",
+    "index": 3,
+    "path": "res/JAm.png",
+    "size": [
+      72,
+      72
+    ],
+    "sha256": "0ea3064f80e4c74ff3d77bd693a140d5ec885fa35dee09b82e556f98c8ac044f",
+    "local": "/tmp/re/download-action-icons/experimental-3.png"
+  },
+  {
+    "name": "experimental",
+    "index": 4,
+    "path": "res/LcF.png",
+    "size": [
+      96,
+      96
+    ],
+    "sha256": "ef663b01664bc8c52a51a1466619b7963e7e43d31c841c6185755ed0937f10c8",
+    "local": "/tmp/re/download-action-icons/experimental-4.png"
+  },
+  {
+    "name": "mobile",
+    "index": 0,
+    "path": "res/w8V.png",
+    "size": [
+      24,
+      24
+    ],
+    "sha256": "e80e595757009a6c061f97bae8bb0d52d6cafc07bf1461c0c08728b0f967c00c",
+    "local": "/tmp/re/download-action-icons/mobile-0.png"
+  },
+  {
+    "name": "mobile",
+    "index": 1,
+    "path": "res/N06.png",
+    "size": [
+      36,
+      36
+    ],
+    "sha256": "842b30059ae5c86afdb5e0f9a89f78f880663160da3285b1073442410acfc8c0",
+    "local": "/tmp/re/download-action-icons/mobile-1.png"
+  },
+  {
+    "name": "mobile",
+    "index": 2,
+    "path": "res/TWC.png",
+    "size": [
+      48,
+      48
+    ],
+    "sha256": "0518e51999009a717fdb699ebfe9af841abcfbe38a51d1b1ca3b79d2c96ffe45",
+    "local": "/tmp/re/download-action-icons/mobile-2.png"
+  },
+  {
+    "name": "mobile",
+    "index": 3,
+    "path": "res/F_x.png",
+    "size": [
+      72,
+      72
+    ],
+    "sha256": "15e0e532cbbcdbd49281d20019d61f14366e5426adc3047796280044595a95f2",
+    "local": "/tmp/re/download-action-icons/mobile-3.png"
+  },
+  {
+    "name": "mobile",
+    "index": 4,
+    "path": "res/93x.png",
+    "size": [
+      96,
+      96
+    ],
+    "sha256": "3f40700555d5f75c5f6190cd2981d617c9af82e597e905c78911aa26bada696f",
+    "local": "/tmp/re/download-action-icons/mobile-4.png"
+  },
+  {
+    "name": "legacy_start",
+    "index": 0,
+    "path": "res/Ng7.webp",
+    "size": [
+      24,
+      24
+    ],
+    "sha256": "8a97b88efa194b285effd801266d061a349b467e998493b979978f5ff99d61d5",
+    "local": "/tmp/re/download-action-icons/legacy_start-0.webp"
+  },
+  {
+    "name": "legacy_start",
+    "index": 1,
+    "path": "res/gf4.webp",
+    "size": [
+      36,
+      36
+    ],
+    "sha256": "2c09227d96c69690f6e0267dbe3d85364ca796c6a6f501aea244124b2a382fd4",
+    "local": "/tmp/re/download-action-icons/legacy_start-1.webp"
+  },
+  {
+    "name": "legacy_start",
+    "index": 2,
+    "path": "res/s7h.webp",
+    "size": [
+      48,
+      48
+    ],
+    "sha256": "d1afc52338a65950c3fb91353de88aa408a6eb8caa48c99e6c8d23b2053fa2c7",
+    "local": "/tmp/re/download-action-icons/legacy_start-2.webp"
+  },
+  {
+    "name": "legacy_start",
+    "index": 3,
+    "path": "res/nbY.webp",
+    "size": [
+      72,
+      72
+    ],
+    "sha256": "dfffc59f71a7e15ccce851e6edb33b4ebdf50183f0cbe142bbdfecbae76a60c5",
+    "local": "/tmp/re/download-action-icons/legacy_start-3.webp"
+  },
+  {
+    "name": "legacy_start",
+    "index": 4,
+    "path": "res/8XN.webp",
+    "size": [
+      96,
+      96
+    ],
+    "sha256": "c692bd05a983226b5495c772e857fc5f1cf7e31cb234fa2553f661b345d68390",
+    "local": "/tmp/re/download-action-icons/legacy_start-4.webp"
+  },
+  {
+    "name": "legacy_finished",
+    "index": 0,
+    "path": "res/tDh1.png",
+    "size": [
+      24,
+      24
+    ],
+    "sha256": "475111582ce5a519079ca53688a6a0f8df97a97e6bb2854610b34d1ee9d1b81a",
+    "local": "/tmp/re/download-action-icons/legacy_finished-0.png"
+  },
+  {
+    "name": "legacy_finished",
+    "index": 1,
+    "path": "res/ncg.png",
+    "size": [
+      36,
+      36
+    ],
+    "sha256": "f66d4e93900729a7d7c5122a39caf3a88d06435e9bbd7a8cb808050e632d9ee9",
+    "local": "/tmp/re/download-action-icons/legacy_finished-1.png"
+  },
+  {
+    "name": "legacy_finished",
+    "index": 2,
+    "path": "res/WYa.png",
+    "size": [
+      48,
+      48
+    ],
+    "sha256": "11c1deaa9604943f9b3b9c1984a2e1cf27f9da3848ae4fc5e13adfd850978556",
+    "local": "/tmp/re/download-action-icons/legacy_finished-2.png"
+  },
+  {
+    "name": "legacy_finished",
+    "index": 3,
+    "path": "res/AEl.png",
+    "size": [
+      72,
+      72
+    ],
+    "sha256": "703d02771416866a8820dad2d0f6e926a57a640293b1c07a903fa808d17bc681",
+    "local": "/tmp/re/download-action-icons/legacy_finished-3.png"
+  },
+  {
+    "name": "legacy_finished",
+    "index": 4,
+    "path": "res/GNl.png",
+    "size": [
+      96,
+      96
+    ],
+    "sha256": "352ed1c39e41659b5df41584254d1d3429aed4f8a78784f9b7a9ca9e675e1e98",
+    "local": "/tmp/re/download-action-icons/legacy_finished-4.png"
+  }
+]

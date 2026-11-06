@@ -1,0 +1,11 @@
+N: android=http://schemas.android.com/apk/res/android (line=5)
+  E: layer-list (line=5)
+      E: item (line=6)
+        A: http://schemas.android.com/apk/res/android:id(0x010100d0)=@0x0102000d
+          E: shape (line=7)
+            A: http://schemas.android.com/apk/res/android:shape(0x0101019a)=3
+            A: http://schemas.android.com/apk/res/android:useLevel(0x0101019f)=true
+            A: http://schemas.android.com/apk/res/android:innerRadius(0x0101025f)=@0x7f07102d
+            A: http://schemas.android.com/apk/res/android:thickness(0x01010260)=@0x7f0711a6
+              E: solid (line=12)
+                A: http://schemas.android.com/apk/res/android:color(0x010101a5)=@0x7f060983

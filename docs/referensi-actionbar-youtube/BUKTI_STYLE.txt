@@ -1,0 +1,176 @@
+15580:         resource 0x7f040c2d com.google.android.youtube:attr/yt_sys_color_baseline_tonal_background: <bag>
+15581:           Parent=0x00000000(Resolved=0x00000000), Count=1
+
+15589:         resource 0x7f040c30 com.google.android.youtube:attr/yt_sys_color_baseline_tonal_rim: <bag>
+15590:           Parent=0x00000000(Resolved=0x00000000), Count=1
+
+15598:         resource 0x7f040c33 com.google.android.youtube:attr/yt_sys_color_baseline_tonal_touch_light: <bag>
+15599:           Parent=0x00000000(Resolved=0x00000000), Count=1
+
+15601:         resource 0x7f040c34 com.google.android.youtube:attr/yt_sys_color_baseline_tonal_wash: <bag>
+15602:           Parent=0x00000000(Resolved=0x00000000), Count=1
+
+24556:         resource 0x7f060eb1 com.google.android.youtube:color/yt_ref_color_constants_baseline_grey95_alpha25: t=0x1c d=0x40f2f2f5 (s=0x0008 r=0x00)
+24557:           (color) #40f2f2f5
+
+24656:         resource 0x7f060ef0 com.google.android.youtube:color/yt_ref_color_constants_baseline_transparent_white1_alpha10: t=0x1c d=0x1affffff (s=0x0008 r=0x00)
+24657:           (color) #1affffff
+
+24658:         resource 0x7f060ef1 com.google.android.youtube:color/yt_ref_color_constants_baseline_transparent_white1_alpha15: t=0x1c d=0x26ffffff (s=0x0008 r=0x00)
+24659:           (color) #26ffffff
+
+24660:         resource 0x7f060ef2 com.google.android.youtube:color/yt_ref_color_constants_baseline_transparent_white1_alpha20: t=0x1c d=0x33ffffff (s=0x0008 r=0x00)
+24661:           (color) #33ffffff
+
+24980:         resource 0x7f060fdb com.google.android.youtube:color/yt_sys_color_baseline_dark_default_additive_background: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+24981:           (reference) 0x7f060ef0
+
+25002:         resource 0x7f060fe6 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_button_chip_background_hover: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25003:           (reference) 0x7f060ef2
+
+25060:         resource 0x7f061003 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_mono_tonal_hover: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25061:           (reference) 0x7f060ef2
+
+25080:         resource 0x7f06100d com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_outline_rim: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25081:           (reference) 0x7f060ef1
+
+25082:         resource 0x7f06100e com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_outline_rim_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25083:           (reference) 0x7f060ef1
+
+25084:         resource 0x7f06100f com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_solid_rim: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25085:           (reference) 0x7f060ef2
+
+25086:         resource 0x7f061010 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_solid_rim_inverse: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25087:           (reference) 0x7f060ef2
+
+25090:         resource 0x7f061012 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_solid_wash_inverse: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25091:           (reference) 0x7f060ef2
+
+25096:         resource 0x7f061015 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_tonal_background_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25097:           (reference) 0x7f060ef1
+
+25098:         resource 0x7f061016 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_tonal_hover: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25099:           (reference) 0x7f060ef2
+
+25100:         resource 0x7f061017 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_tonal_rim: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25101:           (reference) 0x7f060ef1
+
+25102:         resource 0x7f061018 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_tonal_rim_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25103:           (reference) 0x7f060ef1
+
+25104:         resource 0x7f061019 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_tonal_wash: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25105:           (reference) 0x7f060ef1
+
+25106:         resource 0x7f06101a com.google.android.youtube:color/yt_sys_color_baseline_dark_default_overlay_tonal_wash_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25107:           (reference) 0x7f060ef1
+
+25120:         resource 0x7f061021 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_solid_rim_inverse: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25121:           (reference) 0x7f060ef2
+
+25122:         resource 0x7f061022 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_solid_wash_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25123:           (reference) 0x7f060ef1
+
+25158:         resource 0x7f061035 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_tonal_background: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+25159:           (reference) 0x7f060ef0
+
+25164:         resource 0x7f061038 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_tonal_touch_light: t=0x01 d=0x7f060eb1 (s=0x0008 r=0x00)
+25165:           (reference) 0x7f060eb1
+
+25166:         resource 0x7f061039 com.google.android.youtube:color/yt_sys_color_baseline_dark_default_tonal_wash_inverse: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25167:           (reference) 0x7f060ef2
+
+25218:         resource 0x7f061056 com.google.android.youtube:color/yt_sys_color_baseline_dark_overlay_button_secondary_darker: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25219:           (reference) 0x7f060ef2
+
+25226:         resource 0x7f06105a com.google.android.youtube:color/yt_sys_color_baseline_dark_state_mono_standard_pressed: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+25227:           (reference) 0x7f060ef0
+
+25314:         resource 0x7f06108a com.google.android.youtube:color/yt_sys_color_baseline_light_default_additive_background_inverse: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+25315:           (reference) 0x7f060ef0
+
+25346:         resource 0x7f06109a com.google.android.youtube:color/yt_sys_color_baseline_light_default_default_outline_inverse: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25347:           (reference) 0x7f060ef2
+
+25394:         resource 0x7f0610b2 com.google.android.youtube:color/yt_sys_color_baseline_light_default_mono_tonal_hover_inverse: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25395:           (reference) 0x7f060ef2
+
+25398:         resource 0x7f0610b4 com.google.android.youtube:color/yt_sys_color_baseline_light_default_outline_rim_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25399:           (reference) 0x7f060ef1
+
+25412:         resource 0x7f0610bb com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_outline_rim: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25413:           (reference) 0x7f060ef1
+
+25414:         resource 0x7f0610bc com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_outline_rim_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25415:           (reference) 0x7f060ef1
+
+25416:         resource 0x7f0610bd com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_solid_rim: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25417:           (reference) 0x7f060ef2
+
+25418:         resource 0x7f0610be com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_solid_rim_inverse: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25419:           (reference) 0x7f060ef2
+
+25422:         resource 0x7f0610c0 com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_solid_wash_inverse: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25423:           (reference) 0x7f060ef2
+
+25428:         resource 0x7f0610c3 com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_tonal_background_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25429:           (reference) 0x7f060ef1
+
+25430:         resource 0x7f0610c4 com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_tonal_hover: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25431:           (reference) 0x7f060ef2
+
+25432:         resource 0x7f0610c5 com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_tonal_rim: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25433:           (reference) 0x7f060ef1
+
+25434:         resource 0x7f0610c6 com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_tonal_rim_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25435:           (reference) 0x7f060ef1
+
+25436:         resource 0x7f0610c7 com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_tonal_wash: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25437:           (reference) 0x7f060ef1
+
+25438:         resource 0x7f0610c8 com.google.android.youtube:color/yt_sys_color_baseline_light_default_overlay_tonal_wash_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25439:           (reference) 0x7f060ef1
+
+25452:         resource 0x7f0610cf com.google.android.youtube:color/yt_sys_color_baseline_light_default_solid_rim_inverse: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25453:           (reference) 0x7f060ef2
+
+25458:         resource 0x7f0610d2 com.google.android.youtube:color/yt_sys_color_baseline_light_default_state_mono_filled_pressed: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+25459:           (reference) 0x7f060ef0
+
+25492:         resource 0x7f0610e4 com.google.android.youtube:color/yt_sys_color_baseline_light_default_tonal_background_inverse: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+25493:           (reference) 0x7f060ef0
+
+25494:         resource 0x7f0610e5 com.google.android.youtube:color/yt_sys_color_baseline_light_default_tonal_rim_inverse: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25495:           (reference) 0x7f060ef1
+
+25550:         resource 0x7f061102 com.google.android.youtube:color/yt_sys_color_baseline_light_overlay_button_secondary_darker: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25551:           (reference) 0x7f060ef2
+
+25606:         resource 0x7f061122 com.google.android.youtube:color/yt_sys_color_baseline_mobile_dark_default_default_default_default_outline: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25607:           (reference) 0x7f060ef2
+
+25624:         resource 0x7f06112b com.google.android.youtube:color/yt_sys_color_baseline_mobile_dark_default_default_overlay_button_secondary: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+25625:           (reference) 0x7f060ef0
+
+25630:         resource 0x7f06112e com.google.android.youtube:color/yt_sys_color_baseline_mobile_dark_default_outline_rim: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25631:           (reference) 0x7f060ef1
+
+25636:         resource 0x7f061131 com.google.android.youtube:color/yt_sys_color_baseline_mobile_dark_default_solid_rim: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25637:           (reference) 0x7f060ef2
+
+25640:         resource 0x7f061133 com.google.android.youtube:color/yt_sys_color_baseline_mobile_dark_default_tonal_rim: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+25641:           (reference) 0x7f060ef0
+
+25664:         resource 0x7f06113f com.google.android.youtube:color/yt_sys_color_baseline_mobile_light_default_default_overlay_button_secondary: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+25665:           (reference) 0x7f060ef0
+
+25678:         resource 0x7f061148 com.google.android.youtube:color/yt_sys_color_baseline_mobile_light_default_tonal_rim: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25679:           (reference) 0x7f060ef1
+
+25680:         resource 0x7f061149 com.google.android.youtube:color/yt_sys_color_baseline_mobile_light_default_tonal_wash: t=0x01 d=0x7f060ef1 (s=0x0008 r=0x00)
+25681:           (reference) 0x7f060ef1
+
+25704:         resource 0x7f061156 com.google.android.youtube:color/yt_white1_opacity10: t=0x01 d=0x7f060ef0 (s=0x0008 r=0x00)
+25705:           (reference) 0x7f060ef0
+
+25706:         resource 0x7f061157 com.google.android.youtube:color/yt_white1_opacity20: t=0x01 d=0x7f060ef2 (s=0x0008 r=0x00)
+25707:           (reference) 0x7f060ef2
