@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
+import org.schabi.newpipe.extractor.stream.SubtitlesStream
 import org.schabi.newpipe.extractor.stream.VideoStream
 
 /**
@@ -20,6 +21,10 @@ internal class PlaybackTrackState {
     var forceDirectPlayback by mutableStateOf(false)
     var manualAudioOverride by mutableStateOf(false)
     var attemptedAudioFallback by mutableStateOf<String?>(null)
+    var selectedSubtitle by mutableStateOf<SubtitlesStream?>(null)
+    var lastSubtitle by mutableStateOf<SubtitlesStream?>(null)
+    var attachedSubtitle by mutableStateOf<SubtitlesStream?>(null)
+    var attachedSubtitleVideo by mutableStateOf<String?>(null)
 
     /** True bila audio diputar lewat manifest/stream adaptif (bukan mode langsung). */
     fun usesAdaptiveAudio(info: StreamInfo): Boolean = !forceDirectPlayback && (

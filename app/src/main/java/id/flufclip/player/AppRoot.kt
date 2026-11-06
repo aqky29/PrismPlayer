@@ -179,10 +179,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     var selected by remember { mutableStateOf<StreamInfo?>(null) }
     var pendingVideo by remember { mutableStateOf<PendingVideo?>(null) }
     var openJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var selectedSubtitle by remember { mutableStateOf<SubtitlesStream?>(null) }
-    var lastSubtitle by remember { mutableStateOf<SubtitlesStream?>(null) }
-    var attachedSubtitle by remember { mutableStateOf<SubtitlesStream?>(null) }
-    var attachedSubtitleVideo by remember { mutableStateOf<String?>(null) }
     val watchPrefs = remember { context.getSharedPreferences("watch_history", Context.MODE_PRIVATE) }
     var watchHistory by remember { mutableStateOf(WatchHistory.read(watchPrefs)) }
     val accountHistorySession = YouTubeAuth.sessionRevision
@@ -626,7 +622,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             else -> Int.MAX_VALUE
         }
         val parameters = player.trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, wantedHeight)
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, selectedSubtitle == null)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, trackState.selectedSubtitle == null)
         if (stream != null) parameters.clearOverridesOfType(C.TRACK_TYPE_VIDEO)
         player.trackSelectionParameters = parameters.build()
         val factory = youTubeMediaSourceFactory(context)
@@ -636,7 +632,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             if (manifestMime != null) builder.setMimeType(manifestMime)
             if (isLive) builder.setLiveConfiguration(MediaItem.LiveConfiguration.Builder()
                 .setTargetOffsetMs(5_000L).setMinPlaybackSpeed(.97f).setMaxPlaybackSpeed(1.03f).build())
-            selectedSubtitle?.takeIf { it.isUrl && it.content.isNotBlank() }?.let { sub ->
+            trackState.selectedSubtitle?.takeIf { it.isUrl && it.content.isNotBlank() }?.let { sub ->
                 val mime = when (sub.format?.suffix?.lowercase()) { "vtt" -> MimeTypes.TEXT_VTT; "ttml" -> MimeTypes.APPLICATION_TTML; "srt" -> MimeTypes.APPLICATION_SUBRIP; else -> null }
                 if (mime != null) builder.setSubtitleConfigurations(listOf(MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.content)).setMimeType(mime).setLanguage(sub.languageTag).setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT).build()))
             }
@@ -653,29 +649,29 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             else -> error("No playable video format is available.")
         }
         if (position > 0) player.setMediaSource(source, position) else player.setMediaSource(source)
-        attachedSubtitle = selectedSubtitle
-        attachedSubtitleVideo = mediaKey
+        trackState.attachedSubtitle = trackState.selectedSubtitle
+        trackState.attachedSubtitleVideo = mediaKey
         trackState.quality = stream
         trackState.forceDirectPlayback = forceDirect
         player.prepare()
         player.playWhenReady = play
     }
     fun changeSubtitle(info: StreamInfo, subtitle: SubtitlesStream?) {
-        val previous = selectedSubtitle
+        val previous = trackState.selectedSubtitle
         try {
-            if (subtitle == null || (attachedSubtitleVideo == videoKey(info.url) && attachedSubtitle == subtitle)) {
+            if (subtitle == null || (trackState.attachedSubtitleVideo == videoKey(info.url) && trackState.attachedSubtitle == subtitle)) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, subtitle == null).build()
-                selectedSubtitle = subtitle
+                trackState.selectedSubtitle = subtitle
             } else {
                 val position = player.currentPosition.coerceAtLeast(0L)
                 val playing = player.playWhenReady
-                selectedSubtitle = subtitle
+                trackState.selectedSubtitle = subtitle
                 playQuality(info, trackState.quality, trackState.selectedAudio, position, playing, trackState.forceDirectPlayback)
             }
-            if (subtitle != null) lastSubtitle = subtitle
+            if (subtitle != null) trackState.lastSubtitle = subtitle
         } catch (e: Exception) {
-            selectedSubtitle = previous
+            trackState.selectedSubtitle = previous
             android.widget.Toast.makeText(context, "Captions failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
@@ -1219,8 +1215,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     /** Pasang [info] ke pemutar: pilih kualitas dan audio awal, lalu mulai memutar. Dipakai video biasa. */
     fun startInfo(info: StreamInfo, resume: Long, startMinimized: Boolean = false) {
         chaptersOpen = false
-        selectedSubtitle = null
-        lastSubtitle = null
+        trackState.selectedSubtitle = null
+        trackState.lastSubtitle = null
         playerLocked = false
         trackState.qualityMode = "auto"
         player.pauseAtEndOfMediaItems = false
@@ -1262,8 +1258,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         trackState.attemptedAudioFallback = null
         configurePreferredAudio(info, PlayerSettings.audioPreference)
         val loaded = if (player.playbackState == Player.STATE_IDLE) null else (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == key }
-        selectedSubtitle = null; lastSubtitle = null; playerLocked = false; trackState.qualityMode = "auto"
-        attachedSubtitle = null; attachedSubtitleVideo = null
+        trackState.selectedSubtitle = null; trackState.lastSubtitle = null; playerLocked = false; trackState.qualityMode = "auto"
+        trackState.attachedSubtitle = null; trackState.attachedSubtitleVideo = null
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
         player.pauseAtEndOfMediaItems = true
         if (loaded != null) {
@@ -2218,7 +2214,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 onOpenDownloads = { showDownloads = true },
                 quality = trackState.quality,
                 selectedAudio = trackState.selectedAudio,
-                selectedSubtitle = selectedSubtitle,
+                selectedSubtitle = trackState.selectedSubtitle,
                 autoplay = autoplay,
                 onAutoplayChange = { autoplay = it; watchPrefs.edit().putBoolean("autoplay", it).apply() },
                 maxVideoHeight = maxVideoHeight,
@@ -2332,7 +2328,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     fsComments = false
                     chaptersOpen = false
                 }
-                FloatingPlayer(player = player, title = playing.name, zoomKey = playing.url, locked = playerLocked, onUnlock = { playerLocked = false }, isLive = isPlayingLive, autoplay = autoplay, hasSubtitles = playing.subtitles.any { it.isUrl && it.format?.suffix?.lowercase() in listOf("vtt", "ttml", "srt") }, subtitlesEnabled = selectedSubtitle != null, previewFrames = playing.previewFrames, segments = playing.streamSegments.orEmpty(), fullscreen = fullscreen, minimized = minimized, progress = collapse, travelDistance = dragTravel.coerceAtLeast(180.dp),
+                FloatingPlayer(player = player, title = playing.name, zoomKey = playing.url, locked = playerLocked, onUnlock = { playerLocked = false }, isLive = isPlayingLive, autoplay = autoplay, hasSubtitles = playing.subtitles.any { it.isUrl && it.format?.suffix?.lowercase() in listOf("vtt", "ttml", "srt") }, subtitlesEnabled = trackState.selectedSubtitle != null, previewFrames = playing.previewFrames, segments = playing.streamSegments.orEmpty(), fullscreen = fullscreen, minimized = minimized, progress = collapse, travelDistance = dragTravel.coerceAtLeast(180.dp),
                     miniState = miniState, modifier = Modifier.offset { IntOffset(x.roundToPx(), y.roundToPx()) }.size(width, height), chatState = playingChatState,
                     recovering = refreshingPlaybackKey == videoKey(playing.url),
                     onRetryPlayback = { refreshPlayback(playing, player.currentPosition.coerceAtLeast(0L), true) },
@@ -2366,7 +2362,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     onPrevious = queue.indexOfFirst { videoKey(it.url) == videoKey(playing.url) }.let { index -> queue.getOrNull(index - 1) }?.let { previous -> { openUrl(previous.url) } },
                     onAutoplay = { autoplay = !autoplay; watchPrefs.edit().putBoolean("autoplay", autoplay).apply() },
                     onSubtitles = {
-                        val subtitle = if (selectedSubtitle != null) null else lastSubtitle ?: playing.subtitles.firstOrNull { it.isUrl && it.format?.suffix?.lowercase() in listOf("vtt", "ttml", "srt") }
+                        val subtitle = if (trackState.selectedSubtitle != null) null else trackState.lastSubtitle ?: playing.subtitles.firstOrNull { it.isUrl && it.format?.suffix?.lowercase() in listOf("vtt", "ttml", "srt") }
                         changeSubtitle(playing, subtitle)
                     },
                     onBack = { back() }, onSettings = { qualityInitialPage = "menu"; showQuality = true }, onFullscreen = { setFullscreen(!fullscreen) },
