@@ -961,32 +961,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             finally { loading = false }
         }
     }
-    fun moreSearchResults() {
-        val page = searchState.page ?: return
-        if (page.next == null || searchState.moreLoading || loading) return
-        searchState.moreLoading = true; searchState.moreError = null
-        val generation = searchState.generation
-        scope.launch {
-            try {
-                val next = VideoRepository.moreSearch(page)
-                if (generation != searchState.generation) return@launch
-                val updated = (searchState.results + next.items).distinctBy { it.url }
-                searchState.page = if (updated.size == searchState.results.size) next.copy(next = null) else next
-                searchState.results = updated
-            } catch (e: Exception) { if (generation == searchState.generation) searchState.moreError = "Failed to load more results: ${e.message ?: "try again"}" }
-            finally { if (generation == searchState.generation) searchState.moreLoading = false }
-        }
-    }
-    fun loadChannelTab(filter: String) {
-        val page = browse.channel ?: return
-        if (loading) return
-        browse.channelTab = filter; browse.channelItems = emptyList(); error = null; loading = true
-        scope.launch {
-            try { val result = VideoRepository.channelTabPage(page, filter); browse.channelItems = result.items; browse.next = result.next; browse.error = null }
-            catch (e: Exception) { error = "Failed to load tab: ${e.message ?: "try again"}" }
-            finally { loading = false }
-        }
-    }
     fun openPlaylist(url: String) {
         if (loading) return
         val listId = runCatching { Uri.parse(url).getQueryParameter("list") }.getOrNull()?.takeIf { it.isNotBlank() }
@@ -1000,26 +974,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             try { val result = VideoRepository.playlist(url); browse.playlist = result; browse.playlistItems = result.relatedItems; browse.next = result.nextPage; browse.error = null; showHistory = false }
             catch (e: Exception) { error = "Cannot open playlist: ${e.message ?: "try again"}" }
             finally { loading = false }
-        }
-    }
-    fun loadMoreBrowse() {
-        val next = browse.next ?: return
-        val currentPlaylist = browse.playlist
-        val currentChannel = browse.channel
-        val currentTab = browse.channelTab
-        if (browse.loading) return
-        browse.loading = true; browse.error = null
-        scope.launch {
-            try {
-                val result = if (currentPlaylist != null) VideoRepository.morePlaylist(currentPlaylist.url, next) else if (currentChannel != null) VideoRepository.moreChannelTab(currentChannel, currentTab, next) else return@launch
-                if (browse.playlist != currentPlaylist || browse.channel != currentChannel || browse.channelTab != currentTab) return@launch
-                val old = if (currentPlaylist != null) browse.playlistItems else browse.channelItems
-                val merged = (old + result.items).distinctBy { it.url }
-                if (currentPlaylist != null) browse.playlistItems = merged else browse.channelItems = merged
-                browse.next = if (merged.size == old.size) null else result.next
-            } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { browse.error = "Failed to load next page: ${e.message ?: "try again"}" }
-            finally { browse.loading = false }
         }
     }
     /** Kualitas video dan jalur audio awal untuk [info]. */
@@ -1922,11 +1876,11 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     onLoadHome = { refresh -> loadHome(refresh) },
                     onSelectCategory = { cat, retry -> selectCategory(cat, retry) },
                     onLoadMoreFeed = { loadMoreFeed() },
-                    onMoreSearchResults = { moreSearchResults() },
-                    onLoadMoreBrowse = { loadMoreBrowse() },
+                    onMoreSearchResults = { searchState.moreSearchResults(scope, loading) },
+                    onLoadMoreBrowse = { browse.loadMoreBrowse(scope) },
                     onSubscribeChannel = { channelId, sub, hint -> subscribeChannelId(channelId, sub, hint) },
                     onNotificationPreference = { channelId, pref -> setChannelNotificationPref(channelId, pref) },
-                    onLoadChannelTab = { tab -> loadChannelTab(tab) },
+                    onLoadChannelTab = { tab -> browse.loadChannelTab(tab, scope, loading, { loading = it }, { error = it }) },
                     onSearch = { query, filter -> search(query, filter) },
                     onOpenChannel = { url -> openChannel(url) },
                     onOpenPlaylist = { url -> openPlaylist(url) },
