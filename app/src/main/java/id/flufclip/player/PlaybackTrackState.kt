@@ -10,6 +10,8 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
@@ -107,6 +109,113 @@ internal class PlaybackTrackState {
         } catch (e: Exception) {
             selectedSubtitle = previous
             android.widget.Toast.makeText(context, "Captions failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun changePreferredAudio(player: ExoPlayer, context: Context, maxVideoHeight: Int, info: StreamInfo, preference: AudioPreference) {
+        PlayerSettings.updateAudioPreference(preference)
+        manualAudioOverride = false
+        attemptedAudioFallback = null
+        configurePreferredAudio(player, info, preference)
+        if (VideoRepository.embeddedAudio(info, quality) != null) {
+            val tracks = VideoRepository.embeddedAudio(info)
+            val preferred = selectEmbeddedAudio(tracks, preference, java.util.Locale.getDefault())
+            val height = player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
+            val video = tracks.filter { it.metadata.id == preferred?.metadata?.id }.minByOrNull {
+                kotlin.math.abs((it.video.height.takeIf { value -> value > 0 } ?: it.video.resolution.filter(Char::isDigit).toIntOrNull() ?: 0) - height)
+            }?.video
+            if (video != null && video.content != quality?.content) {
+                try {
+                    playQuality(player, context, maxVideoHeight, info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                    selectedAudio = null
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
+        val chosen = selectAudioTrack(audioTracks(info), preference, java.util.Locale.getDefault())
+        if (usesAdaptiveAudio(info)) {
+            selectedAudio = chosen
+            return
+        }
+        if (chosen == null || chosen == selectedAudio && quality?.isVideoOnly == true) return
+        val candidates = VideoRepository.videos(info).filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+        val height = quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
+        val video = quality?.takeIf { it.isVideoOnly && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+            ?: candidates.minByOrNull { kotlin.math.abs(it.height - height) }
+        if (video != null) {
+            try {
+                playQuality(player, context, maxVideoHeight, info, video, chosen, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                selectedAudio = chosen
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    fun selectManifestAudio(player: ExoPlayer, info: StreamInfo, group: Tracks.Group, indices: List<Int>) {
+        manualAudioOverride = true
+        val format = group.getTrackFormat(indices.first())
+        val lang = audioLocale(format.language)?.toLanguageTag()
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(lang)
+            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, indices)).build()
+        val matching = audioTracks(info).filter { audioLocale(audioLanguage(it))?.language == audioLocale(lang)?.language && lang != null }
+        selectedAudio = matching.singleOrNull() ?: matching.firstOrNull { !format.label.isNullOrBlank() && it.audioTrackName.equals(format.label, ignoreCase = true) }
+    }
+    fun selectEmbeddedAudio(player: ExoPlayer, context: Context, maxVideoHeight: Int, info: StreamInfo, metadata: AudioTrackMetadata) {
+        manualAudioOverride = true
+        val height = quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
+        fun heightOf(video: VideoStream) = video.height.takeIf { it > 0 } ?: (video.resolution.filter(Char::isDigit).toIntOrNull() ?: 0)
+        val video = VideoRepository.embeddedAudio(info).filter { it.metadata.id == metadata.id }
+            .minByOrNull { kotlin.math.abs(heightOf(it.video) - height) }?.video
+        if (video == null) {
+            android.widget.Toast.makeText(context, "No stream found for ${metadata.name}", android.widget.Toast.LENGTH_LONG).show()
+        } else {
+            try {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO).build()
+                playQuality(player, context, maxVideoHeight, info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                selectedAudio = null
+            } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
+        }
+    }
+    fun selectStreamQuality(player: ExoPlayer, context: Context, maxVideoHeight: Int, info: StreamInfo, stream: VideoStream?) {
+        if (stream != quality) {
+            val position = player.currentPosition.coerceAtLeast(0L)
+            val playing = player.playWhenReady
+            val audio = selectedAudio ?: selectAudioTrack(audioTracks(info), PlayerSettings.audioPreference, java.util.Locale.getDefault())
+            try { playQuality(player, context, maxVideoHeight, info, stream, audio, position, playing, forceDirectPlayback && stream?.isVideoOnly == true) }
+            catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change quality: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
+        }
+    }
+    fun selectAudio(player: ExoPlayer, context: Context, maxVideoHeight: Int, info: StreamInfo, audio: AudioStream?) {
+        manualAudioOverride = true
+        val language = audioLanguage(audio)
+        val manifestHasLanguage = language != null && player.currentTracks.groups.any { group ->
+            group.type == C.TRACK_TYPE_AUDIO && (0 until group.length).any { index ->
+                group.isTrackSupported(index) && audioLocale(group.getTrackFormat(index).language)?.language == audioLocale(language)?.language
+            }
+        }
+        if (usesAdaptiveAudio(info) && manifestHasLanguage) {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(language).build()
+            selectedAudio = audio
+        } else if (audio != selectedAudio || quality?.isVideoOnly != true) {
+            val separate = VideoRepository.videos(info).filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+            val currentHeight = quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
+            val video = quality?.takeIf { it.isVideoOnly && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+                ?: separate.minByOrNull { kotlin.math.abs(it.height - currentHeight) }
+            if (video == null) {
+                android.widget.Toast.makeText(context, "Audio selection is unavailable for this video format", android.widget.Toast.LENGTH_LONG).show()
+            } else {
+                try {
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(language).build()
+                    playQuality(player, context, maxVideoHeight, info, video, audio, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                    selectedAudio = audio
+                } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
+            }
         }
     }
 

@@ -1023,112 +1023,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
     }
     /** Kualitas video dan jalur audio awal untuk [info]. */
-    fun changePreferredAudio(info: StreamInfo, preference: AudioPreference) {
-        PlayerSettings.updateAudioPreference(preference)
-        trackState.manualAudioOverride = false
-        trackState.attemptedAudioFallback = null
-        configurePreferredAudio(player, info, preference)
-        if (VideoRepository.embeddedAudio(info, trackState.quality) != null) {
-            val tracks = VideoRepository.embeddedAudio(info)
-            val preferred = selectEmbeddedAudio(tracks, preference, java.util.Locale.getDefault())
-            val height = player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
-            val video = tracks.filter { it.metadata.id == preferred?.metadata?.id }.minByOrNull {
-                kotlin.math.abs((it.video.height.takeIf { value -> value > 0 } ?: it.video.resolution.filter(Char::isDigit).toIntOrNull() ?: 0) - height)
-            }?.video
-            if (video != null && video.content != trackState.quality?.content) {
-                try {
-                    trackState.playQuality(player, context, maxVideoHeight, info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
-                    trackState.selectedAudio = null
-                } catch (e: Exception) {
-                    android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                }
-            }
-            return
-        }
-        val chosen = selectAudioTrack(audioTracks(info), preference, java.util.Locale.getDefault())
-        if (trackState.usesAdaptiveAudio(info)) {
-            trackState.selectedAudio = chosen
-            return
-        }
-        if (chosen == null || chosen == trackState.selectedAudio && trackState.quality?.isVideoOnly == true) return
-        val candidates = VideoRepository.videos(info).filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-        val height = trackState.quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
-        val video = trackState.quality?.takeIf { it.isVideoOnly && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-            ?: candidates.minByOrNull { kotlin.math.abs(it.height - height) }
-        if (video != null) {
-            try {
-                trackState.playQuality(player, context, maxVideoHeight, info, video, chosen, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
-                trackState.selectedAudio = chosen
-            } catch (e: Exception) {
-                android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-    fun selectManifestAudio(info: StreamInfo, group: Tracks.Group, indices: List<Int>) {
-        trackState.manualAudioOverride = true
-        val format = group.getTrackFormat(indices.first())
-        val lang = audioLocale(format.language)?.toLanguageTag()
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(lang)
-            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, indices)).build()
-        val matching = audioTracks(info).filter { audioLocale(audioLanguage(it))?.language == audioLocale(lang)?.language && lang != null }
-        trackState.selectedAudio = matching.singleOrNull() ?: matching.firstOrNull { !format.label.isNullOrBlank() && it.audioTrackName.equals(format.label, ignoreCase = true) }
-    }
-    fun selectEmbeddedAudio(info: StreamInfo, metadata: AudioTrackMetadata) {
-        trackState.manualAudioOverride = true
-        val height = trackState.quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
-        fun heightOf(video: VideoStream) = video.height.takeIf { it > 0 } ?: (video.resolution.filter(Char::isDigit).toIntOrNull() ?: 0)
-        val video = VideoRepository.embeddedAudio(info).filter { it.metadata.id == metadata.id }
-            .minByOrNull { kotlin.math.abs(heightOf(it.video) - height) }?.video
-        if (video == null) {
-            android.widget.Toast.makeText(context, "No stream found for ${metadata.name}", android.widget.Toast.LENGTH_LONG).show()
-        } else {
-            try {
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO).build()
-                trackState.playQuality(player, context, maxVideoHeight, info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
-                trackState.selectedAudio = null
-            } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
-        }
-    }
-    fun selectStreamQuality(info: StreamInfo, stream: VideoStream?) {
-        if (stream != trackState.quality) {
-            val position = player.currentPosition.coerceAtLeast(0L)
-            val playing = player.playWhenReady
-            val audio = trackState.selectedAudio ?: selectAudioTrack(audioTracks(info), PlayerSettings.audioPreference, java.util.Locale.getDefault())
-            try { trackState.playQuality(player, context, maxVideoHeight, info, stream, audio, position, playing, trackState.forceDirectPlayback && stream?.isVideoOnly == true) }
-            catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change quality: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
-        }
-    }
-    fun selectAudio(info: StreamInfo, audio: AudioStream?) {
-        trackState.manualAudioOverride = true
-        val language = audioLanguage(audio)
-        val manifestHasLanguage = language != null && player.currentTracks.groups.any { group ->
-            group.type == C.TRACK_TYPE_AUDIO && (0 until group.length).any { index ->
-                group.isTrackSupported(index) && audioLocale(group.getTrackFormat(index).language)?.language == audioLocale(language)?.language
-            }
-        }
-        if (trackState.usesAdaptiveAudio(info) && manifestHasLanguage) {
-            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(language).build()
-            trackState.selectedAudio = audio
-        } else if (audio != trackState.selectedAudio || trackState.quality?.isVideoOnly != true) {
-            val separate = VideoRepository.videos(info).filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-            val currentHeight = trackState.quality?.height ?: player.videoFormat?.height?.takeIf { it > 0 } ?: maxVideoHeight
-            val video = trackState.quality?.takeIf { it.isVideoOnly && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
-                ?: separate.minByOrNull { kotlin.math.abs(it.height - currentHeight) }
-            if (video == null) {
-                android.widget.Toast.makeText(context, "Audio selection is unavailable for this video format", android.widget.Toast.LENGTH_LONG).show()
-            } else {
-                try {
-                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                        .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(language).build()
-                    trackState.playQuality(player, context, maxVideoHeight, info, video, audio, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
-                    trackState.selectedAudio = audio
-                } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
-            }
-        }
-    }
     fun setMaxVideoHeightPreference(height: Int) {
         maxVideoHeight = height
         watchPrefs.edit().putInt("max_video_height", height).apply()
@@ -2118,21 +2012,21 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 onQualityModeChange = { trackState.qualityMode = it },
                 onLockPlayer = { playerLocked = true; showQuality = false },
                 usesAdaptiveAudio = trackState.usesAdaptiveAudio(info),
-                onAudioPreference = { changePreferredAudio(info, it) },
+                onAudioPreference = { trackState.changePreferredAudio(player, context, maxVideoHeight, info, it) },
                 onSelectManifestAudio = { group, indices ->
-                    selectManifestAudio(info, group, indices)
+                    trackState.selectManifestAudio(player, info, group, indices)
                     showQuality = false
                 },
                 onSelectEmbeddedAudio = { metadata ->
-                    selectEmbeddedAudio(info, metadata)
+                    trackState.selectEmbeddedAudio(player, context, maxVideoHeight, info, metadata)
                     showQuality = false
                 },
                 onSelectStreamQuality = { stream ->
-                    selectStreamQuality(info, stream)
+                    trackState.selectStreamQuality(player, context, maxVideoHeight, info, stream)
                     showQuality = false
                 },
                 onSelectAudioTrack = { audio ->
-                    selectAudio(info, audio)
+                    trackState.selectAudio(player, context, maxVideoHeight, info, audio)
                     showQuality = false
                 },
                 onSetMaxVideoHeight = { height -> setMaxVideoHeightPreference(height) },
