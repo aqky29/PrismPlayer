@@ -1177,7 +1177,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             val playing = player.playWhenReady
             val audio = trackState.selectedAudio ?: selectAudioTrack(audioTracks(info), PlayerSettings.audioPreference, java.util.Locale.getDefault())
             try { playQuality(info, stream, audio, position, playing, trackState.forceDirectPlayback && stream?.isVideoOnly == true) }
-            catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change trackState.quality: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
+            catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change quality: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
         }
     }
     fun selectAudio(info: StreamInfo, audio: AudioStream?) {
@@ -1313,7 +1313,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
     }
     // A direct stream selected automatically for a preferred audio track can stall even when the
-    // original HLS stream is available. Try HLS once without changing saved trackState.quality preferences.
+    // original HLS stream is available. Try HLS once without changing saved quality preferences.
     LaunchedEffect(selected, pendingVideo, shortsMode, trackState.forceDirectPlayback, trackState.attemptedAudioFallback, trackState.manualAudioOverride, trackState.qualityMode) {
         val info = selected ?: return@LaunchedEffect
         if (pendingVideo != null || !canRecoverAutomaticAudioFallback(trackState.forceDirectPlayback,
