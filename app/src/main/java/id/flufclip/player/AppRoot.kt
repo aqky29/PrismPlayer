@@ -607,74 +607,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
         error = null
     }
-    fun playQuality(info: StreamInfo, stream: VideoStream?, audio: AudioStream?, position: Long, play: Boolean, forceDirect: Boolean = false) {
-        OfflinePlaybackBridge.close()
-        val isLive = info.isOngoingLive()
-        val dashUrl = info.dashMpdUrl?.takeIf { it.isNotBlank() }
-        val hlsUrl = info.hlsUrl?.takeIf { it.isNotBlank() }
-            ?: stream?.takeIf { it.deliveryMethod == DeliveryMethod.HLS }?.content
-        val manifest = if (forceDirect) PlaybackManifest.NONE else playbackManifest(isLive, hlsUrl, dashUrl, VideoRepository.preferLiveDash(info))
-        val adaptive = manifest != PlaybackManifest.NONE
-        android.util.Log.d("FlufMedia", "type=${info.streamType} dur=${info.duration} hls=${hlsUrl?.length ?: -1} dash=${dashUrl?.length ?: -1} manifest=$manifest live=$isLive")
-        val wantedHeight = when {
-            adaptive -> stream?.height?.takeIf { it > 0 } ?: maxVideoHeight
-            stream == null -> maxVideoHeight
-            else -> Int.MAX_VALUE
-        }
-        val parameters = player.trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE, wantedHeight)
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, trackState.selectedSubtitle == null)
-        if (stream != null) parameters.clearOverridesOfType(C.TRACK_TYPE_VIDEO)
-        player.trackSelectionParameters = parameters.build()
-        val factory = youTubeMediaSourceFactory(context)
-        val mediaKey = videoKey(info.url)
-        fun media(url: String, manifestMime: String? = null): MediaItem {
-            val builder = MediaItem.Builder().setUri(url).setMediaId(mediaKey)
-            if (manifestMime != null) builder.setMimeType(manifestMime)
-            if (isLive) builder.setLiveConfiguration(MediaItem.LiveConfiguration.Builder()
-                .setTargetOffsetMs(5_000L).setMinPlaybackSpeed(.97f).setMaxPlaybackSpeed(1.03f).build())
-            trackState.selectedSubtitle?.takeIf { it.isUrl && it.content.isNotBlank() }?.let { sub ->
-                val mime = when (sub.format?.suffix?.lowercase()) { "vtt" -> MimeTypes.TEXT_VTT; "ttml" -> MimeTypes.APPLICATION_TTML; "srt" -> MimeTypes.APPLICATION_SUBRIP; else -> null }
-                if (mime != null) builder.setSubtitleConfigurations(listOf(MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.content)).setMimeType(mime).setLanguage(sub.languageTag).setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT).build()))
-            }
-            return builder.build()
-        }
-        fun plain(url: String): MediaItem = MediaItem.Builder().setUri(url).setMediaId(mediaKey).build()
-        val source = when {
-            manifest == PlaybackManifest.HLS -> factory.createMediaSource(media(hlsUrl!!, MimeTypes.APPLICATION_M3U8))
-            manifest == PlaybackManifest.DASH -> factory.createMediaSource(media(dashUrl!!, MimeTypes.APPLICATION_MPD))
-            stream != null && stream.deliveryMethod == DeliveryMethod.HLS -> factory.createMediaSource(media(stream.content, MimeTypes.APPLICATION_M3U8))
-            stream != null && stream.isVideoOnly && audio != null -> MergingMediaSource(factory.createMediaSource(media(stream.content)), factory.createMediaSource(plain(audio.content)))
-            stream != null && !stream.isVideoOnly -> factory.createMediaSource(media(stream.content))
-            stream == null && hlsUrl != null -> factory.createMediaSource(media(hlsUrl, MimeTypes.APPLICATION_M3U8))
-            else -> error("No playable video format is available.")
-        }
-        if (position > 0) player.setMediaSource(source, position) else player.setMediaSource(source)
-        trackState.attachedSubtitle = trackState.selectedSubtitle
-        trackState.attachedSubtitleVideo = mediaKey
-        trackState.quality = stream
-        trackState.forceDirectPlayback = forceDirect
-        player.prepare()
-        player.playWhenReady = play
-    }
-    fun changeSubtitle(info: StreamInfo, subtitle: SubtitlesStream?) {
-        val previous = trackState.selectedSubtitle
-        try {
-            if (subtitle == null || (trackState.attachedSubtitleVideo == videoKey(info.url) && trackState.attachedSubtitle == subtitle)) {
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, subtitle == null).build()
-                trackState.selectedSubtitle = subtitle
-            } else {
-                val position = player.currentPosition.coerceAtLeast(0L)
-                val playing = player.playWhenReady
-                trackState.selectedSubtitle = subtitle
-                playQuality(info, trackState.quality, trackState.selectedAudio, position, playing, trackState.forceDirectPlayback)
-            }
-            if (subtitle != null) trackState.lastSubtitle = subtitle
-        } catch (e: Exception) {
-            trackState.selectedSubtitle = previous
-            android.widget.Toast.makeText(context, "Captions failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-        }
-    }
     BackHandler(shortsMode || showHistory || fullscreen || searchState.active || (selected != null && !minimized) || accountPlaylist != null || browse.playlist != null || browse.channel != null || searchState.mode || mainTab != "home") { back() }
     fun loadHome(refresh: Boolean = false) {
         if (loading || feedState.feedLoading) return
@@ -1105,7 +1037,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }?.video
             if (video != null && video.content != trackState.quality?.content) {
                 try {
-                    playQuality(info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                    trackState.playQuality(player, context, maxVideoHeight, info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
                     trackState.selectedAudio = null
                 } catch (e: Exception) {
                     android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
@@ -1125,7 +1057,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             ?: candidates.minByOrNull { kotlin.math.abs(it.height - height) }
         if (video != null) {
             try {
-                playQuality(info, video, chosen, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                trackState.playQuality(player, context, maxVideoHeight, info, video, chosen, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
                 trackState.selectedAudio = chosen
             } catch (e: Exception) {
                 android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
@@ -1154,7 +1086,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             try {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                     .clearOverridesOfType(C.TRACK_TYPE_AUDIO).build()
-                playQuality(info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                trackState.playQuality(player, context, maxVideoHeight, info, video, null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
                 trackState.selectedAudio = null
             } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
         }
@@ -1164,7 +1096,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             val position = player.currentPosition.coerceAtLeast(0L)
             val playing = player.playWhenReady
             val audio = trackState.selectedAudio ?: selectAudioTrack(audioTracks(info), PlayerSettings.audioPreference, java.util.Locale.getDefault())
-            try { playQuality(info, stream, audio, position, playing, trackState.forceDirectPlayback && stream?.isVideoOnly == true) }
+            try { trackState.playQuality(player, context, maxVideoHeight, info, stream, audio, position, playing, trackState.forceDirectPlayback && stream?.isVideoOnly == true) }
             catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change quality: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
         }
     }
@@ -1191,7 +1123,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 try {
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                         .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguage(language).build()
-                    playQuality(info, video, audio, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+                    trackState.playQuality(player, context, maxVideoHeight, info, video, audio, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
                     trackState.selectedAudio = audio
                 } catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change audio: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
             }
@@ -1219,7 +1151,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         configurePreferredAudio(player, info, PlayerSettings.audioPreference)
         // Saved positions are relative to an older moving DVR window, not the current live edge.
         if (info.isOngoingLive()) player.setPlaybackSpeed(1f)
-        playQuality(info, initial, audio, if (info.isOngoingLive()) 0L else resume, true)
+        trackState.playQuality(player, context, maxVideoHeight, info, initial, audio, if (info.isOngoingLive()) 0L else resume, true)
         trackState.selectedAudio = audio
         selected = info
         minimized = startMinimized
@@ -1280,7 +1212,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         val video = separateVideo ?: embeddedVideo ?: return@LaunchedEffect
         trackState.attemptedAudioFallback = fallbackKey
         try {
-            playQuality(info, video, if (separateVideo != null) audio else null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
+            trackState.playQuality(player, context, maxVideoHeight, info, video, if (separateVideo != null) audio else null, player.currentPosition.coerceAtLeast(0L), player.playWhenReady, forceDirect = true)
             trackState.selectedAudio = if (separateVideo != null) audio else null
         } catch (e: Exception) {
             android.util.Log.w("FlufPlayback", "preferred audio fallback failed: ${e.javaClass.simpleName}")
@@ -1306,7 +1238,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         val position = player.currentPosition.coerceAtLeast(0L)
                         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                             .clearOverridesOfType(C.TRACK_TYPE_VIDEO).build()
-                        playQuality(info, null, null, position, true, forceDirect = false)
+                        trackState.playQuality(player, context, maxVideoHeight, info, null, null, position, true, forceDirect = false)
                         android.util.Log.i("FlufPlayback", "automatic audio fallback stalled; retrying HLS")
                         android.widget.Toast.makeText(context, "Switching stream to reduce buffering", android.widget.Toast.LENGTH_SHORT).show()
                     } catch (e: Exception) {
@@ -1816,7 +1748,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         VideoRepository.evict(old.url)
         val fresh = kotlinx.coroutines.withTimeout(30_000L) { VideoRepository.resolve(old.url, context) }
         if (currentSelected.value?.let { videoKey(it.url) } == videoKey(old.url) && !currentShortsMode.value && currentPending.value == null) {
-            playQuality(fresh, trackState.quality, trackState.selectedAudio, position, player.playWhenReady, trackState.forceDirectPlayback)
+            trackState.playQuality(player, context, maxVideoHeight, fresh, trackState.quality, trackState.selectedAudio, position, player.playWhenReady, trackState.forceDirectPlayback)
             selected = fresh
         }
     }
@@ -2204,7 +2136,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     showQuality = false
                 },
                 onSetMaxVideoHeight = { height -> setMaxVideoHeightPreference(height) },
-                onChangeSubtitle = { subtitle -> changeSubtitle(info, subtitle) },
+                onChangeSubtitle = { subtitle -> trackState.changeSubtitle(player, context, maxVideoHeight, info, subtitle) },
                 onOpenLink = { url -> openLink(info, url) },
                 onShareVideo = { shareVideo(info) },
                 onRemixVideo = { closePlayer(); selectTab("shorts") },
@@ -2327,7 +2259,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     onAutoplay = { autoplay = !autoplay; watchPrefs.edit().putBoolean("autoplay", autoplay).apply() },
                     onSubtitles = {
                         val subtitle = if (trackState.selectedSubtitle != null) null else trackState.lastSubtitle ?: playing.subtitles.firstOrNull { it.isUrl && it.format?.suffix?.lowercase() in listOf("vtt", "ttml", "srt") }
-                        changeSubtitle(playing, subtitle)
+                        trackState.changeSubtitle(player, context, maxVideoHeight, playing, subtitle)
                     },
                     onBack = { back() }, onSettings = { qualityInitialPage = "menu"; showQuality = true }, onFullscreen = { setFullscreen(!fullscreen) },
                     onExpand = { minimized = false }, onClose = { closePlayer() },
