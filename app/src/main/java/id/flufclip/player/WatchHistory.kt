@@ -270,10 +270,46 @@ internal object WatchHistory {
             playlistVideoCount = resolvedPlaylistCount,
         )
         val videos = (listOf(entry) + existingList.filterNot { it.url == url }).take(100)
+        livePositions[vid] = saved
+        prefs.edit().putLong("resume_$vid", saved).apply()
         write(prefs, videos)
     }
-    fun remove(prefs: SharedPreferences, url: String) = write(prefs, readRaw(prefs).filterNot { it.url == url })
-    fun clear(prefs: SharedPreferences) { prefs.edit().remove("videos").apply() }
+    fun remove(prefs: SharedPreferences, url: String) {
+        val vid = videoKey(url)
+        livePositions.remove(vid)
+        prefs.edit().remove("resume_$vid").apply()
+        write(prefs, readRaw(prefs).filterNot { it.url == url })
+    }
+    fun clear(prefs: SharedPreferences) {
+        livePositions.clear()
+        prefs.edit().remove("videos").apply()
+    }
+
+    private val livePositions = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /**
+     * Menyimpan posisi pemutaran secara instan dan ringan (hanya key-value Long)
+     * tanpa membaca/menulis ulang seluruh array JSON (100 item) dan tanpa
+     * memicu rekomposisi Compose di tengah pemutaran video.
+     */
+    fun recordPlaybackPosition(prefs: SharedPreferences, url: String, position: Long, duration: Long) {
+        val saved = if (duration > 0 && position >= duration - 5000) 0L else position
+        val vid = videoKey(url)
+        livePositions[vid] = saved
+        prefs.edit().putLong("resume_$vid", saved).apply()
+    }
+
+    /**
+     * Mengambil posisi resume terakhir untuk video tertentu.
+     * Mengutamakan posisi terbaru di memori/SharedPreferences, lalu fallback ke riwayat tontonan.
+     */
+    fun getResumePosition(prefs: SharedPreferences, url: String, fallbackList: List<WatchedVideo> = emptyList()): Long {
+        val vid = videoKey(url)
+        livePositions[vid]?.let { return it }
+        val saved = prefs.getLong("resume_$vid", -1L)
+        if (saved >= 0L) return saved
+        return fallbackList.firstOrNull { videoKey(it.url) == vid }?.position ?: 0L
+    }
 }
 
 private fun historyDate(timestamp: Long): LocalDate? = if (timestamp > 0) runCatching {

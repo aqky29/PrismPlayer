@@ -559,6 +559,66 @@ Jalankan setelah Fase 1, setelah Fase 3, dan setelah setiap tugas Fase 4.
 - [ ] PiP: tekan Home saat video diputar
 - [ ] Ganti akun / logout: beranda dan Subscriptions kosong lalu dimuat ulang
 
+### 10.1 Hasil uji di perangkat
+
+Perangkat: emulator Pixel Tablet (Android 16 / API 36, 2560×1600, landscape), dipasang dengan
+`pixeltablet install`. APK selalu di-build ulang dari HEAD sebelum diuji. `pixeltablet install`
+hanya mem-build bila APK belum ada, jadi APK lama harus dipindah atau dihapus dulu.
+
+#### Setelah Fase 1 (2026-11-06, commit `404d36d`)
+
+Hash normalisasi §4.3 sama sebelum (`923d90a`) dan sesudah: `30d6951965a7f9dd296413eee2236559`.
+Tidak ada file di luar `app/src/main/java` yang berubah.
+
+| Checklist | Hasil |
+|---|---|
+| Beranda, pull-to-refresh, paging | ✔ |
+| Tab atas Home / Subs / Music / Live / More (chip Gaming) | ✔ |
+| Not interested / Don't recommend channel | ✔ |
+| Pencarian: saran, riwayat, filter, scroll | ✔ |
+| Tempel URL video / playlist | ✔ |
+| Channel: header, tab, bagikan, sheet lonceng | ✔ (tombol Subscribe tidak ditekan) |
+| Halaman tonton: like/dislike, simpan, komentar, deskripsi, bab, chat live | ✔ |
+| Mini player, stash, buka lagi | ✔ |
+| Fullscreen, geser keluar, rotasi | ✔ |
+| Dialog kualitas: kualitas, subtitle, autoplay | ✔ (pilihan audio tidak diganti) |
+| Unduh dari halaman tonton dan Shorts; banner Cancel / Open / Close | ✔ |
+| Shorts: geser, like, simpan; Shorts dari rak Subs | ✔ |
+| Subscriptions: feed, chip, rail, video member | ✔ |
+| You: riwayat akun & perangkat, hapus entri, playlist akun, Play all | ✔ |
+| PiP | ✔ |
+| Ganti akun / logout | **belum diuji** (butuh login ulang manual) |
+
+Tidak ada crash aplikasi.
+
+#### Setelah Fase 3 (2026-11-06, commit `b348e38`)
+
+Fokus ke bagian yang disentuh Fase 2–3:
+
+| Tugas | Yang diuji | Hasil |
+|---|---|---|
+| 2.1 `AppChrome` | Bar atas, tab beranda, daftar saran pencarian | ✔ |
+| 2.2 handler playlist akun | Short dari Saved Shorts terbuka di layar Shorts; item ke-3 Liked membuka antrean "Liked videos 3/34"; Play all mulai dari item 1 | ✔ |
+| 3.1 `SearchHistoryStore` | Riwayat lama terbaca, kata baru tersimpan, hapus item | ✔ |
+| 3.2 `SubscriptionsState` | Feed, chip Membership & Shorts, paging, rail channel, Short dari rak | ✔ |
+| 3.3 `HiddenFeedItems` | Item tersembunyi dari Fase 1 tetap tersembunyi; Not interested baru langsung jalan | ✔ |
+| 3.4 `AccountHistoryState` | Riwayat akun di tab You, View all, hapus entri | ✔ |
+
+Tidak ada crash aplikasi. Satu crash di buffer berasal dari `com.google.android.bluetooth`
+(emulator), bukan dari FlufPlay.
+
+**Belum diuji:**
+- Ganti akun / logout. Langkah ini juga menguji `subs.reset()` dan `hidden.reset()`.
+- Pemutar, kualitas, dan PiP di build Fase 3 (bagian ini tidak disentuh Fase 2–3).
+- Banner unduhan versi `AppChrome` (Fase 2.1).
+
+#### Bug yang sudah ada sebelum refactor (bukan regresi, kodenya identik)
+1. Header channel menampilkan "Subscribe" untuk channel yang sudah di-subscribe (halaman tonton benar). Teks nama channel juga tertimpa banner.
+2. Setelah ganti subtitle, kualitas manual (mis. 1080p) kembali ke 720p.
+3. Antrean "Play all" dari playlist akun tetap menempel di video yang dibuka lewat URL.
+4. Tombol cari di bottom nav tidak menampilkan kolom pencarian selama layar playlist akun terbuka.
+5. Menu kualitas menampilkan "Auto" untuk preset Data saver/Higher (`QualityDialog.kt`, `qualityLabel`).
+
 ---
 
 ## 11. Masalah yang mungkin muncul

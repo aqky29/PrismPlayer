@@ -1422,7 +1422,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 val startMinimized = pendingVideo?.url == url && minimized
                 val key = videoKey(info.url).ifBlank { videoKey(url) }
                 val localResume = if (resumeLocal) {
-                    watchHistory.firstOrNull { videoKey(it.url) == key }?.position ?: 0L
+                    WatchHistory.getResumePosition(watchPrefs, info.url.ifBlank { url }, watchHistory)
                 } else 0L
                 val previewResume = pendingVideo?.resumePositionMs ?: preview.resumePositionMs ?: 0L
                 val meta = HomeFeed.metaOf(info.url) ?: HomeFeed.metaOf(url)
@@ -1983,7 +1983,17 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     }
     DisposableEffect(player) { onDispose { PlaybackTracker.stop(sendFinal = false) } }
     LaunchedEffect(selected) {
-        while (selected != null) { delay(5000); savePosition() }
+        while (selected != null) {
+            delay(5000)
+            selected?.let { info ->
+                WatchHistory.recordPlaybackPosition(
+                    watchPrefs,
+                    info.url,
+                    player.currentPosition.coerceAtLeast(0),
+                    player.duration
+                )
+            }
+        }
     }
     fun openLink(info: StreamInfo, url: String) {
         timestampSeconds(url, info.id)?.let { seconds -> player.seekTo(seconds * 1000L); player.play(); return }
