@@ -119,7 +119,8 @@ internal fun AccountPlaylistScreen(
         }
     }
 
-    FrostedGlassBackdropHost(Modifier.fillMaxSize().background(PlaylistBackground).statusBarsPadding().navigationBarsPadding()) {
+    val bottomNavAutoHide = rememberBottomNavAutoHideState(playlist.id, activeFilter, searching)
+    FrostedGlassBackdropHost(Modifier.fillMaxSize().background(PlaylistBackground).statusBarsPadding().navigationBarsPadding().bottomNavAutoHide(bottomNavAutoHide)) {
         val glassBackdrop = LocalFrostedGlassBackdrop.current
         BoxWithConstraints(Modifier.fillMaxSize().frostedGlassSource(glassBackdrop)) {
             val screenWidth = maxWidth
@@ -165,7 +166,7 @@ internal fun AccountPlaylistScreen(
                 onCloseSearch = { searching = false; query = "" }, onShare = { onSharePlaylist(context, effectivePlaylist) })
         }
         Box(Modifier.align(Alignment.BottomCenter)) {
-            HomeNavigation("you", onNavigate)
+            HomeNavigation("you", onNavigate, visible = bottomNavAutoHide.visible)
         }
     }
 }

@@ -57,12 +57,13 @@ internal fun Modifier.offlineMinimizeGesture(onMinimize: () -> Unit): Modifier {
 
 /** Render the same draggable/pinchable/stashable mini player used by online playback. */
 @Composable
-internal fun OfflineFloatingMini(saved: SavedDownload, player: ExoPlayer, onExpand: () -> Unit, onClose: () -> Unit) {
+internal fun OfflineFloatingMini(saved: SavedDownload, player: ExoPlayer, onExpand: () -> Unit, onClose: () -> Unit, bottomBar: Dp = 78.dp) {
     val scope = rememberCoroutineScope()
     val state = remember(player) { MiniPlayerState(scope) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val limits = MiniLimits.of(maxWidth, maxHeight, 56.dp)
-        LaunchedEffect(limits) { state.limits = limits; state.show() }
+        val limits = MiniLimits.of(maxWidth, maxHeight, bottomBar)
+        state.limits = limits
+        LaunchedEffect(limits) { state.settle(animate = true) }
         val w = state.width.value.takeIf { it > 0 } ?: limits.default
         val p = state.position.value
         FloatingPlayer(
@@ -132,10 +133,11 @@ internal object OfflinePlaybackBridge {
 }
 
 @Composable
-internal fun OfflineMiniOverlay() {
+internal fun OfflineMiniOverlay(bottomBar: Dp = 78.dp) {
     val current = OfflinePlaybackBridge.session ?: return
     val context = LocalContext.current
     OfflineFloatingMini(current.saved, current.player,
         onExpand = { context.startActivity(SavedDownloads.openIntent(context, current.saved)) },
-        onClose = { OfflinePlaybackBridge.close() })
+        onClose = { OfflinePlaybackBridge.close() },
+        bottomBar = bottomBar)
 }

@@ -134,11 +134,98 @@ import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.AudioTrackType
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 
-@Composable internal fun HomeNavigation(selected: String, onSelect: (String) -> Unit) {
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlin.math.roundToInt
+
+/**
+ * State auto-hide untuk Floating Bottom Navigation di layar mobile.
+ * Menyembunyikan bilah navigasi saat pengguna menggulir ke bawah dan memunculkannya kembali saat menggulir ke atas.
+ */
+@Stable
+internal class BottomNavAutoHideState(
+    private val hideThresholdPx: Float,
+    private val showThresholdPx: Float,
+) {
+    var visible by mutableStateOf(true)
+        private set
+
+    private var accumulatedDy = 0f
+
+    fun show() {
+        visible = true
+        accumulatedDy = 0f
+    }
+
+    val nestedScrollConnection = object : NestedScrollConnection {
+        override fun onPostScroll(
+            consumed: Offset,
+            available: Offset,
+            source: NestedScrollSource
+        ): Offset {
+            val dy = when {
+                consumed.y != 0f -> consumed.y
+                !visible && available.y > 0f && source == NestedScrollSource.UserInput -> available.y
+                else -> 0f
+            }
+            if (dy < 0f) {
+                if (accumulatedDy > 0f) accumulatedDy = 0f
+                accumulatedDy += dy
+                if (accumulatedDy <= -hideThresholdPx) {
+                    visible = false
+                    accumulatedDy = 0f
+                }
+            } else if (dy > 0f) {
+                if (accumulatedDy < 0f) accumulatedDy = 0f
+                accumulatedDy += dy
+                if (accumulatedDy >= showThresholdPx || (consumed.y > 0f && available.y > 0f)) {
+                    visible = true
+                    accumulatedDy = 0f
+                }
+            }
+            return Offset.Zero
+        }
+    }
+}
+
+@Composable
+internal fun rememberBottomNavAutoHideState(vararg resetKeys: Any?): BottomNavAutoHideState {
+    val density = LocalDensity.current
+    val state = remember(density) {
+        BottomNavAutoHideState(
+            hideThresholdPx = with(density) { 18.dp.toPx() },
+            showThresholdPx = with(density) { 10.dp.toPx() },
+        )
+    }
+    LaunchedEffect(*resetKeys) {
+        state.show()
+    }
+    return state
+}
+
+internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier =
+    nestedScroll(state.nestedScrollConnection)
+
+@Composable internal fun HomeNavigation(
+    selected: String,
+    onSelect: (String) -> Unit,
+    visible: Boolean = true,
+) {
     // Floating Frosted Pill Navigation Bar:
     // - Latar luar sepenuhnya transparan (tidak ada blok hitam penghalang di belakangnya).
     // - Kapsul mengambang menggunakan Frosted Glass (blur backdrop resolusi rendah + vibrancy + specular border).
     // - Pill indikator abu-abu dapat berpindah dengan animasi spring saat diketuk maupun digeser (interactive slide).
+    // - Di mobile (screenWidthDp < 600), dapat auto-hide saat scroll ke bawah dan muncul kembali saat scroll ke atas.
+    val isMobile = LocalConfiguration.current.screenWidthDp < 600
+    val effectiveVisible = if (isMobile) visible else true
+    val hideProgress by animateFloatAsState(
+        targetValue = if (effectiveVisible) 0f else 1f,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+        label = "bottomNavAutoHide"
+    )
+    if (hideProgress >= 0.999f) return
+
     val isDark = isSystemInDarkTheme() || true
     val pillColor = if (isDark) Color(0xFF3E3E3E).copy(alpha = 0.85f) else Color(0xFFE5E5E5).copy(alpha = 0.90f)
     val pillBorderColor = if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
@@ -169,11 +256,16 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         derivedStateOf { pillProgress.value.let { kotlin.math.round(it).toInt().coerceIn(0, 3) } }
     }
 
+    val density = LocalDensity.current
+    val slideDistancePx = with(density) { 96.dp.toPx() }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 10.dp),
+            .padding(horizontal = 24.dp, vertical = 10.dp)
+            .offset { IntOffset(0, (hideProgress * slideDistancePx).roundToInt()) }
+            .graphicsLayer { alpha = (1f - hideProgress).coerceIn(0f, 1f) },
         contentAlignment = Alignment.Center
     ) {
         // FLOATING FROSTED PILL CONTAINER (Compact Centered Dock pada Tablet/Layar Besar maks 380.dp)
@@ -193,7 +285,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 .padding(horizontal = 6.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            val density = LocalDensity.current
             val totalWidthPx = with(density) { maxWidth.toPx() }
             val slotWidthPx = totalWidthPx / 4f
             val pillWidth = ((maxWidth / 4f) - 12.dp).coerceIn(56.dp, 76.dp)
@@ -219,8 +310,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             Row(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(totalWidthPx) {
-                        if (totalWidthPx <= 0f) return@pointerInput
+                    .pointerInput(totalWidthPx, effectiveVisible) {
+                        if (totalWidthPx <= 0f || !effectiveVisible) return@pointerInput
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             var dragged = false

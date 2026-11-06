@@ -1540,9 +1540,23 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         val wideWatch = isWideWatchLayout(maxWidth, maxHeight)
         val screenWidth = maxWidth
         val screenHeight = maxHeight
+        val bottomNavAutoHide = rememberBottomNavAutoHideState(
+            mainTab,
+            searchState.active,
+            searchState.mode,
+            browse.channel?.info?.url,
+            browse.playlist?.url,
+            feedState.category,
+            feedState.selectedChip,
+            minimized,
+        )
+        val bottomNavVisible = if (screenWidth < 600.dp) bottomNavAutoHide.visible else true
         FrostedGlassBackdropHost(Modifier.fillMaxSize()) {
           val glassBackdrop = LocalFrostedGlassBackdrop.current
-          Box(if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+          Box(
+              (if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding())
+                  .bottomNavAutoHide(bottomNavAutoHide)
+          ) {
             Column(Modifier.fillMaxSize().frostedGlassSource(glassBackdrop)) {
             if (showFeed) FeedTopBar(
                 searchActive = searchState.active, query = searchState.query, onQueryChange = { searchState.query = it }, onSearch = { search() },
@@ -1633,7 +1647,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             val currentNavTab = if (searchState.active || (searchState.mode && !shortsMode)) "search" else if (mainTab == "subscriptions") "home" else mainTab
             if (showFeed) {
                 Box(Modifier.align(Alignment.BottomCenter)) {
-                    HomeNavigation(selected = currentNavTab, onSelect = selectTab)
+                    HomeNavigation(selected = currentNavTab, onSelect = selectTab, visible = bottomNavVisible)
                 }
             }
           }
@@ -1783,7 +1797,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             val playingChatState = activeChatState ?: rememberLiveChat(playing.url, isPlayingLive, playingPostLive, player)
             val insets = if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             BoxWithConstraints(insets) {
-                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active || fullscreen) 0.dp else 78.dp)
+                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active || fullscreen || (minimized && !bottomNavVisible)) 0.dp else 78.dp)
                 miniState.limits = limits
                 LaunchedEffect(limits) { miniState.settle(animate = minimized) }
                 val miniWidth = miniState.width.value.dp
@@ -1870,7 +1884,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             BackHandler(enabled = !minimized) { dragProgress = null; minimized = true }
             if (watchFade < 1f) PendingWatchScreen(pending, watchAlpha = 1f - watchFade, watchOffset = verticalProgress)
             BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active) 0.dp else 78.dp)
+                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active || (minimized && !bottomNavVisible)) 0.dp else 78.dp)
                 miniState.limits = limits
                 LaunchedEffect(limits) { miniState.settle(animate = minimized) }
                 val miniWidth = (miniState.width.value.takeIf { it > 0f } ?: limits.default).dp
@@ -1904,7 +1918,9 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         .offset(y = (miniPosition.y.dp + miniHeight / 2 - 54.dp).coerceAtLeast(0.dp))) { miniState.unstash() }
             }
         }
-        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) { OfflineMiniOverlay() }
+        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            OfflineMiniOverlay(bottomBar = if (searchState.active || !bottomNavVisible) 0.dp else 78.dp)
+        }
       }
     }
 }

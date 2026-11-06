@@ -67,7 +67,8 @@ internal fun DownloadsHome(downloads: List<SavedDownload>, state: DownloadState,
         }
     }
     val filtered = downloads.filter { query.isBlank() || it.title.contains(query, true) || it.video.uploader.contains(query, true) }
-    FrostedGlassBackdropHost(Modifier.fillMaxSize()) {
+    val bottomNavAutoHide = rememberBottomNavAutoHideState(search)
+    FrostedGlassBackdropHost(Modifier.fillMaxSize().bottomNavAutoHide(bottomNavAutoHide)) {
         val glassBackdrop = LocalFrostedGlassBackdrop.current
         Column(Modifier.fillMaxSize().frostedGlassSource(glassBackdrop)) {
             Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -107,7 +108,7 @@ internal fun DownloadsHome(downloads: List<SavedDownload>, state: DownloadState,
             }
         }
         Box(Modifier.align(Alignment.BottomCenter)) {
-            HomeNavigation("you") { openMainFromDownloads(context, "flufplay-tab:$it") }
+            HomeNavigation("you", onSelect = { openMainFromDownloads(context, "flufplay-tab:$it") }, visible = bottomNavAutoHide.visible)
         }
     }
     if (settings) AlertDialog(onDismissRequest = { settings = false }, title = { Text("Downloads") }, text = {

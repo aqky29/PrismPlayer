@@ -459,7 +459,8 @@ private fun historyDateLabel(date: LocalDate?, today: LocalDate): String = when 
         }
         result
     }
-    FrostedGlassBackdropHost(Modifier.fillMaxSize().background(Background).statusBarsPadding().navigationBarsPadding()) {
+    val bottomNavAutoHide = rememberBottomNavAutoHideState(filter, searching)
+    FrostedGlassBackdropHost(Modifier.fillMaxSize().background(Background).statusBarsPadding().navigationBarsPadding().bottomNavAutoHide(bottomNavAutoHide)) {
         val glassBackdrop = LocalFrostedGlassBackdrop.current
         Column(Modifier.fillMaxSize().frostedGlassSource(glassBackdrop)) {
             Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -572,7 +573,7 @@ private fun historyDateLabel(date: LocalDate?, today: LocalDate): String = when 
             }
         }
         Box(Modifier.align(Alignment.BottomCenter)) {
-            HomeNavigation("you", onNavigate)
+            HomeNavigation("you", onNavigate, visible = bottomNavAutoHide.visible)
         }
     }
 }
