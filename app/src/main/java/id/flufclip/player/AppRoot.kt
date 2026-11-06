@@ -1091,19 +1091,11 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
     }
     /** Kualitas video dan jalur audio awal untuk [info]. */
-    fun configurePreferredAudio(info: StreamInfo, preference: AudioPreference) {
-        val languages = preferredAudioLanguages(preference, java.util.Locale.getDefault(), audioTracks(info)).toMutableList()
-        val embeddedOriginal = VideoRepository.embeddedAudio(info).firstOrNull { it.metadata.type == AudioTrackType.ORIGINAL }
-            ?.metadata?.locale?.toLanguageTag()
-        if (!embeddedOriginal.isNullOrBlank() && languages.none { it.equals(embeddedOriginal, ignoreCase = true) }) languages += embeddedOriginal
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            .clearOverridesOfType(C.TRACK_TYPE_AUDIO).setPreferredAudioLanguages(*languages.toTypedArray()).build()
-    }
     fun changePreferredAudio(info: StreamInfo, preference: AudioPreference) {
         PlayerSettings.updateAudioPreference(preference)
         trackState.manualAudioOverride = false
         trackState.attemptedAudioFallback = null
-        configurePreferredAudio(info, preference)
+        configurePreferredAudio(player, info, preference)
         if (VideoRepository.embeddedAudio(info, trackState.quality) != null) {
             val tracks = VideoRepository.embeddedAudio(info)
             val preferred = selectEmbeddedAudio(tracks, preference, java.util.Locale.getDefault())
@@ -1224,27 +1216,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         val (initial, audio) = pickStreams(info, maxVideoHeight)
         trackState.manualAudioOverride = false
         trackState.attemptedAudioFallback = null
-        configurePreferredAudio(info, PlayerSettings.audioPreference)
+        configurePreferredAudio(player, info, PlayerSettings.audioPreference)
         // Saved positions are relative to an older moving DVR window, not the current live edge.
         if (info.isOngoingLive()) player.setPlaybackSpeed(1f)
         playQuality(info, initial, audio, if (info.isOngoingLive()) 0L else resume, true)
         trackState.selectedAudio = audio
         selected = info
         minimized = startMinimized
-    }
-    /** Sumber media satu Short. mediaId = videoKey, supaya item di daftar putar pemutar bisa dikenali. */
-    fun shortSource(info: StreamInfo, stream: VideoStream?, audio: AudioStream?): MediaSource {
-        val key = videoKey(info.url)
-        val factory = youTubeMediaSourceFactory(context)
-        fun item(url: String) = MediaItem.Builder().setUri(url).setMediaId(key).build()
-        return when {
-            stream != null && stream.deliveryMethod == DeliveryMethod.HLS -> youTubeHlsSource(context, stream.content, key)
-            stream != null && stream.isVideoOnly && audio != null -> MergingMediaSource(factory.createMediaSource(item(stream.content)), factory.createMediaSource(MediaItem.fromUri(audio.content)))
-            stream != null && !stream.isVideoOnly -> factory.createMediaSource(item(stream.content))
-            stream == null && !info.hlsUrl.isNullOrBlank() -> youTubeHlsSource(context, info.hlsUrl, key)
-            stream == null && !info.dashMpdUrl.isNullOrBlank() -> youTubeDashSource(context, info.dashMpdUrl, key)
-            else -> error("No playable video format is available.")
-        }
     }
     /**
      * Putar sebuah Short dari awal. Bila Short ini sudah masuk daftar putar pemutar sebagai item berikutnya
@@ -1256,7 +1234,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         trackState.forceDirectPlayback = false
         trackState.manualAudioOverride = false
         trackState.attemptedAudioFallback = null
-        configurePreferredAudio(info, PlayerSettings.audioPreference)
+        configurePreferredAudio(player, info, PlayerSettings.audioPreference)
         val loaded = if (player.playbackState == Player.STATE_IDLE) null else (0 until player.mediaItemCount).firstOrNull { player.getMediaItemAt(it).mediaId == key }
         trackState.selectedSubtitle = null; trackState.lastSubtitle = null; playerLocked = false; trackState.qualityMode = "auto"
         trackState.attachedSubtitle = null; trackState.attachedSubtitleVideo = null
@@ -1269,7 +1247,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         } else {
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO)
                 .setMaxVideoSize(Int.MAX_VALUE, if (stream == null) maxVideoHeight else Int.MAX_VALUE).build()
-            player.setMediaSource(shortSource(info, stream, audio))
+            player.setMediaSource(shortSource(context, info, stream, audio))
             player.prepare()
             player.playWhenReady = true
         }
@@ -1337,20 +1315,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     return@LaunchedEffect
                 }
             } else bufferingSince = null
-        }
-    }
-    /** Tambahkan Short berikutnya ke daftar putar agar ExoPlayer mem-buffernya selagi Short sekarang diputar. */
-    fun preloadNext(current: StreamInfo, next: StreamInfo) {
-        if (player.playbackState == Player.STATE_IDLE || player.currentMediaItem?.mediaId != videoKey(current.url)) return
-        val nextKey = videoKey(next.url)
-        val at = player.currentMediaItemIndex + 1
-        if (player.mediaItemCount > at) {
-            if (player.getMediaItemAt(at).mediaId == nextKey) return
-            player.removeMediaItems(at, player.mediaItemCount)
-        }
-        runCatching {
-            val (stream, audio) = pickStreams(next, maxVideoHeight)
-            player.addMediaSource(shortSource(next, stream, audio))
         }
     }
     var lastRecovered by remember { mutableStateOf<String?>(null) }
@@ -1786,7 +1750,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     LaunchedEffect(shortsMode, selected?.url, nextShortInfo) {
         val next = nextShortInfo ?: return@LaunchedEffect
         val current = selected ?: return@LaunchedEffect
-        if (shortsMode && queue.getOrNull(shorts.index)?.let { videoKey(it.url) } == videoKey(current.url)) preloadNext(current, next)
+        if (shortsMode && queue.getOrNull(shorts.index)?.let { videoKey(it.url) } == videoKey(current.url)) preloadNext(player, context, current, next, maxVideoHeight)
     }
     // Siapkan Short di sekitar halaman aktif selagi yang sekarang diputar.
     LaunchedEffect(shortsMode, shorts.index, queue.size) {
