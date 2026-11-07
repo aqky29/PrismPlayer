@@ -253,20 +253,33 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
         }
     }
 
-    // State pembengkakan tetesan kaca (swell) saat disentuh / di-drag / meluncur
+    // State pembengkakan fisik kapsul (swell) saat disentuh / di-drag
     val swellTarget = when {
         isDraggingPill -> 1f
-        isTouchingActivePill -> 0.38f
-        pillProgress.isRunning -> 0.20f
+        isTouchingActivePill -> 0.42f
+        pillProgress.isRunning -> 0.16f
         else -> 0f
     }
     val swellState = animateFloatAsState(
         targetValue = swellTarget,
         animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = 0.64f,
+            dampingRatio = 0.66f,
             stiffness = 400f
         ),
         label = "liquidPillSwell"
+    )
+
+    // State kejernihan optik lensa (0f = Smoked Dark Glass kalem saat diam; 1f = Lensa bening membiaskan latar saat di-drag)
+    val activeLensTarget = when {
+        isDraggingPill -> 1f
+        isTouchingActivePill -> 0.55f
+        pillProgress.isRunning -> 0.42f
+        else -> 0f
+    }
+    val activeLensState = animateFloatAsState(
+        targetValue = activeLensTarget,
+        animationSpec = tween(durationMillis = if (activeLensTarget > 0f) 150 else 260, easing = FastOutSlowInEasing),
+        label = "liquidPillLensClarity"
     )
 
     // Pelacak kecepatan cairan (aktif hanya saat pill bergerak; saat diam = 0 callback / 0 fps)
@@ -328,22 +341,23 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
                 )
                 .clip(RoundedCornerShape(50))
                 .frostedGlassCapsule(isDark = isDark, borderStrokeWidth = 1.dp)
-                .padding(horizontal = 6.dp),
+                .padding(horizontal = 5.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             val totalWidthPx = with(density) { maxWidth.toPx() }
             val maxHeightPx = with(density) { maxHeight.toPx() }
             val slotWidthPx = totalWidthPx / 4f
-            val pillWidth = ((maxWidth / 4f) - 10.dp).coerceIn(56.dp, 78.dp)
-            val pillHeight = 42.dp
-            // Kanvas tetap sedikit lebih lebar agar efek regangan cair (stretch), swell, & refraksi tepi tidak memicu relayout
-            val canvasWidth = pillWidth + 54.dp
-            val canvasHeight = 56.dp
+            // Geometri konsentris (R_dock = 29.dp, inset = 5.dp -> R_pill = 24.dp / tinggi 48.dp, lebar tepat 1 slot)
+            val pillWidth = (maxWidth / 4f).coerceIn(58.dp, 92.dp)
+            val pillHeight = 48.dp
+            // Kanvas tetap sedikit lebih lebar agar regangan cair (stretch), swell, & refraksi tepi tidak memicu relayout
+            val canvasWidth = pillWidth + 48.dp
+            val canvasHeight = 58.dp
             val canvasWidthPx = with(density) { canvasWidth.toPx() }
             val canvasHeightPx = with(density) { canvasHeight.toPx() }
             val verticalPadPx = ((maxHeightPx - canvasHeightPx) * 0.5f).roundToInt().toFloat()
 
-            // Layer 1: Pill Aktif Liquid / Fluid Glass (0 recompose tiap frame; deformasi & refraksi dihitung di fase Draw)
+            // Layer 1: Pill Aktif Dark Liquid Glass v2 (kalem gelap saat diam, lensa bening tajam saat di-drag)
             Box(
                 Modifier
                     .offset {
@@ -371,8 +385,9 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
                             exactLeftX - exactLeftX.roundToInt().toFloat()
                         },
                         swellProvider = { swellState.value },
+                        activeLensProvider = { activeLensState.value },
                         stretchProvider = {
-                            (kotlin.math.abs(fluidVelocity) / 8.5f).coerceIn(0f, 1f) * 0.24f
+                            (kotlin.math.abs(fluidVelocity) / 8.5f).coerceIn(0f, 1f) * 0.22f
                         },
                         velocityTiltProvider = {
                             (fluidVelocity / 6.5f).coerceIn(-1f, 1f)

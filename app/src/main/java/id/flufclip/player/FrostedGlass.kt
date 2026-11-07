@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -249,20 +248,38 @@ internal fun Modifier.frostedGlassCapsule(
 }
 
 // ============================================================================
-// LIQUID / FLUID GLASS PILL (AGSL RuntimeShader + Fluid Droplet Optics)
+// DARK LIQUID GLASS PILL v2 (iOS 26 Style: Calm Dark Smoked Idle + Clear Lens Drag)
 // ============================================================================
 
-private const val LIQUID_PRE_BLUR_SCALE = 0.65f
+private const val PILL_REST_BLUR_SCALE = 0.50f
+private const val PILL_LENS_BLUR_SCALE = 0.80f
 
-private val SharedLiquidVibrancyFilter: ColorFilter by lazy {
-    val cm = ColorMatrix().apply { setSaturation(1.48f) }
+private val SharedPillRestVibrancy: ColorFilter by lazy {
+    val cm = ColorMatrix().apply { setSaturation(1.22f) }
     ColorMatrixColorFilter(cm).asComposeColorFilter()
 }
 
-private val SharedLiquidPreBlurEffect: RenderEffect? by lazy {
+private val SharedPillLensVibrancy: ColorFilter by lazy {
+    val cm = ColorMatrix().apply { setSaturation(1.45f) }
+    ColorMatrixColorFilter(cm).asComposeColorFilter()
+}
+
+private val SharedPillRestBlurEffect: RenderEffect? by lazy {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // Blur jauh lebih tipis daripada kapsul luar (Frosted) agar area di bawah pill tampak seperti tetesan kaca jernih
-        val radiusPx = 11f * LIQUID_PRE_BLUR_SCALE
+        // Blur lembut saat diam agar tidak ada garis/warna belang tajam di belakang ikon putih
+        val radiusPx = 34f * PILL_REST_BLUR_SCALE
+        AndroidRenderEffect.createBlurEffect(
+            radiusPx,
+            radiusPx,
+            Shader.TileMode.CLAMP
+        ).asComposeRenderEffect()
+    } else null
+}
+
+private val SharedPillLensBlurEffect: RenderEffect? by lazy {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        // Polish sangat tipis saat di-drag agar pembiasan lensa cair terlihat jernih & tajam (tanpa noise piksel)
+        val radiusPx = 3.2f * PILL_LENS_BLUR_SCALE
         AndroidRenderEffect.createBlurEffect(
             radiusPx,
             radiusPx,
@@ -272,22 +289,22 @@ private val SharedLiquidPreBlurEffect: RenderEffect? by lazy {
 }
 
 /**
- * Shader AGSL (Android 13+ / API 33+) untuk efek Liquid Glass sejati pada kapsul aktif:
- * - Menghitung Capsule Signed Distance Field (SDF) & vektor normal lengkungan meniskus 2D/3D.
- * - Membelokkan (refraction) piksel backdrop di sekitar bibir kaca cembung + magnifikasi halus di kubah tengah.
- * - Memisahkan tipis saluran R/G/B (chromatic dispersion / efek prisma) di tepi lengkungan.
- * - Menambahkan kilau Fresnel 3D serta pantulan spekular kembar (kiri-atas utama & pantulan balik kanan-bawah)
- *   yang miring secara dinamis mengikuti kecepatan geser pill.
+ * Shader AGSL v2 (Android 13+ / API 33+) bergaya iOS 26 Dark Liquid Glass:
+ * - Tanpa kabut putih susu (0 inner glow / 0 fresnel fog) sehingga bagian dalam kaca bersih & tajam.
+ * - Menggunakan profil lengkungan busur lingkaran (`1 - sqrt(1 - t^2)`) khusus di bibir tepi kaca (`uBevelWidth`),
+ *   sehingga bagian tengah rata & jernih sementara bibir tepinya membelokkan cahaya secara tajam + dispersi prisma R/G/B.
+ * - Saat diam (`uActiveLens = 0`): Smoked Dark Glass kalem dengan kompresi luma agar kontras ikon putih 100% terjaga.
+ * - Saat disentuh/di-drag (`uActiveLens -> 1`): Membuka menjadi lensa cair bening yang membiaskan konten di bawahnya.
  */
 private const val LIQUID_GLASS_AGSL = """
 uniform shader content;
 uniform float2 uCenter;
 uniform float2 uHalfSize;
 uniform float2 uBufSize;
+uniform float uBevelWidth;
 uniform float uRefraction;
 uniform float uDispersion;
-uniform float uSwell;
-uniform float uVelocityTilt;
+uniform float uActiveLens;
 uniform float uIsDark;
 
 half4 main(float2 fragCoord) {
@@ -300,26 +317,25 @@ half4 main(float2 fragCoord) {
     float dist = length(dVec);
     float sdf = dist - capRadius;
 
-    float mask = 1.0 - smoothstep(-0.85, 0.65, sdf);
+    float mask = 1.0 - smoothstep(-0.75, 0.65, sdf);
     if (mask <= 0.001) {
         return half4(0.0, 0.0, 0.0, 0.0);
     }
 
     float2 normal2D = (dist > 0.0001) ? (dVec / dist) : float2(0.0, -1.0);
     float inset = max(-sdf, 0.0);
-    float normDepth = clamp(inset / capRadius, 0.0, 1.0);
 
-    // Profil lengkungan meniskus (bevel) tetesan kaca cembung
-    float edgeT = 1.0 - smoothstep(0.0, 0.50, normDepth);
-    float bevelCurve = edgeT * edgeT;
+    // Profil meniskus busur lingkaran (circular-arc lens): rata di tengah, melengkung tajam di bibir tepi kaca
+    float bevelW = max(min(uBevelWidth, capRadius * 0.85), 1.0);
+    float t = 1.0 - clamp(inset / bevelW, 0.0, 1.0);
+    float lensFactor = 1.0 - sqrt(max(1.0 - t * t, 0.0001));
 
-    // Pembiasan kubah tengah (magnifikasi halus) + pembiasan tepi meniskus (Snell's law)
-    float domeZoom = (1.0 - bevelCurve) * (0.09 + 0.14 * uSwell);
-    float refractAmt = uRefraction * (1.0 + 0.36 * uSwell) * bevelCurve;
-    float2 baseOffset = (-normal2D * refractAmt) - (p * domeZoom);
+    // Magnifikasi kubah halus saat lensa aktif di-drag + pembiasan tepi tajam
+    float domeZoom = (1.0 - lensFactor) * (0.10 * uActiveLens);
+    float2 baseOffset = (-normal2D * (uRefraction * lensFactor)) - (p * domeZoom);
 
-    // Dispersi kromatik tipis (efek prisma R/G/B di lengkungan tepi kaca)
-    float2 dispVec = normal2D * (uDispersion * (1.0 + 0.42 * uSwell) * bevelCurve);
+    // Dispersi kromatik tipis (efek prisma R/G/B khusus di bibir lengkungan kaca)
+    float2 dispVec = normal2D * (uDispersion * lensFactor);
 
     float2 minB = float2(1.0, 1.0);
     float2 maxB = max(uBufSize - float2(1.0, 1.0), minB);
@@ -327,46 +343,32 @@ half4 main(float2 fragCoord) {
     half4 sG = content.eval(clamp(fragCoord + baseOffset, minB, maxB));
     half4 sB = content.eval(clamp(fragCoord + baseOffset - dispVec, minB, maxB));
 
-    float3 refracted = float3(
+    float3 sampleRgb = float3(
         float(sR.r) / max(float(sR.a), 0.001),
         float(sG.g) / max(float(sG.a), 0.001),
         float(sB.b) / max(float(sB.a), 0.001)
     );
 
-    // Badan kristal jernih: lebih terang & hidup dibanding dock frosted buram di sekelilingnya
-    float3 liftedBackdrop = refracted * mix(1.03, 1.16, uIsDark);
-    float3 glassTint = mix(float3(0.96, 0.98, 1.0), float3(0.28, 0.30, 0.35), uIsDark);
-    float tintAlpha = mix(0.32, 0.25 + 0.05 * uSwell, uIsDark);
-    float3 col = mix(liftedBackdrop, glassTint, tintAlpha);
+    // Saat diam, tahan sorotan latar yang terlalu terang agar tidak pernah belang di belakang ikon putih
+    float maxLumaRest = mix(0.95, 0.40, uIsDark);
+    float3 calmRgb = min(sampleRgb, float3(maxLumaRest, maxLumaRest, maxLumaRest));
+    float3 lensRgb = sampleRgb * mix(1.02, 1.08, uIsDark);
+    float3 baseBackdrop = mix(calmRgb, lensRgb, uActiveLens);
 
-    // Efek Fresnel di sekeliling lengkungan kaca (ketebalan optik 3D)
-    float fresnel = bevelCurve * edgeT;
-    col += float3(0.80, 0.88, 1.0) * (fresnel * (0.18 + 0.08 * uSwell));
+    // Smoked Dark Glass kalem saat diam (#2B2C31 @ 76%) -> membuka jadi lensa jernih (@ 26%) saat di-drag
+    float3 darkTint = mix(float3(0.170, 0.175, 0.195), float3(0.130, 0.140, 0.160), uActiveLens);
+    float3 lightTint = float3(0.95, 0.97, 1.0);
+    float3 glassTint = mix(lightTint, darkTint, uIsDark);
 
-    // Kilau kubah atas (wet dome sheen) & bayangan ketebalan bawah
-    float topGrad = clamp((-p.y / capRadius) * 0.5 + 0.5, 0.0, 1.0);
-    float domeSheen = topGrad * topGrad * (1.0 - edgeT * 0.45);
-    col += float3(1.0, 1.0, 1.0) * (domeSheen * (0.085 + 0.04 * uSwell));
+    float darkAlpha = mix(0.76, 0.26, uActiveLens);
+    float lightAlpha = mix(0.70, 0.28, uActiveLens);
+    float tintAlpha = mix(lightAlpha, darkAlpha, uIsDark);
 
-    float bottomDepth = clamp(p.y / capRadius, 0.0, 1.0) * (1.0 - edgeT);
-    col *= (1.0 - bottomDepth * 0.08);
+    float3 col = mix(baseBackdrop, glassTint, tintAlpha);
 
-    // Pantulan spekular arah cahaya dinamis (kiri-atas utama + pantulan balik kanan-bawah)
-    float2 rawL1 = float2(-0.46 + uVelocityTilt * 0.38, -0.89);
-    float2 light1 = rawL1 / length(rawL1);
-    float2 rawL2 = float2(0.50 - uVelocityTilt * 0.30, 0.86);
-    float2 light2 = rawL2 / length(rawL2);
-
-    float spec1 = max(dot(normal2D, light1), 0.0);
-    float spec2 = max(dot(normal2D, light2), 0.0);
-    float spec1Pow = spec1 * spec1 * spec1;
-    float spec2Pow = spec2 * spec2 * spec2 * spec2;
-
-    float outerRim = 1.0 - smoothstep(0.0, 2.5, inset);
-    float innerGlint = smoothstep(0.0, 1.6, inset) * (1.0 - smoothstep(1.6, 6.2, inset));
-
-    col += float3(1.0, 1.0, 1.0) * (outerRim * (0.19 + 0.48 * spec1Pow) + innerGlint * (0.15 * spec1Pow));
-    col += float3(0.85, 0.93, 1.0) * (outerRim * (0.28 * spec2Pow) + bevelCurve * (0.07 * spec2Pow));
+    // Gradasi vertikal super halus untuk kedalaman kaca tanpa kabut putih
+    float topToBottom = clamp((-p.y / capRadius) * 0.5 + 0.5, 0.0, 1.0);
+    col += float3(1.0, 1.0, 1.0) * (topToBottom * (0.028 + 0.018 * uActiveLens));
 
     col = clamp(col, float3(0.0, 0.0, 0.0), float3(1.0, 1.0, 1.0));
     return half4(half3(col * mask), half(mask));
@@ -384,19 +386,19 @@ private class LiquidGlassApi33Holder {
         halfH: Float,
         bufW: Float,
         bufH: Float,
+        bevelWidthPx: Float,
         refractionPx: Float,
         dispersionPx: Float,
-        swell: Float,
-        velocityTilt: Float,
+        activeLens: Float,
         isDark: Boolean,
     ): RenderEffect {
         shader.setFloatUniform("uCenter", centerX, centerY)
         shader.setFloatUniform("uHalfSize", halfW, halfH)
         shader.setFloatUniform("uBufSize", bufW, bufH)
+        shader.setFloatUniform("uBevelWidth", bevelWidthPx)
         shader.setFloatUniform("uRefraction", refractionPx)
         shader.setFloatUniform("uDispersion", dispersionPx)
-        shader.setFloatUniform("uSwell", swell)
-        shader.setFloatUniform("uVelocityTilt", velocityTilt)
+        shader.setFloatUniform("uActiveLens", activeLens)
         shader.setFloatUniform("uIsDark", if (isDark) 1f else 0f)
         return AndroidRenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
     }
@@ -410,23 +412,21 @@ private class LiquidGlassPillCache {
     var lastBufH: Int = -1
     var lastHadBackdrop: Boolean = false
     var lastIsDark: Boolean = true
+    var clearRecordedForCurrentSource: Boolean = false
+    var lastCompositedLens: Float = Float.NaN
 
     var lastCenterX: Float = Float.NaN
     var lastCenterY: Float = Float.NaN
     var lastHalfW: Float = Float.NaN
     var lastHalfH: Float = Float.NaN
-    var lastSwell: Float = Float.NaN
-    var lastTilt: Float = Float.NaN
+    var lastActiveLens: Float = Float.NaN
 }
 
 /**
- * Menggambar kapsul indikator aktif bergaya **Liquid / Fluid Glass**:
- * - **API 33+ (Android 13+)**: Lensa AGSL `RuntimeShader` dengan pembiasan tepi cembung, dispersi prisma R/G/B,
- *   kilau Fresnel, dan pantulan spekular dinamis di atas backdrop jernih ber-vibrancy tinggi.
- * - **API 31–32 (Android 12)**: Potongan backdrop ber-vibrancy ringan + gradasi lensa & spekular kembar Canvas.
- * - **API < 31**: Permukaan kristal translusen dengan gradasi kubah & highlight spekular dinamis.
- * - Seluruh perubahan bentuk cair (`swell`, `stretch`, `subPixelOffsetX`, `velocityTilt`) dievaluasi di fase Draw
- *   tanpa memicu Recomposition atau realokasi ukuran `GraphicsLayer`.
+ * Menggambar kapsul indikator aktif bergaya **Dark Liquid Glass (iOS 26)**:
+ * - **Saat diam**: Smoked Dark Glass kalem dengan garis kilau vektor setipis rambut (`0.8.dp`) tanpa kabut putih.
+ * - **Saat di-drag / meluncur**: Bertransformasi mulus menjadi lensa tetesan kaca bening (`activeLens -> 1f`)
+ *   dengan pembiasan busur lingkaran tajam (`18.dp`) & dispersi prisma di bibir kaca.
  */
 @Composable
 internal fun Modifier.liquidGlassPill(
@@ -436,18 +436,22 @@ internal fun Modifier.liquidGlassPill(
     rootPositionProvider: (() -> Offset)? = null,
     subPixelOffsetX: () -> Float = { 0f },
     swellProvider: () -> Float = { 0f },
+    activeLensProvider: () -> Float = swellProvider,
     stretchProvider: () -> Float = { 0f },
     velocityTiltProvider: () -> Float = { 0f },
 ): Modifier {
     val backdrop = LocalFrostedGlassBackdrop.current
-    val preBlurLayer = rememberGraphicsLayer()
+    val calmBlurLayer = rememberGraphicsLayer()
+    val clearLensLayer = rememberGraphicsLayer()
     val upscaledSourceLayer = rememberGraphicsLayer()
     val lensLayer = rememberGraphicsLayer()
 
-    val cache = remember(preBlurLayer, upscaledSourceLayer) {
+    val cache = remember(calmBlurLayer, clearLensLayer, upscaledSourceLayer) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            preBlurLayer.renderEffect = SharedLiquidPreBlurEffect
-            preBlurLayer.colorFilter = SharedLiquidVibrancyFilter
+            calmBlurLayer.renderEffect = SharedPillRestBlurEffect
+            calmBlurLayer.colorFilter = SharedPillRestVibrancy
+            clearLensLayer.renderEffect = SharedPillLensBlurEffect
+            clearLensLayer.colorFilter = SharedPillLensVibrancy
             upscaledSourceLayer.compositingStrategy = CompositingStrategy.Offscreen
         }
         LiquidGlassPillCache()
@@ -471,13 +475,14 @@ internal fun Modifier.liquidGlassPill(
             if (boxW <= 0f || boxH <= 0f) return@drawBehind
 
             val swell = swellProvider().coerceIn(0f, 1f)
-            val stretch = stretchProvider().coerceIn(0f, 0.30f)
+            val activeLens = activeLensProvider().coerceIn(0f, 1f)
+            val stretch = stretchProvider().coerceIn(0f, 0.28f)
             val tilt = velocityTiltProvider().coerceIn(-1f, 1f)
             val subX = subPixelOffsetX().coerceIn(-1f, 1f)
 
-            val minMarginPx = 2.dp.toPx()
-            val rawW = baseWidth.toPx() * (1f + stretch) + (8.dp.toPx() * swell)
-            val rawH = baseHeight.toPx() * (1f - stretch * 0.28f) + (5.dp.toPx() * swell)
+            val minMarginPx = 1.dp.toPx()
+            val rawW = baseWidth.toPx() * (1f + stretch) + (6.dp.toPx() * swell)
+            val rawH = baseHeight.toPx() * (1f - stretch * 0.22f) + (5.dp.toPx() * swell)
             val pillW = rawW.coerceIn(16f, max(16f, boxW - minMarginPx * 2f))
             val pillH = rawH.coerceIn(16f, max(16f, boxH - minMarginPx * 2f))
 
@@ -494,15 +499,15 @@ internal fun Modifier.liquidGlassPill(
             clipPath.reset()
             clipPath.addRoundRect(RoundRect(pillRect, cornerRadius))
 
-            // 1. Bayangan kontak lembut di luar siluet kapsul agar pill tampak mengambang di atas dock buram
-            val shadowDropY = (1.5.dp + 1.5.dp * swell).toPx()
-            val shadowExpand = (1.5.dp + 1.5.dp * swell).toPx()
-            val shadowBaseAlpha = if (isDark) (0.26f + 0.10f * swell) else (0.12f + 0.06f * swell)
+            // 1. Bayangan kontak halus di luar siluet kapsul (0 bocor ke bagian dalam kaca)
+            val shadowDropY = (1.dp + 1.5.dp * swell).toPx()
+            val shadowExpand = (1.dp + 1.5.dp * swell).toPx()
+            val shadowBaseAlpha = if (isDark) (0.18f + 0.12f * activeLens) else (0.09f + 0.06f * activeLens)
             clipPath(clipPath, clipOp = ClipOp.Difference) {
                 drawRoundRect(
-                    color = Color.Black.copy(alpha = shadowBaseAlpha * 0.50f),
-                    topLeft = Offset(pillLeft - shadowExpand, pillTop + shadowDropY - shadowExpand * 0.3f),
-                    size = Size(pillW + shadowExpand * 2f, pillH + shadowExpand * 1.6f),
+                    color = Color.Black.copy(alpha = shadowBaseAlpha * 0.55f),
+                    topLeft = Offset(pillLeft - shadowExpand, pillTop + shadowDropY - shadowExpand * 0.25f),
+                    size = Size(pillW + shadowExpand * 2f, pillH + shadowExpand * 1.5f),
                     cornerRadius = CornerRadius(radius + shadowExpand, radius + shadowExpand)
                 )
                 drawRoundRect(
@@ -522,7 +527,7 @@ internal fun Modifier.liquidGlassPill(
             val bufW = boxW.roundToInt().coerceAtLeast(1)
             val bufH = boxH.roundToInt().coerceAtLeast(1)
 
-            // Rekam sumber backdrop ber-vibrancy ringan bila posisi atau isi layar berubah
+            // 2. Rekam backdrop: calmBlurLayer (selalu lembut saat diam) + clearLensLayer (jernih hanya saat activeLens > 0)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val relX = if (backdrop != null) (originInRoot.x - backdrop.contentOriginInRoot.x).roundToInt() else 0
                 val relY = if (backdrop != null) (originInRoot.y - backdrop.contentOriginInRoot.y).roundToInt() else 0
@@ -536,6 +541,17 @@ internal fun Modifier.liquidGlassPill(
                     hasBackdrop != cache.lastHadBackdrop ||
                     isDark != cache.lastIsDark
 
+                val baseFill = if (isDark) Color(0xFF141414) else Color(0xFFF2F2F2)
+                val calmScaledW = (bufW * PILL_REST_BLUR_SCALE).roundToInt().coerceAtLeast(1)
+                val calmScaledH = (bufH * PILL_REST_BLUR_SCALE).roundToInt().coerceAtLeast(1)
+                val sxCalm = calmScaledW.toFloat() / bufW.toFloat()
+                val syCalm = calmScaledH.toFloat() / bufH.toFloat()
+
+                val clearScaledW = (bufW * PILL_LENS_BLUR_SCALE).roundToInt().coerceAtLeast(1)
+                val clearScaledH = (bufH * PILL_LENS_BLUR_SCALE).roundToInt().coerceAtLeast(1)
+                val sxClear = clearScaledW.toFloat() / bufW.toFloat()
+                val syClear = clearScaledH.toFloat() / bufH.toFloat()
+
                 if (sourceChanged) {
                     cache.lastSourceRev = srcRev
                     cache.lastRelX = relX
@@ -544,50 +560,78 @@ internal fun Modifier.liquidGlassPill(
                     cache.lastBufH = bufH
                     cache.lastHadBackdrop = hasBackdrop
                     cache.lastIsDark = isDark
-                    // Paksa lensLayer memperbarui hasil saat sumber berubah
-                    cache.lastCenterX = Float.NaN
+                    cache.clearRecordedForCurrentSource = false
+                    cache.lastCompositedLens = Float.NaN
 
-                    val scaledW = (bufW * LIQUID_PRE_BLUR_SCALE).roundToInt().coerceAtLeast(1)
-                    val scaledH = (bufH * LIQUID_PRE_BLUR_SCALE).roundToInt().coerceAtLeast(1)
-                    val sx = scaledW.toFloat() / bufW.toFloat()
-                    val sy = scaledH.toFloat() / bufH.toFloat()
-                    val baseFill = if (isDark) Color(0xFF141414) else Color(0xFFF2F2F2)
-
-                    preBlurLayer.record(IntSize(scaledW, scaledH)) {
+                    calmBlurLayer.record(IntSize(calmScaledW, calmScaledH)) {
                         drawRect(color = baseFill)
                         if (hasBackdrop && backdrop != null) {
-                            scale(sx, sy, pivot = Offset.Zero) {
+                            scale(sxCalm, syCalm, pivot = Offset.Zero) {
                                 translate(left = -relX.toFloat(), top = -relY.toFloat()) {
                                     drawLayer(backdrop.contentLayer)
                                 }
                             }
                         }
                     }
+                }
+
+                val needClearLayer = activeLens > 0.005f
+                if (needClearLayer && !cache.clearRecordedForCurrentSource) {
+                    cache.clearRecordedForCurrentSource = true
+                    cache.lastCompositedLens = Float.NaN
+
+                    clearLensLayer.record(IntSize(clearScaledW, clearScaledH)) {
+                        drawRect(color = baseFill)
+                        if (hasBackdrop && backdrop != null) {
+                            scale(sxClear, syClear, pivot = Offset.Zero) {
+                                translate(left = -relX.toFloat(), top = -relY.toFloat()) {
+                                    drawLayer(backdrop.contentLayer)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                val compositeChanged = cache.lastCompositedLens.isNaN() ||
+                    abs(activeLens - cache.lastCompositedLens) > 0.005f
+
+                if (compositeChanged) {
+                    cache.lastCompositedLens = activeLens
+                    cache.lastCenterX = Float.NaN
+
                     upscaledSourceLayer.record(IntSize(bufW, bufH)) {
-                        scale(1f / sx, 1f / sy, pivot = Offset.Zero) {
-                            drawLayer(preBlurLayer)
+                        scale(1f / sxCalm, 1f / syCalm, pivot = Offset.Zero) {
+                            drawLayer(calmBlurLayer)
+                        }
+                        if (needClearLayer) {
+                            clearLensLayer.alpha = activeLens
+                            scale(1f / sxClear, 1f / syClear, pivot = Offset.Zero) {
+                                drawLayer(clearLensLayer)
+                            }
                         }
                     }
                 }
             }
 
-            // 2A. Jalur Utama Android 13+ (API 33+): Lensa AGSL RuntimeShader penuh
+            // 3A. Badan Kaca & Pembiasan Lensa: Android 13+ (AGSL RuntimeShader)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && api33Holder != null) {
                 val uniformsChanged = cache.lastCenterX.isNaN() ||
                     abs(centerX - cache.lastCenterX) > 0.05f ||
                     abs(centerY - cache.lastCenterY) > 0.05f ||
                     abs(halfW - cache.lastHalfW) > 0.05f ||
                     abs(halfH - cache.lastHalfH) > 0.05f ||
-                    abs(swell - cache.lastSwell) > 0.002f ||
-                    abs(tilt - cache.lastTilt) > 0.004f
+                    abs(activeLens - cache.lastActiveLens) > 0.003f
 
                 if (uniformsChanged) {
                     cache.lastCenterX = centerX
                     cache.lastCenterY = centerY
                     cache.lastHalfW = halfW
                     cache.lastHalfH = halfH
-                    cache.lastSwell = swell
-                    cache.lastTilt = tilt
+                    cache.lastActiveLens = activeLens
+
+                    val bevelPx = (5.dp + 3.5.dp * activeLens).toPx()
+                    val refractionPx = (3.5.dp + 14.5.dp * activeLens).toPx()
+                    val dispersionPx = (0.35.dp + 2.45.dp * activeLens).toPx()
 
                     lensLayer.renderEffect = api33Holder.createRenderEffect(
                         centerX = centerX,
@@ -596,10 +640,10 @@ internal fun Modifier.liquidGlassPill(
                         halfH = halfH,
                         bufW = bufW.toFloat(),
                         bufH = bufH.toFloat(),
-                        refractionPx = 13.dp.toPx(),
-                        dispersionPx = 2.2.dp.toPx(),
-                        swell = swell,
-                        velocityTilt = tilt,
+                        bevelWidthPx = bevelPx,
+                        refractionPx = refractionPx,
+                        dispersionPx = dispersionPx,
+                        activeLens = activeLens,
                         isDark = isDark
                     )
                     lensLayer.record(IntSize(bufW, bufH)) {
@@ -608,47 +652,55 @@ internal fun Modifier.liquidGlassPill(
                 }
 
                 drawLayer(lensLayer)
-                return@drawBehind
+            } else {
+                // 3B. Fallback Badan Kaca Android 8–12 (API 26–32)
+                clipPath(clipPath) {
+                    if (hasBackdrop) {
+                        drawLayer(upscaledSourceLayer)
+                    }
+                    val darkAlphaTop = if (hasBackdrop) (0.74f - 0.36f * activeLens) else 0.84f
+                    val darkAlphaBottom = if (hasBackdrop) (0.78f - 0.38f * activeLens) else 0.88f
+                    val fillTop = if (isDark) Color(0xFF303238).copy(alpha = darkAlphaTop) else Color.White.copy(alpha = 0.78f)
+                    val fillBottom = if (isDark) Color(0xFF25262B).copy(alpha = darkAlphaBottom) else Color(0xFFF0F4FA).copy(alpha = 0.72f)
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(fillTop, fillBottom),
+                            startY = pillTop,
+                            endY = pillTop + pillH
+                        ),
+                        topLeft = Offset(pillLeft, pillTop),
+                        size = Size(pillW, pillH)
+                    )
+                }
             }
 
-            // 2B. Fallback Android 8–12 (API 26–32): Klip kapsul dinamis + kubah kristal + spekular kembar miring
-            clipPath(clipPath) {
-                if (hasBackdrop) {
-                    drawLayer(upscaledSourceLayer)
-                }
-                val domeTop = if (isDark) {
-                    Color(0xFF687285).copy(alpha = if (hasBackdrop) 0.34f + 0.06f * swell else 0.56f)
-                } else {
-                    Color.White.copy(alpha = if (hasBackdrop) 0.55f else 0.88f)
-                }
-                val domeBottom = if (isDark) {
-                    Color(0xFF2B2F38).copy(alpha = if (hasBackdrop) 0.28f else 0.48f)
-                } else {
-                    Color(0xFFE8EEF7).copy(alpha = if (hasBackdrop) 0.38f else 0.78f)
-                }
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(domeTop, domeBottom),
-                        startY = pillTop,
-                        endY = pillTop + pillH
-                    ),
-                    topLeft = Offset(pillLeft, pillTop),
-                    size = Size(pillW, pillH)
-                )
+            // 4. Garis Kilau Tepi Vektor Setipis Rambut (0.8.dp) ala iOS 26 — tajam tanpa kabut putih!
+            val rimStroke = 0.8.dp.toPx()
+            val shiftX = tilt * halfW * 0.55f
+            val specTopLeft = if (isDark) {
+                Color.White.copy(alpha = 0.36f + 0.28f * activeLens)
+            } else {
+                Color.White.copy(alpha = 0.80f)
+            }
+            val specMiddle = if (isDark) {
+                Color.White.copy(alpha = 0.04f + 0.04f * activeLens)
+            } else {
+                Color.Black.copy(alpha = 0.06f)
+            }
+            val specBottomRight = if (isDark) {
+                Color(0xFFE0EEFF).copy(alpha = 0.15f + 0.18f * activeLens)
+            } else {
+                Color.White.copy(alpha = 0.45f)
             }
 
-            // Rim spekular kembar (kiri-atas terang -> tengah tipis -> kanan-bawah pantulan balik)
-            val rimStroke = 1.2.dp.toPx()
-            val shiftX = tilt * halfW * 0.45f
-            val specPrimary = Color.White.copy(alpha = if (isDark) 0.62f + 0.12f * swell else 0.85f)
-            val specMid = Color.White.copy(alpha = if (isDark) 0.10f else 0.25f)
-            val specBounce = Color(0xFFD8ECFF).copy(alpha = if (isDark) 0.34f + 0.08f * swell else 0.55f)
-            val diagLen = max(hypot(pillW, pillH), 1f)
             drawRoundRect(
                 brush = Brush.linearGradient(
-                    colors = listOf(specPrimary, specMid, specBounce),
+                    0.0f to specTopLeft,
+                    0.45f to specMiddle,
+                    0.62f to specMiddle,
+                    1.0f to specBottomRight,
                     start = Offset(pillLeft + shiftX, pillTop),
-                    end = Offset(pillLeft + pillW - shiftX, pillTop + pillH + diagLen * 0.05f)
+                    end = Offset(pillLeft + pillW - shiftX, pillTop + pillH)
                 ),
                 topLeft = Offset(pillLeft + rimStroke * 0.5f, pillTop + rimStroke * 0.5f),
                 size = Size(max(1f, pillW - rimStroke), max(1f, pillH - rimStroke)),
