@@ -212,23 +212,23 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
     onSelect: (String) -> Unit,
     visible: Boolean = true,
 ) {
-    // Floating Frosted Pill Navigation Bar:
+    // Floating Frosted Dock + Liquid Glass Active Pill Navigation Bar:
     // - Latar luar sepenuhnya transparan (tidak ada blok hitam penghalang di belakangnya).
-    // - Kapsul mengambang menggunakan Frosted Glass (blur backdrop resolusi rendah + vibrancy + specular border).
-    // - Pill indikator abu-abu dapat berpindah dengan animasi spring saat diketuk maupun digeser (interactive slide).
+    // - Kapsul dock utama tetap memakai Frosted Glass kalem (blur backdrop resolusi rendah + vibrancy + specular border).
+    // - Pill indikator aktif memakai Liquid / Fluid Glass (AGSL RuntimeShader refraction + dispersi prisma + kilau spekular
+    //   kembar + deformasi cair stretch/swell saat berpindah maupun digeser jari).
     // - Di mobile (screenWidthDp < 600), dapat auto-hide saat scroll ke bawah dan muncul kembali saat scroll ke atas.
     val isMobile = LocalConfiguration.current.screenWidthDp < 600
     val effectiveVisible = if (isMobile) visible else true
-    val hideProgress by animateFloatAsState(
+    val hideProgressState = animateFloatAsState(
         targetValue = if (effectiveVisible) 0f else 1f,
         animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
         label = "bottomNavAutoHide"
     )
+    val hideProgress = hideProgressState.value
     if (hideProgress >= 0.999f) return
 
     val isDark = isSystemInDarkTheme() || true
-    val pillColor = if (isDark) Color(0xFF3E3E3E).copy(alpha = 0.85f) else Color(0xFFE5E5E5).copy(alpha = 0.90f)
-    val pillBorderColor = if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
 
     val tabs = remember { listOf("home", "shorts", "search", "you") }
     val activeIndex = remember(selected) {
@@ -239,17 +239,62 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
     val scope = rememberCoroutineScope()
     val pillProgress = remember { Animatable(activeIndex.toFloat()) }
     var isDraggingPill by remember { mutableStateOf(false) }
+    var isTouchingActivePill by remember { mutableStateOf(false) }
 
     LaunchedEffect(activeIndex) {
         if (!isDraggingPill) {
             pillProgress.animateTo(
                 targetValue = activeIndex.toFloat(),
                 animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = 0.80f,
-                    stiffness = 380f
+                    dampingRatio = 0.76f,
+                    stiffness = 360f
                 )
             )
         }
+    }
+
+    // State pembengkakan tetesan kaca (swell) saat disentuh / di-drag / meluncur
+    val swellTarget = when {
+        isDraggingPill -> 1f
+        isTouchingActivePill -> 0.38f
+        pillProgress.isRunning -> 0.20f
+        else -> 0f
+    }
+    val swellState = animateFloatAsState(
+        targetValue = swellTarget,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = 0.64f,
+            stiffness = 400f
+        ),
+        label = "liquidPillSwell"
+    )
+
+    // Pelacak kecepatan cairan (aktif hanya saat pill bergerak; saat diam = 0 callback / 0 fps)
+    var fluidVelocity by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(pillProgress.isRunning, isDraggingPill) {
+        if (!pillProgress.isRunning && !isDraggingPill && kotlin.math.abs(fluidVelocity) < 0.01f) {
+            fluidVelocity = 0f
+            return@LaunchedEffect
+        }
+        var lastNanos = 0L
+        var lastPos = pillProgress.value
+        while (pillProgress.isRunning || isDraggingPill || kotlin.math.abs(fluidVelocity) >= 0.01f) {
+            withFrameNanos { now ->
+                if (lastNanos != 0L) {
+                    val dt = ((now - lastNanos) * 1e-9f).coerceIn(0.001f, 0.05f)
+                    val rawVel = if (pillProgress.isRunning && !isDraggingPill) {
+                        pillProgress.velocity
+                    } else {
+                        (pillProgress.value - lastPos) / dt
+                    }
+                    val smoothing = (dt * 18f).coerceIn(0.12f, 0.65f)
+                    fluidVelocity += (rawVel - fluidVelocity) * smoothing
+                }
+                lastNanos = now
+                lastPos = pillProgress.value
+            }
+        }
+        fluidVelocity = 0f
     }
 
     val visualIndex by remember {
@@ -258,17 +303,18 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
 
     val density = LocalDensity.current
     val slideDistancePx = with(density) { 96.dp.toPx() }
+    var restingTrackOriginInRoot by remember { mutableStateOf(Offset.Zero) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 10.dp)
-            .offset { IntOffset(0, (hideProgress * slideDistancePx).roundToInt()) }
-            .graphicsLayer { alpha = (1f - hideProgress).coerceIn(0f, 1f) },
+            .offset { IntOffset(0, (hideProgressState.value * slideDistancePx).roundToInt()) }
+            .graphicsLayer { alpha = (1f - hideProgressState.value).coerceIn(0f, 1f) },
         contentAlignment = Alignment.Center
     ) {
-        // FLOATING FROSTED PILL CONTAINER (Compact Centered Dock pada Tablet/Layar Besar maks 380.dp)
+        // FLOATING FROSTED PILL CONTAINER (Background dock tetap Frosted Blur kalem, maks 380.dp di layar lebar)
         BoxWithConstraints(
             modifier = Modifier
                 .widthIn(max = 380.dp)
@@ -286,72 +332,116 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
             contentAlignment = Alignment.CenterStart
         ) {
             val totalWidthPx = with(density) { maxWidth.toPx() }
+            val maxHeightPx = with(density) { maxHeight.toPx() }
             val slotWidthPx = totalWidthPx / 4f
-            val pillWidth = ((maxWidth / 4f) - 12.dp).coerceIn(56.dp, 76.dp)
-            val pillHeight = 40.dp
-            val pillWidthPx = with(density) { pillWidth.toPx() }
+            val pillWidth = ((maxWidth / 4f) - 10.dp).coerceIn(56.dp, 78.dp)
+            val pillHeight = 42.dp
+            // Kanvas tetap sedikit lebih lebar agar efek regangan cair (stretch), swell, & refraksi tepi tidak memicu relayout
+            val canvasWidth = pillWidth + 54.dp
+            val canvasHeight = 56.dp
+            val canvasWidthPx = with(density) { canvasWidth.toPx() }
+            val canvasHeightPx = with(density) { canvasHeight.toPx() }
+            val verticalPadPx = ((maxHeightPx - canvasHeightPx) * 0.5f).roundToInt().toFloat()
 
-            // Layer 1: Pill Indikator Abu-Abu yang meluncur halus (offset dibaca di fase layout agar 0 recompose tiap frame)
+            // Layer 1: Pill Aktif Liquid / Fluid Glass (0 recompose tiap frame; deformasi & refraksi dihitung di fase Draw)
             Box(
                 Modifier
                     .offset {
-                        val centerOffsetPx = (slotWidthPx - pillWidthPx) / 2f
-                        val xPx = (pillProgress.value * slotWidthPx) + centerOffsetPx
-                        IntOffset(xPx.let { kotlin.math.round(it).toInt() }, 0)
+                        val exactCenterX = (pillProgress.value + 0.5f) * slotWidthPx
+                        val exactLeftX = exactCenterX - canvasWidthPx * 0.5f
+                        IntOffset(exactLeftX.roundToInt(), 0)
                     }
-                    .size(width = pillWidth, height = pillHeight)
-                    .clip(RoundedCornerShape(50))
-                    .background(pillColor)
-                    .border(0.8.dp, pillBorderColor, RoundedCornerShape(50))
+                    .size(width = canvasWidth, height = canvasHeight)
+                    .liquidGlassPill(
+                        baseWidth = pillWidth,
+                        baseHeight = pillHeight,
+                        isDark = isDark,
+                        rootPositionProvider = {
+                            val exactCenterX = (pillProgress.value + 0.5f) * slotWidthPx
+                            val intLeftX = (exactCenterX - canvasWidthPx * 0.5f).roundToInt().toFloat()
+                            val currentHideY = (hideProgressState.value * slideDistancePx).roundToInt().toFloat()
+                            Offset(
+                                x = restingTrackOriginInRoot.x + intLeftX,
+                                y = restingTrackOriginInRoot.y + verticalPadPx + currentHideY
+                            )
+                        },
+                        subPixelOffsetX = {
+                            val exactCenterX = (pillProgress.value + 0.5f) * slotWidthPx
+                            val exactLeftX = exactCenterX - canvasWidthPx * 0.5f
+                            exactLeftX - exactLeftX.roundToInt().toFloat()
+                        },
+                        swellProvider = { swellState.value },
+                        stretchProvider = {
+                            (kotlin.math.abs(fluidVelocity) / 8.5f).coerceIn(0f, 1f) * 0.24f
+                        },
+                        velocityTiltProvider = {
+                            (fluidVelocity / 6.5f).coerceIn(-1f, 1f)
+                        }
+                    )
             )
 
-            // Layer 2: Baris 4 Tab Ikon Resmi YouTube (Home, Shorts, Search, You) + gestur tap & slide
+            // Layer 2: Baris 4 Tab Ikon Resmi YouTube (Home, Shorts, Search, You) + gestur tap & fluid slide
             val currentOnSelect by rememberUpdatedState(onSelect)
             Row(
                 Modifier
                     .fillMaxSize()
+                    .onGloballyPositioned { coords ->
+                        val currentHideY = (hideProgressState.value * slideDistancePx).roundToInt().toFloat()
+                        restingTrackOriginInRoot = coords.positionInRoot() - Offset(0f, currentHideY)
+                    }
                     .pointerInput(totalWidthPx, effectiveVisible) {
                         if (totalWidthPx <= 0f || !effectiveVisible) return@pointerInput
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             var dragged = false
                             val startX = down.position.x
+                            val downSlot = (startX / slotWidthPx).toInt().coerceIn(0, 3)
+                            if (downSlot == kotlin.math.round(pillProgress.value).toInt().coerceIn(0, 3)) {
+                                isTouchingActivePill = true
+                            }
 
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) {
-                                    if (dragged) {
-                                        val targetIdx = kotlin.math.round(pillProgress.value).toInt().coerceIn(0, 3)
-                                        isDraggingPill = false
-                                        scope.launch {
-                                            pillProgress.animateTo(
-                                                targetValue = targetIdx.toFloat(),
-                                                animationSpec = androidx.compose.animation.core.spring(
-                                                    dampingRatio = 0.80f,
-                                                    stiffness = 380f
+                            try {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (!change.pressed) {
+                                        if (dragged) {
+                                            val targetIdx = kotlin.math.round(pillProgress.value).toInt().coerceIn(0, 3)
+                                            isDraggingPill = false
+                                            isTouchingActivePill = false
+                                            scope.launch {
+                                                pillProgress.animateTo(
+                                                    targetValue = targetIdx.toFloat(),
+                                                    animationSpec = androidx.compose.animation.core.spring(
+                                                        dampingRatio = 0.76f,
+                                                        stiffness = 360f
+                                                    )
                                                 )
-                                            )
+                                            }
+                                            currentOnSelect(tabs[targetIdx])
+                                        } else {
+                                            isTouchingActivePill = false
+                                            val tappedIdx = (change.position.x / slotWidthPx).toInt().coerceIn(0, 3)
+                                            currentOnSelect(tabs[tappedIdx])
                                         }
-                                        currentOnSelect(tabs[targetIdx])
-                                    } else {
-                                        val tappedIdx = (change.position.x / slotWidthPx).toInt().coerceIn(0, 3)
-                                        currentOnSelect(tabs[tappedIdx])
+                                        break
                                     }
-                                    break
-                                }
-                                val dx = kotlin.math.abs(change.position.x - startX)
-                                if (!dragged && dx > viewConfiguration.touchSlop * 0.6f) {
-                                    dragged = true
-                                    isDraggingPill = true
-                                }
-                                if (dragged) {
-                                    change.consume()
-                                    val frac = ((change.position.x - slotWidthPx / 2f) / slotWidthPx).coerceIn(0f, 3f)
-                                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                                        pillProgress.snapTo(frac)
+                                    val dx = kotlin.math.abs(change.position.x - startX)
+                                    if (!dragged && dx > viewConfiguration.touchSlop * 0.55f) {
+                                        dragged = true
+                                        isDraggingPill = true
+                                    }
+                                    if (dragged) {
+                                        change.consume()
+                                        val frac = ((change.position.x - slotWidthPx / 2f) / slotWidthPx).coerceIn(0f, 3f)
+                                        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                            pillProgress.snapTo(frac)
+                                        }
                                     }
                                 }
+                            } finally {
+                                isDraggingPill = false
+                                isTouchingActivePill = false
                             }
                         }
                     },
@@ -359,12 +449,18 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
             ) {
                 tabs.forEachIndexed { index, tabKey ->
                     val isSelected = (index == visualIndex)
-                    val iconTint = if (isSelected) Color.White else Color.White.copy(alpha = 0.85f)
+                    val iconTint = if (isSelected) Color.White else Color.White.copy(alpha = 0.78f)
 
                     Box(
                         Modifier
                             .weight(1f)
-                            .fillMaxHeight(),
+                            .fillMaxHeight()
+                            .graphicsLayer {
+                                val proximity = (1f - kotlin.math.abs(pillProgress.value - index.toFloat())).coerceIn(0f, 1f)
+                                val buoyScale = 1f + (0.06f * proximity * (0.30f + 0.70f * swellState.value))
+                                scaleX = buoyScale
+                                scaleY = buoyScale
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         when (tabKey) {
