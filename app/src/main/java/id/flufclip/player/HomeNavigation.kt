@@ -212,12 +212,12 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
     onSelect: (String) -> Unit,
     visible: Boolean = true,
 ) {
-    // Floating Frosted Dock + Liquid Glass Active Pill Navigation Bar:
-    // - Latar luar sepenuhnya transparan (tidak ada blok hitam penghalang di belakangnya).
-    // - Kapsul dock utama tetap memakai Frosted Glass kalem (blur backdrop resolusi rendah + vibrancy + specular border).
-    // - Pill indikator aktif memakai Liquid / Fluid Glass (AGSL RuntimeShader refraction + dispersi prisma + kilau spekular
-    //   kembar + deformasi cair stretch/swell saat berpindah maupun digeser jari).
-    // - Di mobile (screenWidthDp < 600), dapat auto-hide saat scroll ke bawah dan muncul kembali saat scroll ke atas.
+    // Google / iOS Liquid Glass Floating Navigation Bar:
+    // - Latar luar sepenuhnya transparan tanpa blok penghalang.
+    // - Kapsul utama memakai Liquid Glass jernih berwarna (AGSL meniscus refraction di sekeliling bibir kapsul + vibrancy tinggi).
+    // - Pill indikator tab aktif memakai bantalan kaca smoked gelap tanpa garis putih (borderless) yang kontras & bersih,
+    //   lengkap dengan fisika cair (stretch, squish, swell) saat berpindah atau digeser jari + ikon aktif biru muda (#C2E7FF).
+    // - Di mobile (screenWidthDp < 600), auto-hide saat scroll ke bawah dan muncul kembali saat scroll ke atas.
     val isMobile = LocalConfiguration.current.screenWidthDp < 600
     val effectiveVisible = if (isMobile) visible else true
     val hideProgressState = animateFloatAsState(
@@ -256,8 +256,8 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
     // State pembengkakan fisik kapsul (swell) saat disentuh / di-drag
     val swellTarget = when {
         isDraggingPill -> 1f
-        isTouchingActivePill -> 0.42f
-        pillProgress.isRunning -> 0.16f
+        isTouchingActivePill -> 0.38f
+        pillProgress.isRunning -> 0.14f
         else -> 0f
     }
     val swellState = animateFloatAsState(
@@ -269,17 +269,12 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
         label = "liquidPillSwell"
     )
 
-    // State kejernihan optik lensa (0f = Smoked Dark Glass kalem saat diam; 1f = Lensa bening membiaskan latar saat di-drag)
-    val activeLensTarget = when {
-        isDraggingPill -> 1f
-        isTouchingActivePill -> 0.55f
-        pillProgress.isRunning -> 0.42f
-        else -> 0f
-    }
-    val activeLensState = animateFloatAsState(
-        targetValue = activeLensTarget,
-        animationSpec = tween(durationMillis = if (activeLensTarget > 0f) 150 else 260, easing = FastOutSlowInEasing),
-        label = "liquidPillLensClarity"
+    // Kilau taktil tipis yang hanya muncul saat pill aktif di-drag jari (0f / tanpa border saat diam)
+    val dragGlowTarget = if (isDraggingPill) 1f else 0f
+    val dragGlowState = animateFloatAsState(
+        targetValue = dragGlowTarget,
+        animationSpec = tween(durationMillis = if (isDraggingPill) 120 else 220, easing = FastOutSlowInEasing),
+        label = "liquidPillDragGlow"
     )
 
     // Pelacak kecepatan cairan (aktif hanya saat pill bergerak; saat diam = 0 callback / 0 fps)
@@ -316,48 +311,59 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
 
     val density = LocalDensity.current
     val slideDistancePx = with(density) { 96.dp.toPx() }
-    var restingTrackOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+    var restingDockOriginInRoot by remember { mutableStateOf(Offset.Zero) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 10.dp)
+            .padding(horizontal = 28.dp, vertical = 10.dp)
             .offset { IntOffset(0, (hideProgressState.value * slideDistancePx).roundToInt()) }
             .graphicsLayer { alpha = (1f - hideProgressState.value).coerceIn(0f, 1f) },
         contentAlignment = Alignment.Center
     ) {
-        // FLOATING FROSTED PILL CONTAINER (Background dock tetap Frosted Blur kalem, maks 380.dp di layar lebar)
+        // KAPSUL UTAMA GOOGLE LIQUID GLASS (Jernih membiaskan latar di tepi, tinggi 60.dp / R = 30.dp)
         BoxWithConstraints(
             modifier = Modifier
-                .widthIn(max = 380.dp)
+                .widthIn(max = 344.dp)
                 .fillMaxWidth()
-                .height(58.dp)
+                .height(60.dp)
+                .onGloballyPositioned { coords ->
+                    val currentHideY = (hideProgressState.value * slideDistancePx).roundToInt().toFloat()
+                    restingDockOriginInRoot = coords.positionInRoot() - Offset(0f, currentHideY)
+                }
                 .shadow(
-                    elevation = 12.dp,
+                    elevation = 14.dp,
                     shape = RoundedCornerShape(50),
-                    ambientColor = Color.Black.copy(alpha = 0.45f),
-                    spotColor = Color.Black.copy(alpha = 0.55f)
+                    ambientColor = Color.Black.copy(alpha = 0.36f),
+                    spotColor = Color.Black.copy(alpha = 0.46f)
                 )
                 .clip(RoundedCornerShape(50))
-                .frostedGlassCapsule(isDark = isDark, borderStrokeWidth = 1.dp)
+                .liquidGlassBar(
+                    isDark = isDark,
+                    borderStrokeWidth = 1.dp,
+                    rootPositionProvider = {
+                        val currentHideY = (hideProgressState.value * slideDistancePx).roundToInt().toFloat()
+                        Offset(
+                            x = restingDockOriginInRoot.x,
+                            y = restingDockOriginInRoot.y + currentHideY
+                        )
+                    }
+                )
                 .padding(horizontal = 5.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             val totalWidthPx = with(density) { maxWidth.toPx() }
-            val maxHeightPx = with(density) { maxHeight.toPx() }
             val slotWidthPx = totalWidthPx / 4f
-            // Geometri konsentris (R_dock = 29.dp, inset = 5.dp -> R_pill = 24.dp / tinggi 48.dp, lebar tepat 1 slot)
-            val pillWidth = (maxWidth / 4f).coerceIn(58.dp, 92.dp)
-            val pillHeight = 48.dp
-            // Kanvas tetap sedikit lebih lebar agar regangan cair (stretch), swell, & refraksi tepi tidak memicu relayout
-            val canvasWidth = pillWidth + 48.dp
-            val canvasHeight = 58.dp
+            // Geometri konsentris presisi (R_dock = 30.dp, inset = 5.dp -> R_pill = 25.dp / tinggi 50.dp)
+            val pillWidth = (maxWidth / 4f).coerceIn(56.dp, 88.dp)
+            val pillHeight = 50.dp
+            // Kanvas sedikit lebih lebar agar regangan cair (stretch) & swell tidak memicu relayout
+            val canvasWidth = pillWidth + 44.dp
+            val canvasHeight = 60.dp
             val canvasWidthPx = with(density) { canvasWidth.toPx() }
-            val canvasHeightPx = with(density) { canvasHeight.toPx() }
-            val verticalPadPx = ((maxHeightPx - canvasHeightPx) * 0.5f).roundToInt().toFloat()
 
-            // Layer 1: Pill Aktif Dark Liquid Glass v2 (kalem gelap saat diam, lensa bening tajam saat di-drag)
+            // Layer 1: Bantalan Pill Aktif Smoked Fluid (tanpa border putih saat diam, kontras bersih seperti Google App)
             Box(
                 Modifier
                     .offset {
@@ -366,44 +372,31 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
                         IntOffset(exactLeftX.roundToInt(), 0)
                     }
                     .size(width = canvasWidth, height = canvasHeight)
-                    .liquidGlassPill(
+                    .smokedFluidPill(
                         baseWidth = pillWidth,
                         baseHeight = pillHeight,
                         isDark = isDark,
-                        rootPositionProvider = {
-                            val exactCenterX = (pillProgress.value + 0.5f) * slotWidthPx
-                            val intLeftX = (exactCenterX - canvasWidthPx * 0.5f).roundToInt().toFloat()
-                            val currentHideY = (hideProgressState.value * slideDistancePx).roundToInt().toFloat()
-                            Offset(
-                                x = restingTrackOriginInRoot.x + intLeftX,
-                                y = restingTrackOriginInRoot.y + verticalPadPx + currentHideY
-                            )
-                        },
                         subPixelOffsetX = {
                             val exactCenterX = (pillProgress.value + 0.5f) * slotWidthPx
                             val exactLeftX = exactCenterX - canvasWidthPx * 0.5f
                             exactLeftX - exactLeftX.roundToInt().toFloat()
                         },
                         swellProvider = { swellState.value },
-                        activeLensProvider = { activeLensState.value },
+                        dragGlowProvider = { dragGlowState.value },
                         stretchProvider = {
-                            (kotlin.math.abs(fluidVelocity) / 8.5f).coerceIn(0f, 1f) * 0.22f
-                        },
-                        velocityTiltProvider = {
-                            (fluidVelocity / 6.5f).coerceIn(-1f, 1f)
+                            (kotlin.math.abs(fluidVelocity) / 8.5f).coerceIn(0f, 1f) * 0.20f
                         }
                     )
             )
 
-            // Layer 2: Baris 4 Tab Ikon Resmi YouTube (Home, Shorts, Search, You) + gestur tap & fluid slide
+            // Layer 2: Baris 4 Tab Ikon (Home, Shorts, Search, You) + gestur tap & fluid slide
             val currentOnSelect by rememberUpdatedState(onSelect)
+            val activeIconColor = Color(0xFFC2E7FF)
+            val inactiveIconColor = Color.White.copy(alpha = 0.92f)
+
             Row(
                 Modifier
                     .fillMaxSize()
-                    .onGloballyPositioned { coords ->
-                        val currentHideY = (hideProgressState.value * slideDistancePx).roundToInt().toFloat()
-                        restingTrackOriginInRoot = coords.positionInRoot() - Offset(0f, currentHideY)
-                    }
                     .pointerInput(totalWidthPx, effectiveVisible) {
                         if (totalWidthPx <= 0f || !effectiveVisible) return@pointerInput
                         awaitEachGesture {
@@ -464,7 +457,7 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
             ) {
                 tabs.forEachIndexed { index, tabKey ->
                     val isSelected = (index == visualIndex)
-                    val iconTint = if (isSelected) Color.White else Color.White.copy(alpha = 0.78f)
+                    val iconTint = if (isSelected) activeIconColor else inactiveIconColor
 
                     Box(
                         Modifier
@@ -507,15 +500,16 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
                                 val loggedIn = YouTubeAuth.isLoggedIn
                                 val avatarUrl = if (loggedIn) YouTubeAuth.profile.avatarUrl?.takeIf { it.isNotBlank() } else null
                                 val profileName = if (loggedIn) YouTubeAuth.profile.name.trim() else ""
+                                val avatarRingColor = if (isSelected) activeIconColor else Color(0xFF4C8DF6)
                                 when {
                                     avatarUrl != null -> {
                                         Avatar(
                                             avatarUrl,
                                             profileName,
                                             26,
-                                            Modifier.then(
-                                                if (isSelected) Modifier.border(1.5.dp, Color.White, CircleShape).padding(1.5.dp) else Modifier
-                                            )
+                                            Modifier
+                                                .border(1.75.dp, avatarRingColor, CircleShape)
+                                                .padding(1.75.dp)
                                         )
                                     }
                                     profileName.isNotEmpty() -> {
@@ -523,10 +517,8 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
                                             Modifier
                                                 .size(26.dp)
                                                 .clip(CircleShape)
-                                                .background(Color(0xFF383838))
-                                                .then(
-                                                    if (isSelected) Modifier.border(1.5.dp, Color.White, CircleShape) else Modifier
-                                                ),
+                                                .background(Color(0xFF283142))
+                                                .border(1.5.dp, avatarRingColor, CircleShape),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
@@ -542,11 +534,7 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
                                             imageVector = Icons.Default.AccountCircle,
                                             contentDescription = "You",
                                             tint = iconTint,
-                                            modifier = Modifier
-                                                .size(26.dp)
-                                                .then(
-                                                    if (isSelected) Modifier.border(1.5.dp, Color.White, CircleShape).clip(CircleShape) else Modifier
-                                                )
+                                            modifier = Modifier.size(26.dp)
                                         )
                                     }
                                 }
