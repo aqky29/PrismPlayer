@@ -95,8 +95,6 @@ private class ShortsUiState {
     var scrubFraction by mutableFloatStateOf(0f)
     /** Kecepatan pilihan pengguna dari menu; tahan/kunci menimpanya sementara dengan 2x. */
     var speed by mutableFloatStateOf(1f)
-    /** Mute suara dari ikon volume di header; berlaku untuk semua Short selama layar ini terbuka. */
-    var muted by mutableStateOf(false)
 }
 
 /** Warna bar progress Shorts: `reel_time_bar_played_color` di APK YouTube 21.43.523 bernilai merah (yt_medium_red). */
@@ -169,12 +167,12 @@ internal fun ShortsScreen(
     LaunchedEffect(player, ui.holding, ui.locked, ui.speed) {
         player.setPlaybackSpeed(if (ui.holding || ui.locked) 2f else ui.speed)
     }
-    // Volume: dibisukan dari ikon header; volume awal pemutar dikembalikan saat layar Shorts hilang.
+    // Volume: pastikan pemutar tidak mewarisi state mute dari inline feed; volume awal dikembalikan saat layar Shorts hilang.
     DisposableEffect(player) {
         val entryVolume = player.volume
         onDispose { runCatching { player.volume = entryVolume } }
     }
-    LaunchedEffect(player, ui.muted) { player.volume = if (ui.muted) 0f else 1f }
+    LaunchedEffect(player) { player.volume = 1f }
     // Saat menahan atau men-scrub, kolom aksi, judul, dan bar atas memudar (mode bersih), 125 ms seperti YouTube.
     val chrome = animateFloatAsState(if (ui.holding || ui.scrubbing) 0f else 1f, tween(125), label = "shortsChrome")
     // Status suka dibaca dari Engagement: sumber yang sama dengan Watch, fullscreen, dan player offline.
@@ -194,12 +192,16 @@ internal fun ShortsScreen(
     // Status komentar per Short (maks. 8): dimuat untuk halaman aktif supaya jumlah komentar tampil di bawah ikon,
     // dan dipakai ulang oleh panel komentar tanpa permintaan kedua.
     val commentStates = remember { mutableStateMapOf<String, CommentsState>() }
+    val commentOrder = remember { ArrayDeque<String>() }
     val commentsOf: (StreamInfo) -> CommentsState = { info ->
+        commentOrder.remove(info.url)
+        commentOrder.addLast(info.url)
         commentStates[info.url] ?: CommentsState(info.url, scope).also { state ->
             commentStates[info.url] = state
             scope.launch { state.load() }
             while (commentStates.size > 8) {
-                val oldest = commentStates.keys.firstOrNull { it != info.url && it != commentsFor?.url } ?: break
+                val oldest = commentOrder.firstOrNull { it != info.url && it != commentsFor?.url } ?: break
+                commentOrder.remove(oldest)
                 commentStates.remove(oldest)
             }
         }
@@ -277,8 +279,8 @@ internal fun ShortsScreen(
                 Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().fillMaxWidth().height(56.dp).graphicsLayer { alpha = chrome.value }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onClose != null) IconButton(onClick = onClose, modifier = Modifier.clip(CircleShape).background(Color(0x66000000))) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
                     Spacer(Modifier.weight(1f))
-                    IconButton(onClick = onSearch) { Icon(painterResource(R.drawable.yt_reel_search), "Telusuri", tint = Color.White) }
-                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreHoriz, "Opsi", tint = Color.White) }
+                    IconButton(onClick = onSearch) { Icon(painterResource(R.drawable.yt_reel_search), "Search", tint = Color.White) }
+                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreHoriz, "More options", tint = Color.White) }
                 }
             }
             commentsFor?.let { info ->
@@ -447,7 +449,7 @@ private fun ShortPage(
                     Icon(painterResource(R.drawable.yt_shorts_remix_play), contentDescription = null, Modifier.size(14.dp), tint = Color.White)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = meta.sourceVideoTitle ?: "Video sumber",
+                        text = meta.sourceVideoTitle ?: "Source video",
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
@@ -514,7 +516,7 @@ private fun ShortPage(
                     modifier = Modifier
                         .padding(top = 8.dp)
                         .clip(RoundedCornerShape(6.dp))
-                        .clickable { onDescription(info ?: StreamInfo(0, item.url, item.url, org.schabi.newpipe.extractor.stream.StreamType.VIDEO_STREAM, id, item.name, 0)) }
+                        .clickable(enabled = info != null) { info?.let(onDescription) }
                         .padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

@@ -505,7 +505,9 @@ internal fun SubscriptionsScreen(
     onVideo: (StreamInfoItem) -> Unit,
     onChannel: (String) -> Unit,
     onShorts: (List<ShortsCard>, Int) -> Unit,
-    onNotInterested: (StreamInfoItem) -> Unit
+    onNotInterested: (StreamInfoItem) -> Unit,
+    onInlineCandidateChanged: ((StreamInfoItem?) -> Unit)? = null,
+    inlineOverlayFor: ((StreamInfoItem) -> (@Composable BoxScope.() -> Unit)?)? = null,
 ) {
     val gridState = rememberLazyGridState()
     val refreshState = rememberPullToRefreshState()
@@ -541,6 +543,19 @@ internal fun SubscriptionsScreen(
         val source: List<SubsEntry> = if (activeChip == "members" && membershipEntries.isNotEmpty()) membershipEntries else entries
         filterSubsEntries(source, activeChip, selectedChannel, watchedUrls)
     }
+    val keyToStream = remember(visibleEntries) {
+        buildMap<Any, StreamInfoItem> {
+            visibleEntries.forEach { entry ->
+                if (entry is SubsEntry.Video) put("video:${entry.item.url}", entry.item)
+            }
+        }
+    }
+    ObserveInlineFeedCandidate(
+        gridState = gridState,
+        enabled = visibleEntries.isNotEmpty() && !loading,
+        keyToStream = keyToStream,
+        onCandidateChanged = onInlineCandidateChanged,
+    )
 
     LaunchedEffect(activeChip, membershipEntries.size, channels.size) {
         if (activeChip == "members" && membershipEntries.isEmpty()) onLoadMembership()
@@ -632,6 +647,7 @@ internal fun SubscriptionsScreen(
                                         VideoCard(
                                             item = entry.item,
                                             meta = entry.meta,
+                                            inlineOverlay = inlineOverlayFor?.invoke(entry.item),
                                             onClick = { onVideo(entry.item) },
                                             onChannel = { entry.item.uploaderUrl?.let(onChannel) },
                                             onNotInterested = { onNotInterested(entry.item) },

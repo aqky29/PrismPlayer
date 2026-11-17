@@ -267,11 +267,13 @@ internal fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List
                         SettingsRow(R.drawable.yt_menu_lock, "Lock screen", "", onClick = onLock)
                         SettingsRow(R.drawable.yt_menu_quality, "Auto quality limit", "${maxHeight}p") { page = "data" }
                         SettingsRow(R.drawable.yt_menu_autoplay, "Autoplay", if (autoplay) "On" else "Off") { onAutoplay(!autoplay) }
+                        SettingsRow(R.drawable.yt_menu_audio, "Background play", if (PlayerSettings.backgroundPlayback) "On" else "Off") { PlayerSettings.updateBackgroundPlayback(!PlayerSettings.backgroundPlayback) }
                         SettingsRow(R.drawable.yt_menu_speed, "Double-tap to seek", "${PlayerSettings.doubleTapSeconds} seconds") { page = "doubletap" }
                     }
                     "more" -> {
                         SettingsRow(R.drawable.yt_menu_quality, "Auto quality limit", "${maxHeight}p") { page = "data" }
                         SettingsRow(R.drawable.yt_menu_autoplay, "Autoplay", if (autoplay) "On" else "Off") { onAutoplay(!autoplay) }
+                        SettingsRow(R.drawable.yt_menu_audio, "Background play", if (PlayerSettings.backgroundPlayback) "On" else "Off") { PlayerSettings.updateBackgroundPlayback(!PlayerSettings.backgroundPlayback) }
                         SettingsRow(R.drawable.yt_menu_speed, "Double-tap to seek", "${PlayerSettings.doubleTapSeconds} seconds") { page = "doubletap" }
                     }
                     "data" -> listOf(144, 240, 360, 480, 720, 1080, 2160).forEach { height ->

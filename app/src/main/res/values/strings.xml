@@ -5,5 +5,6 @@
     <string name="accessibility_forward">Forward %1$d seconds</string>
     <string name="downloads">Downloads</string>
     <string name="download_notification_title">FlufPlay · Downloads</string>
+    <string name="playback_notification_channel">Background playback</string>
     <string name="cancel">Cancel</string>
 </resources>

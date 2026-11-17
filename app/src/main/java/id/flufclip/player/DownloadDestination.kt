@@ -6,6 +6,7 @@ import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import java.io.File
 import java.io.OutputStream
@@ -20,6 +21,11 @@ internal class DownloadDestination private constructor(
 ) {
     fun open(): OutputStream = if (legacyFile != null) legacyFile.outputStream()
         else context.contentResolver.openOutputStream(uri, "w") ?: error("Cannot open downloaded file")
+
+    fun openWriteFd(): ParcelFileDescriptor? = if (legacyFile != null) null
+        else runCatching { context.contentResolver.openFileDescriptor(uri, "w") }.getOrNull()
+
+    fun legacyFilePath(): String? = legacyFile?.absolutePath
 
     fun verify(bytes: Long) {
         context.contentResolver.openFileDescriptor(uri, "r")?.use { descriptor ->

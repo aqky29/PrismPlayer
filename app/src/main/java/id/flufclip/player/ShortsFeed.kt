@@ -240,15 +240,17 @@ object ShortsFeed {
     suspend fun fetchMeta(videoId: String): ShortsMeta? = withContext(Dispatchers.IO) {
         try {
             val html = fetch("$HOST/shorts/$videoId?hl=$lang&gl=$country")
-            val marker = "ytInitialData = "
-            val startIndex = html.indexOf(marker).takeIf { it >= 0 }?.plus(marker.length) ?: return@withContext null
-            // Cari kurung kurawal pembuka dan penutup
-            val jsonStart = html.indexOf('{', startIndex).takeIf { it >= 0 } ?: return@withContext null
-            // Ekstrak JSON menggunakan substring sederhana sampai penutup script
-            val scriptEnd = html.indexOf(";</script>", jsonStart).takeIf { it >= 0 }
-                ?: html.indexOf("</script>", jsonStart).takeIf { it >= 0 }
-                ?: return@withContext null
-            val jsonText = html.substring(jsonStart, scriptEnd).trim().removeSuffix(";")
+            val jsonText = NativeParsers.extractYtInitialData(html) ?: run {
+                val marker = "ytInitialData = "
+                val startIndex = html.indexOf(marker).takeIf { it >= 0 }?.plus(marker.length) ?: return@withContext null
+                // Cari kurung kurawal pembuka dan penutup
+                val jsonStart = html.indexOf('{', startIndex).takeIf { it >= 0 } ?: return@withContext null
+                // Ekstrak JSON menggunakan substring sederhana sampai penutup script
+                val scriptEnd = html.indexOf(";</script>", jsonStart).takeIf { it >= 0 }
+                    ?: html.indexOf("</script>", jsonStart).takeIf { it >= 0 }
+                    ?: return@withContext null
+                html.substring(jsonStart, scriptEnd).trim().removeSuffix(";")
+            }
             val root = JSONObject(jsonText)
             parseShortsMeta(root)
         } catch (_: Exception) {

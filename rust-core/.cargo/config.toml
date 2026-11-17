@@ -1,0 +1,5 @@
+[target.aarch64-linux-android]
+rustflags = [
+    "-C", "link-arg=--target=aarch64-linux-android26",
+    "-C", "link-arg=-Wl,-z,max-page-size=16384",
+]

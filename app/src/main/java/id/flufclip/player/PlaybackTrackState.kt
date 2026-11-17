@@ -9,6 +9,7 @@ import android.net.Uri
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
@@ -63,8 +64,14 @@ internal class PlaybackTrackState {
         player.trackSelectionParameters = parameters.build()
         val factory = youTubeMediaSourceFactory(context)
         val mediaKey = videoKey(info.url)
+        val artwork = info.thumbnails.lastOrNull()?.url?.takeIf { it.isNotBlank() }?.let(Uri::parse)
+        val metadata = MediaMetadata.Builder()
+            .setTitle(info.name)
+            .setArtist(info.uploaderName)
+            .apply { if (artwork != null) setArtworkUri(artwork) }
+            .build()
         fun media(url: String, manifestMime: String? = null): MediaItem {
-            val builder = MediaItem.Builder().setUri(url).setMediaId(mediaKey)
+            val builder = MediaItem.Builder().setUri(url).setMediaId(mediaKey).setMediaMetadata(metadata)
             if (manifestMime != null) builder.setMimeType(manifestMime)
             if (isLive) builder.setLiveConfiguration(liveMediaConfiguration())
             selectedSubtitle?.takeIf { it.isUrl && it.content.isNotBlank() }?.let { sub ->

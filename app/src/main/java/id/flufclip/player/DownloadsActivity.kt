@@ -64,6 +64,7 @@ class DownloadsActivity : ComponentActivity() {
     }
     override fun onStart() {
         super.onStart()
+        PlaybackSessionHost.setVideoTrackDisabled(localPlayer, false)
         onlinePlayerForDownloads.get()?.pause()
     }
     internal fun savePosition() {
@@ -76,7 +77,14 @@ class DownloadsActivity : ComponentActivity() {
         SavedDownloads.playbackRevision.update { it + 1 }
     }
     override fun onStop() {
-        if (!handingOff) { savePosition(); localPlayer?.pause() }
+        if (!handingOff) {
+            savePosition()
+            val player = localPlayer
+            val keep = PlayerSettings.backgroundPlayback && localRecord != null && player != null &&
+                player.playWhenReady && (player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_READY)
+            if (keep) PlaybackSessionHost.setVideoTrackDisabled(player, true)
+            else player?.pause()
+        }
         super.onStop()
     }
 }
@@ -102,7 +110,16 @@ private fun DownloadsScreen(activity: DownloadsActivity, requestedUri: String?, 
     var buffering by remember { mutableStateOf(false) }
     var hasSubtitles by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val player = remember { activity.borrowedPlayer ?: ExoPlayer.Builder(activity.applicationContext).build().apply { setAudioAttributes(AudioAttributes.DEFAULT, true) } }
+    val player = remember {
+        (activity.borrowedPlayer ?: ExoPlayer.Builder(activity.applicationContext)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .build()
+            .apply { setAudioAttributes(AudioAttributes.DEFAULT, true) }).apply {
+            setHandleAudioBecomingNoisy(true)
+            setWakeMode(C.WAKE_MODE_NETWORK)
+        }
+    }
     val currentDownloads by rememberUpdatedState(downloads)
     val currentSelected by rememberUpdatedState(selectedUri)
     val auto by rememberUpdatedState(autoplay)
@@ -120,18 +137,56 @@ private fun DownloadsScreen(activity: DownloadsActivity, requestedUri: String?, 
                 hasSubtitles = player.currentTracks.groups.any { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
                 val flag = android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                 if (playing) activity.window.addFlags(flag) else activity.window.clearFlags(flag)
+                if (events.containsAny(Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_PLAYBACK_STATE_CHANGED)) {
+                    PlaybackSessionHost.syncService(activity)
+                }
             }
             override fun onPlayerError(failure: PlaybackException) { error = "Cannot read the file. It may have been moved, deleted, or access may be unavailable." }
             override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_ENDED) onEnded() }
         }
         player.addListener(listener)
         onDispose {
-            if (!activity.handingOff) activity.savePosition()
+            if (!activity.handingOff) {
+                activity.savePosition()
+                if (PlaybackSessionHost.activeTarget?.tag == "offline") {
+                    PlaybackSessionHost.setTarget(null)
+                    PlaybackSessionHost.syncService(activity)
+                }
+            }
             activity.localPlayer = null
             activity.localRecord = null
             player.removeListener(listener)
             if (!activity.handingOff) player.release()
             activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+    LaunchedEffect(selected?.uri, downloads) {
+        if (selected == null) {
+            if (PlaybackSessionHost.activeTarget?.tag == "offline") {
+                PlaybackSessionHost.setTarget(null)
+                PlaybackSessionHost.syncService(activity)
+            }
+        } else {
+            val index = downloads.indexOfFirst { it.uri == selected.uri }
+            PlaybackSessionHost.setTarget(
+                PlaybackSessionHost.Target(
+                    tag = "offline",
+                    player = player,
+                    hasNext = { index >= 0 && index + 1 < currentDownloads.size },
+                    hasPrevious = { index > 0 },
+                    onNext = {
+                        val next = currentDownloads.getOrNull(index + 1)
+                        if (next != null) { activity.savePosition(); selectedUri = next.uri }
+                    },
+                    onPrevious = {
+                        val prev = currentDownloads.getOrNull(index - 1)
+                        if (prev != null) { activity.savePosition(); selectedUri = prev.uri }
+                    },
+                    onClose = { player.pause() },
+                    contentIntent = { ctx -> SavedDownloads.openIntent(ctx, selected) },
+                )
+            )
+            PlaybackSessionHost.syncService(activity)
         }
     }
     LaunchedEffect(selected?.uri) {

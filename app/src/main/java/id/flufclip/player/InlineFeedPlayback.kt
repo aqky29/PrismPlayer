@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
@@ -34,14 +35,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,7 +52,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -70,6 +71,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import org.schabi.newpipe.extractor.stream.Frameset
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
@@ -84,12 +87,100 @@ internal fun firstSupportedSubtitle(info: StreamInfo?): SubtitlesStream? =
         it.isUrl && it.format?.suffix?.lowercase() in SUPPORTED_SUBTITLE_SUFFIXES
     }
 
-/** Home feed autoplays regular videos and livestreams inline; Shorts and playlists stay cards. */
+/** Home/subscriptions/search feeds autoplay regular videos and livestreams inline; Shorts and playlists stay cards. */
 internal fun isInlineFeedCandidate(item: StreamInfoItem): Boolean {
     if (item.isShortFormContent) return false
     val meta = HomeFeed.metaOf(item.url)
     if (meta?.isPlaylist == true) return false
     return true
+}
+
+/** Pure eligibility check for inline feed playback outside WatchScreen. */
+internal fun isInlinePlaybackEligible(
+    hasSelectedVideo: Boolean,
+    hasPendingVideo: Boolean,
+    shortsMode: Boolean,
+    inPip: Boolean,
+    showHistory: Boolean,
+    hasAccountPlaylist: Boolean,
+    showLoginDialog: Boolean,
+    showAccountDialog: Boolean,
+    hasChannelDownloadTarget: Boolean,
+    hasOfflineMiniSession: Boolean,
+    mainTab: String,
+    searchActive: Boolean,
+    searchMode: Boolean,
+    searchFilter: String,
+    hasBrowseChannel: Boolean,
+    hasBrowsePlaylist: Boolean,
+): Boolean =
+    !hasSelectedVideo &&
+        !hasPendingVideo &&
+        !shortsMode &&
+        !inPip &&
+        !showHistory &&
+        !hasAccountPlaylist &&
+        !showLoginDialog &&
+        !showAccountDialog &&
+        !hasChannelDownloadTarget &&
+        !hasOfflineMiniSession &&
+        (mainTab == "home" || mainTab == "subscriptions") &&
+        !searchActive &&
+        (!searchMode || isInlineSearchFilter(searchFilter)) &&
+        !hasBrowseChannel &&
+        !hasBrowsePlaylist
+
+/**
+ * Observes a [LazyGridState] and reports the most-visible eligible [StreamInfoItem] (>= 50% visible)
+ * after scrolling settles for 380ms, clearing the candidate when the observer leaves composition.
+ */
+@Composable
+internal fun ObserveInlineFeedCandidate(
+    gridState: LazyGridState,
+    enabled: Boolean,
+    keyToStream: Map<Any, StreamInfoItem>,
+    onCandidateChanged: ((StreamInfoItem?) -> Unit)?,
+) {
+    val latestCallback by rememberUpdatedState(onCandidateChanged)
+    DisposableEffect(Unit) {
+        onDispose { latestCallback?.invoke(null) }
+    }
+    LaunchedEffect(gridState, enabled, keyToStream, onCandidateChanged) {
+        val callback = onCandidateChanged ?: return@LaunchedEffect
+        if (!enabled || keyToStream.isEmpty()) {
+            callback(null)
+            return@LaunchedEffect
+        }
+        snapshotFlow {
+            val info = gridState.layoutInfo
+            val scrolling = gridState.isScrollInProgress
+            if (scrolling) {
+                null to true
+            } else {
+                val vpStart = info.viewportStartOffset
+                val vpEnd = info.viewportEndOffset
+                val best = info.visibleItemsInfo.mapNotNull { entry ->
+                    val stream = keyToStream[entry.key] ?: return@mapNotNull null
+                    if (!isInlineFeedCandidate(stream)) return@mapNotNull null
+                    val top = entry.offset.y
+                    val height = entry.size.height.coerceAtLeast(1)
+                    val bottom = top + height
+                    val visibleHeight = (minOf(bottom, vpEnd) - maxOf(top, vpStart)).coerceAtLeast(0)
+                    val ratio = visibleHeight.toFloat() / height.toFloat()
+                    if (ratio < 0.5f) return@mapNotNull null
+                    Triple(stream, ratio, top)
+                }.maxWithOrNull(compareBy<Triple<StreamInfoItem, Float, Int>> { it.second }.thenByDescending { it.third })?.first
+                best to false
+            }
+        }
+            .distinctUntilChanged { old, new -> old.first?.url == new.first?.url && old.second == new.second }
+            .collectLatest { (candidate, scrolling) ->
+                if (!scrolling) {
+                    delay(380L)
+                    callback(candidate)
+                }
+            }
+    }
 }
 
 internal data class InlineTimelineState(
@@ -431,8 +522,10 @@ internal fun BoxScope.InlinePlayerOverlay(
         }
         val bufferedProgress = (timeline.barBufferedMs.toFloat() / timeline.barDurationMs.toFloat()).coerceIn(0f, 1f)
         fun commitFraction(fraction: Float) {
-            scrubbing = false
             val target = (fraction * timeline.barDurationMs).toLong().coerceIn(0L, timeline.barDurationMs)
+            // Update displayed position immediately so the bar doesn't snap back before the next 250ms poll.
+            timeline = timeline.copy(barPositionMs = target)
+            scrubbing = false
             if (timeline.isLive && target >= (timeline.barDurationMs - 750L).coerceAtLeast(0L)) {
                 onSeekToLiveEdge()
             } else {
@@ -505,24 +598,23 @@ private fun InlineScrubberBar(
     onTapSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var widthPx by remember { mutableFloatStateOf(1f) }
     var currentFraction by remember { mutableFloatStateOf(progress.coerceIn(0f, 1f)) }
     if (!scrubbing) currentFraction = progress.coerceIn(0f, 1f)
 
+    val latestEnabled by rememberUpdatedState(enabled)
     val latestScrubStart by rememberUpdatedState(onScrubStart)
     val latestScrubMove by rememberUpdatedState(onScrubMove)
     val latestScrubEnd by rememberUpdatedState(onScrubEnd)
     val latestScrubCancel by rememberUpdatedState(onScrubCancel)
     val latestTapSeek by rememberUpdatedState(onTapSeek)
-    val latestFraction by rememberUpdatedState(currentFraction)
 
     val barHeightDp by animateDpAsState(
-        targetValue = if (scrubbing) 4.5.dp else 2.5.dp,
+        targetValue = if (scrubbing) 5.dp else 3.dp,
         animationSpec = tween(durationMillis = 120),
         label = "inlineBarHeight"
     )
     val thumbRadiusDp by animateDpAsState(
-        targetValue = if (scrubbing) 7.dp else 0.dp,
+        targetValue = if (scrubbing) 7.dp else if (enabled) 4.dp else 0.dp,
         animationSpec = tween(durationMillis = 120),
         label = "inlineThumbRadius"
     )
@@ -545,16 +637,16 @@ private fun InlineScrubberBar(
                     }
                 } else Modifier
             )
-            .onSizeChanged { widthPx = it.width.toFloat().coerceAtLeast(1f) }
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
+            // Keep pointerInput stable across transient buffering ticks so an active scrub is never cancelled.
+            .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    val w = widthPx
-                    val thumbX = w * latestFraction
-                    val nearThumb = abs(down.position.x - thumbX) <= 22.dp.toPx()
+                    if (!latestEnabled) return@awaitEachGesture
+                    // Consume down so parent VideoCard.clickable doesn't hijack or ripple when touching the scrubber.
+                    down.consume()
+                    val w = size.width.toFloat().coerceAtLeast(1f)
                     val baseSlop = viewConfiguration.touchSlop
-                    val horizontalSlop = if (nearThumb) baseSlop * 0.45f else baseSlop
+                    val horizontalSlop = baseSlop * 0.4f
                     val fineThresholdPx = 40.dp.toPx()
 
                     var activeScrub = false
@@ -577,7 +669,7 @@ private fun InlineScrubberBar(
                             val dy = change.position.y - down.position.y
                             if (!activeScrub) {
                                 if (abs(dx) > baseSlop || abs(dy) > baseSlop) moved = true
-                                if (abs(dx) > horizontalSlop && abs(dx) >= abs(dy)) {
+                                if (abs(dx) > horizontalSlop && abs(dx) >= abs(dy) * 0.65f) {
                                     activeScrub = true
                                     moved = true
                                     fraction = (change.position.x / w).coerceIn(0f, 1f)
@@ -585,8 +677,8 @@ private fun InlineScrubberBar(
                                     currentFraction = fraction
                                     change.consume()
                                     latestScrubStart(fraction)
-                                } else if (moved && abs(dy) > abs(dx)) {
-                                    // Vertical gesture wins so LazyVerticalGrid scrolls normally.
+                                } else if (abs(dy) > baseSlop * 1.25f && abs(dy) > abs(dx) * 1.35f) {
+                                    // Clear vertical gesture: yield so LazyVerticalGrid scrolls normally.
                                     break
                                 }
                             } else {
@@ -621,10 +713,12 @@ private fun InlineScrubberBar(
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(16.dp)
+                .height(20.dp)
         ) {
             val barHeight = barHeightDp.toPx()
-            val topY = size.height - barHeight
+            val thumbRadius = thumbRadiusDp.toPx()
+            val centerY = size.height - maxOf(barHeight / 2f, thumbRadius)
+            val topY = centerY - barHeight / 2f
             val corner = CornerRadius(barHeight / 2f, barHeight / 2f)
             val filledWidth = size.width * currentFraction.coerceIn(0f, 1f)
             val bufferedWidth = size.width * bufferedProgress.coerceIn(0f, 1f)
@@ -650,13 +744,12 @@ private fun InlineScrubberBar(
                     cornerRadius = corner
                 )
             }
-            val thumbRadius = thumbRadiusDp.toPx()
             if (thumbRadius > 0.5f) {
                 val centerX = filledWidth.coerceIn(thumbRadius, (size.width - thumbRadius).coerceAtLeast(thumbRadius))
                 drawCircle(
                     color = Accent,
                     radius = thumbRadius,
-                    center = Offset(centerX, topY + barHeight / 2f)
+                    center = Offset(centerX, centerY)
                 )
             }
         }

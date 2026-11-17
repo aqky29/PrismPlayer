@@ -203,14 +203,14 @@ internal fun estimateAudioStreamBytes(stream: AudioStream, durationSeconds: Long
     return (bitrateBps.toLong() * durationSeconds) / 8L
 }
 
-private fun pickBestAudioForDownload(audios: List<AudioStream>, durationSeconds: Long): AudioStream? =
+internal fun pickBestAudioForDownload(audios: List<AudioStream>, durationSeconds: Long): AudioStream? =
     audios.maxWithOrNull(
         compareBy<AudioStream> { audioBitrateBps(it) }
             .thenBy { if (estimateAudioStreamBytes(it, durationSeconds) != null) 1 else 0 }
             .thenBy { it.itagItem?.contentLength ?: -1L }
     )
 
-private fun pickBestVideoForCap(
+internal fun pickBestVideoForCap(
     videos: List<VideoStream>,
     maxHeight: Int,
     hasAudioStreams: Boolean,

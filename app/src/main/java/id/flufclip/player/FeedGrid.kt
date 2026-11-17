@@ -64,8 +64,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.schabi.newpipe.extractor.InfoItem
 import org.schabi.newpipe.extractor.channel.ChannelInfoItem
@@ -79,6 +77,9 @@ internal fun isActiveChannelBrowse(channel: ChannelPage?, playlist: PlaylistInfo
 
 internal fun shouldShowCenteredSearchLoader(isSearchResults: Boolean, loading: Boolean, itemCount: Int): Boolean =
     isSearchResults && loading && itemCount == 0
+
+internal fun shouldShowFeedPullRefreshIndicator(isFeed: Boolean, loading: Boolean, pullRefreshing: Boolean): Boolean =
+    isFeed && loading && pullRefreshing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -250,51 +251,29 @@ internal fun ColumnScope.FeedGrid(
             "home:$identity:$occurrence"
         }
     }
-    val keyToIndex = remember(itemKeys, feedEntryKeys, isFeed) {
-        (if (isFeed) feedEntryKeys else itemKeys).withIndex().associate { (i, k) -> k to i }
-    }
-    LaunchedEffect(gridState, isFeed, inlineSearchEligible, visibleFeedEntries, visibleItems, keyToIndex, onInlineCandidateChanged) {
-        val callback = onInlineCandidateChanged ?: return@LaunchedEffect
-        val activeFeedEmpty = if (isFeed) visibleFeedEntries.isEmpty() else visibleItems.isEmpty()
-        if ((!isFeed && !inlineSearchEligible) || activeFeedEmpty) {
-            callback(null)
-            return@LaunchedEffect
-        }
-        snapshotFlow {
-            val info = gridState.layoutInfo
-            val scrolling = gridState.isScrollInProgress
-            if (scrolling) {
-                null to true
-            } else {
-                val vpStart = info.viewportStartOffset
-                val vpEnd = info.viewportEndOffset
-                val best = info.visibleItemsInfo.mapNotNull { entry ->
-                    val idx = keyToIndex[entry.key] ?: return@mapNotNull null
-                    val stream = when {
-                        isFeed -> (visibleFeedEntries.getOrNull(idx) as? HomeEntry.Video)?.item
-                        inlineSearchEligible -> visibleItems.getOrNull(idx) as? StreamInfoItem
-                        else -> null
-                    } ?: return@mapNotNull null
-                    if (!isInlineFeedCandidate(stream)) return@mapNotNull null
-                    val top = entry.offset.y
-                    val height = entry.size.height.coerceAtLeast(1)
-                    val bottom = top + height
-                    val visibleHeight = (minOf(bottom, vpEnd) - maxOf(top, vpStart)).coerceAtLeast(0)
-                    val ratio = visibleHeight.toFloat() / height.toFloat()
-                    if (ratio < 0.5f) return@mapNotNull null
-                    Triple(stream, ratio, top)
-                }.maxWithOrNull(compareBy<Triple<StreamInfoItem, Float, Int>> { it.second }.thenByDescending { it.third })?.first
-                best to false
-            }
-        }
-            .distinctUntilChanged { old, new -> old.first?.url == new.first?.url && old.second == new.second }
-            .collectLatest { (candidate, scrolling) ->
-                if (!scrolling) {
-                    delay(380L)
-                    callback(candidate)
+    val keyToStream: Map<Any, StreamInfoItem> = remember(itemKeys, feedEntryKeys, visibleFeedEntries, visibleItems, isFeed, inlineSearchEligible) {
+        when {
+            isFeed -> buildMap {
+                feedEntryKeys.forEachIndexed { idx, key ->
+                    val stream = (visibleFeedEntries.getOrNull(idx) as? HomeEntry.Video)?.item
+                    if (stream != null) put(key, stream)
                 }
             }
+            inlineSearchEligible -> buildMap {
+                itemKeys.forEachIndexed { idx, key ->
+                    val stream = visibleItems.getOrNull(idx) as? StreamInfoItem
+                    if (stream != null) put(key, stream)
+                }
+            }
+            else -> emptyMap()
+        }
     }
+    ObserveInlineFeedCandidate(
+        gridState = gridState,
+        enabled = isFeed || inlineSearchEligible,
+        keyToStream = keyToStream,
+        onCandidateChanged = onInlineCandidateChanged,
+    )
     LaunchedEffect(gridState, isFeed, feedState.category, visibleFeedEntries.size, feedState.feedLoading, feedState.feedError, feedState.feedEnd, loading) {
         if (isFeed && !feedState.feedLoading && feedState.feedError == null && !feedState.feedEnd && !loading && visibleFeedEntries.isNotEmpty()) {
             snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
@@ -344,7 +323,7 @@ internal fun ColumnScope.FeedGrid(
         }
     }
     val refreshState = rememberPullToRefreshState()
-    val refreshingFeed = isFeed && loading
+    val refreshingFeed = shouldShowFeedPullRefreshIndicator(isFeed, loading, feedState.pullRefreshing)
     val refreshModifier = if (isFeed) Modifier.pullToRefresh(
         isRefreshing = refreshingFeed,
         state = refreshState,

@@ -1,6 +1,7 @@
 package id.flufclip.player
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -96,23 +97,62 @@ internal object OfflinePlaybackBridge {
             .putLong("duration:${current.saved.uri}", duration).apply()
         SavedDownloads.revision.update { it + 1 }
     }
+    private fun playRelative(delta: Int): Boolean {
+        val current = session ?: return false
+        save(current)
+        val queue = SavedDownloads.list(current.context)
+        val index = queue.indexOfFirst { it.uri == current.saved.uri }
+        val next = queue.getOrNull(index + delta)?.takeIf { index >= 0 && isLocalDownloadUri(it.uri) } ?: return false
+        session = current.copy(saved = next)
+        current.player.setMediaSource(ProgressiveMediaSource.Factory(DefaultDataSource.Factory(current.context)).createMediaSource(
+            MediaItem.Builder().setUri(next.uri).setMimeType(next.mime).setMediaId(next.uri)
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(next.title).setArtist(next.video.uploader).build()).build()))
+        current.player.prepare(); current.player.play()
+        PlaybackSessionHost.syncService(current.context)
+        return true
+    }
+    fun saveCurrent() { session?.let(::save) }
     fun offer(context: Context, saved: SavedDownload, player: ExoPlayer, autoplay: Boolean) {
         close()
-        session = Session(saved, player, context.applicationContext, autoplay)
+        val appContext = context.applicationContext
+        player.setWakeMode(C.WAKE_MODE_NETWORK)
+        player.setHandleAudioBecomingNoisy(true)
+        session = Session(saved, player, appContext, autoplay)
         listener = object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                PlaybackSessionHost.syncService(appContext)
+            }
             override fun onPlaybackStateChanged(state: Int) {
                 val current = session ?: return
+                PlaybackSessionHost.syncService(appContext)
                 if (state != Player.STATE_ENDED || !current.autoplay) return
-                save(current)
-                val queue = SavedDownloads.list(current.context)
-                val index = queue.indexOfFirst { it.uri == current.saved.uri }
-                val next = queue.getOrNull(index + 1)?.takeIf { index >= 0 && isLocalDownloadUri(it.uri) } ?: return
-                session = current.copy(saved = next)
-                player.setMediaSource(ProgressiveMediaSource.Factory(DefaultDataSource.Factory(current.context)).createMediaSource(
-                    MediaItem.Builder().setUri(next.uri).setMimeType(next.mime).setMediaId(next.uri).build()))
-                player.prepare(); player.play()
+                playRelative(1)
             }
         }.also { player.addListener(it) }
+        PlaybackSessionHost.setTarget(
+            PlaybackSessionHost.Target(
+                tag = "offline",
+                player = player,
+                hasNext = {
+                    val current = session ?: return@Target false
+                    val queue = SavedDownloads.list(current.context)
+                    val index = queue.indexOfFirst { it.uri == current.saved.uri }
+                    index >= 0 && index + 1 < queue.size
+                },
+                hasPrevious = {
+                    val current = session ?: return@Target false
+                    val queue = SavedDownloads.list(current.context)
+                    queue.indexOfFirst { it.uri == current.saved.uri } > 0
+                },
+                onNext = { playRelative(1) },
+                onPrevious = { playRelative(-1) },
+                onClose = { player.pause() },
+                contentIntent = { ctx ->
+                    Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                },
+            )
+        )
+        PlaybackSessionHost.syncService(appContext)
     }
     fun take(uri: String?): ExoPlayer? {
         val current = session ?: return null
@@ -120,6 +160,7 @@ internal object OfflinePlaybackBridge {
         listener?.let { current.player.removeListener(it) }
         listener = null
         session = null
+        if (PlaybackSessionHost.activeTarget?.tag == "offline") PlaybackSessionHost.setTarget(null)
         return current.player
     }
     fun pause() { session?.let { save(it); it.player.pause() } }
@@ -129,6 +170,10 @@ internal object OfflinePlaybackBridge {
         listener?.let { current.player.removeListener(it) }
         listener = null
         session = null
+        if (PlaybackSessionHost.activeTarget?.tag == "offline") {
+            PlaybackSessionHost.setTarget(null)
+            PlaybackSessionHost.syncService(current.context)
+        }
         current.player.release()
     }
 }

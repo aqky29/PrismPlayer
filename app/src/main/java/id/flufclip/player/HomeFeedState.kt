@@ -16,6 +16,8 @@ import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 
+internal fun shouldLoadHomeOnStart(entries: List<HomeEntry>): Boolean = entries.isEmpty()
+
 /**
  * State untuk feed beranda, kategori/chips, paging feed, dan sesi muat beranda.
  */
@@ -37,6 +39,7 @@ internal class HomeFeedState(
     var categoryContinuation by mutableStateOf<String?>(null)
     var homeChipTitle by mutableStateOf("All")
     var feedLoading by mutableStateOf(false)
+    var pullRefreshing by mutableStateOf(false)
     var feedError by mutableStateOf<String?>(null)
     var feedEnd by mutableStateOf(false)
     var topicIndex by mutableIntStateOf(0)
@@ -112,6 +115,20 @@ internal class HomeFeedState(
         homeChips = merged.values.toList()
     }
 
+    fun restoreCachedChips(cachedChips: List<HomeChip>) {
+        if (cachedChips.isEmpty()) return
+        homeChips = cachedChips
+        val homeChip = cachedChips.firstOrNull { it.selected }
+            ?: cachedChips.firstOrNull { it.title.equals("All", true) || it.title.equals("Semua", true) }
+            ?: cachedChips.firstOrNull { !it.hasEndpoint }
+            ?: cachedChips.firstOrNull()
+        selectedChip = homeChip
+        if (homeChip != null) {
+            homeChipTitle = homeChip.title
+            category = homeChip.title
+        }
+    }
+
     fun loadHome(
         refresh: Boolean = false,
         scope: CoroutineScope,
@@ -129,6 +146,7 @@ internal class HomeFeedState(
     ) {
         if (loading || feedLoading) return
         val revision = YouTubeAuth.sessionRevision
+        pullRefreshing = refresh
         onLoadingChange(true); onErrorChange(null); feedError = null; feedEnd = false
         homeLoadJob = scope.launch {
             // Cek siaran live channel yang sering views berjalan paralel; hasilnya disisipkan setelah feed tampil.
@@ -209,10 +227,16 @@ internal class HomeFeedState(
                     homePage = nextHomePage
                     homeContinuationToken = nextContinuation
                     HomeFeedCache.saveEntries(homeCachePrefs, updatedEntries)
+                    if (homeChips.isNotEmpty()) HomeFeedCache.saveChips(homeCachePrefs, homeChips)
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (revision == YouTubeAuth.sessionRevision) onErrorChange(if (getHome().isEmpty()) "Failed to load feed: ${e.message ?: "try again"}" else "Cannot refresh feed. Showing the latest videos.") }
-            finally { if (revision == YouTubeAuth.sessionRevision) onLoadingChange(false) }
+            finally {
+                if (revision == YouTubeAuth.sessionRevision) {
+                    pullRefreshing = false
+                    onLoadingChange(false)
+                }
+            }
             val live = liveJob.await()
             if (revision == YouTubeAuth.sessionRevision && live.isNotEmpty()) {
                 val updated = HomeRecommendations.withLive(getHome(), live, hidden.videos, hidden.channels)
@@ -238,6 +262,7 @@ internal class HomeFeedState(
         onLoadingChange: (Boolean) -> Unit,
         onErrorChange: (String?) -> Unit
     ) {
+        pullRefreshing = force
         onLoadingChange(true)
         if (value == "Live") {
             // Chip "Live" menampilkan siaran yang benar-benar sedang berlangsung, bukan hasil pencarian kata "Live":
@@ -261,7 +286,10 @@ internal class HomeFeedState(
                     } else onErrorChange("Cannot refresh category. Showing the latest videos.")
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) { onErrorChange("Failed to load category: ${e.message ?: "try again"}") }
-                finally { onLoadingChange(false) }
+                finally {
+                    pullRefreshing = false
+                    onLoadingChange(false)
+                }
             }
             return
         }
@@ -276,7 +304,10 @@ internal class HomeFeedState(
                     feedEnd = page.next == null
                 } else onErrorChange("Cannot refresh category. Showing the latest videos.")
             } catch (e: Exception) { onErrorChange("Failed to load category: ${e.message ?: "try again"}") }
-            finally { onLoadingChange(false) }
+            finally {
+                pullRefreshing = false
+                onLoadingChange(false)
+            }
         }
     }
 
@@ -304,6 +335,7 @@ internal class HomeFeedState(
             return
         }
         val revision = YouTubeAuth.sessionRevision
+        pullRefreshing = force
         onLoadingChange(true)
         scope.launch {
             try {
@@ -320,7 +352,12 @@ internal class HomeFeedState(
                 } else onErrorChange("Cannot refresh category. Showing the latest videos.")
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (revision == YouTubeAuth.sessionRevision && selectedChip == chip) onErrorChange("Failed to load category: ${e.message ?: "try again"}") }
-            finally { if (revision == YouTubeAuth.sessionRevision) onLoadingChange(false) }
+            finally {
+                if (revision == YouTubeAuth.sessionRevision) {
+                    pullRefreshing = false
+                    onLoadingChange(false)
+                }
+            }
         }
     }
 

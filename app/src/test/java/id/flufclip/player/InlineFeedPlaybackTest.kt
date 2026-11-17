@@ -112,4 +112,64 @@ class InlineFeedPlaybackTest {
         assertEquals("-4:58", formatInlineScrubLabel(6_900_000L, liveBehind))
         assertEquals("0:45 / 3:00", formatInlineScrubLabel(45_000L, vod))
     }
+
+    @Test
+    fun isInlinePlaybackEligibleRespectsOverlaysOfflineMiniAndTabs() {
+        fun eligible(
+            hasSelectedVideo: Boolean = false,
+            hasPendingVideo: Boolean = false,
+            shortsMode: Boolean = false,
+            inPip: Boolean = false,
+            showHistory: Boolean = false,
+            hasAccountPlaylist: Boolean = false,
+            showLoginDialog: Boolean = false,
+            showAccountDialog: Boolean = false,
+            hasChannelDownloadTarget: Boolean = false,
+            hasOfflineMiniSession: Boolean = false,
+            mainTab: String = "home",
+            searchActive: Boolean = false,
+            searchMode: Boolean = false,
+            searchFilter: String = "all",
+            hasBrowseChannel: Boolean = false,
+            hasBrowsePlaylist: Boolean = false,
+        ) = isInlinePlaybackEligible(
+            hasSelectedVideo = hasSelectedVideo,
+            hasPendingVideo = hasPendingVideo,
+            shortsMode = shortsMode,
+            inPip = inPip,
+            showHistory = showHistory,
+            hasAccountPlaylist = hasAccountPlaylist,
+            showLoginDialog = showLoginDialog,
+            showAccountDialog = showAccountDialog,
+            hasChannelDownloadTarget = hasChannelDownloadTarget,
+            hasOfflineMiniSession = hasOfflineMiniSession,
+            mainTab = mainTab,
+            searchActive = searchActive,
+            searchMode = searchMode,
+            searchFilter = searchFilter,
+            hasBrowseChannel = hasBrowseChannel,
+            hasBrowsePlaylist = hasBrowsePlaylist,
+        )
+
+        assertTrue(eligible(mainTab = "home"))
+        assertTrue(eligible(mainTab = "subscriptions"))
+        assertTrue(eligible(searchMode = true, searchFilter = "videos"))
+
+        assertFalse(eligible(mainTab = "you"))
+        assertFalse(eligible(mainTab = "shorts"))
+        assertFalse(eligible(hasOfflineMiniSession = true))
+        assertFalse(eligible(hasAccountPlaylist = true))
+        assertFalse(eligible(showLoginDialog = true))
+        assertFalse(eligible(showAccountDialog = true))
+        assertFalse(eligible(hasChannelDownloadTarget = true))
+        assertFalse(eligible(hasBrowseChannel = true))
+        assertFalse(eligible(hasBrowsePlaylist = true))
+        assertFalse(eligible(searchActive = true))
+        assertFalse(eligible(searchMode = true, searchFilter = "channels"))
+        assertFalse(eligible(hasSelectedVideo = true))
+        assertFalse(eligible(hasPendingVideo = true))
+        assertFalse(eligible(shortsMode = true))
+        assertFalse(eligible(inPip = true))
+        assertFalse(eligible(showHistory = true))
+    }
 }

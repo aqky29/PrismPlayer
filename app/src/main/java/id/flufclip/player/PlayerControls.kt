@@ -97,18 +97,25 @@ internal object PlayerSettings {
         private set
     var audioPreference by mutableStateOf(AudioPreference.INDONESIAN)
         private set
+    var backgroundPlayback by mutableStateOf(true)
+        private set
     private var preferences: SharedPreferences? = null
     fun load(context: Context) {
         if (preferences != null) return
         preferences = context.getSharedPreferences("player_settings", Context.MODE_PRIVATE).also {
             doubleTapSeconds = it.getInt("double_tap_seconds", 10)
             audioPreference = AudioPreference.fromKey(it.getString("audio_preference", null))
+            backgroundPlayback = it.getBoolean("background_playback", true)
         }
     }
     fun updateDoubleTap(seconds: Int) { doubleTapSeconds = seconds; preferences?.edit()?.putInt("double_tap_seconds", seconds)?.apply() }
     fun updateAudioPreference(preference: AudioPreference) {
         audioPreference = preference
         preferences?.edit()?.putString("audio_preference", preference.key)?.apply()
+    }
+    fun updateBackgroundPlayback(enabled: Boolean) {
+        backgroundPlayback = enabled
+        preferences?.edit()?.putBoolean("background_playback", enabled)?.apply()
     }
 }
 

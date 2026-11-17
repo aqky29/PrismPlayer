@@ -141,6 +141,8 @@ class MainActivity : ComponentActivity() {
     var pipPlayer: Player? = null
     /** Dinilai saat pengguna meninggalkan app, bukan di-cache saat komposisi, supaya tidak basi. Diisi App(). */
     var pipEligible: () -> Boolean = { false }
+    /** Dinilai saat onStop(): true jika video tonton aktif (bukan Shorts/inline) bisa lanjut di latar belakang. */
+    var backgroundPlaybackEligible: () -> Boolean = { false }
     private val pipSupported get() = packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     /** Rasio PiP mengikuti video yang sedang diputar (Short vertikal tidak dipaksa 16:9), dibatasi 1:2,39 sampai 2,39:1 sesuai aturan sistem. */
@@ -174,21 +176,42 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         if (pipSupported && pipEligible()) runCatching { enterPictureInPictureMode(pipParams()) }
     }
+    override fun onStart() {
+        super.onStart()
+        PlaybackSessionHost.setVideoTrackDisabled(pipPlayer, false)
+        OfflinePlaybackBridge.session?.let { PlaybackSessionHost.setVideoTrackDisabled(it.player, false) }
+    }
     override fun onResume() {
         super.onResume()
         // Setelah proses dibekukan/dibunuh sistem, state login di memori bisa tertinggal; baca ulang dari prefs.
         if (!YouTubeAuth.isLoggedIn) YouTubeAuth.init(applicationContext)
     }
     override fun onStop() {
-        OfflinePlaybackBridge.pause()
+        val offlinePlayer = OfflinePlaybackBridge.session?.player
+        val keepOffline = PlayerSettings.backgroundPlayback && offlinePlayer != null &&
+            offlinePlayer.playWhenReady &&
+            (offlinePlayer.playbackState == Player.STATE_BUFFERING || offlinePlayer.playbackState == Player.STATE_READY)
+        if (keepOffline) {
+            OfflinePlaybackBridge.saveCurrent()
+            PlaybackSessionHost.setVideoTrackDisabled(offlinePlayer, true)
+        } else {
+            OfflinePlaybackBridge.pause()
+        }
         super.onStop()
-        // Aplikasi belum punya pemutaran latar belakang. Jika Activity berhenti (baik keluar ke Home
-        // tanpa PiP maupun saat jendela PiP ditutup), jeda pemutar supaya suara tidak bocor di background.
-        pipPlayer?.pause()
+        val keepOnline = PlayerSettings.backgroundPlayback &&
+            (backgroundPlaybackEligible() || PlaybackSessionHost.keepForegroundDuringTransition)
+        if (keepOnline) {
+            PlaybackSessionHost.setVideoTrackDisabled(pipPlayer, true)
+        } else {
+            pipPlayer?.pause()
+        }
     }
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            PlaybackSessionHost.setVideoTrackDisabled(pipPlayer, false)
+        }
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -196,7 +219,10 @@ class MainActivity : ComponentActivity() {
         incomingVideo = intent.getStringExtra("open_video")
     }
     override fun onDestroy() {
-        if (isFinishing) OfflinePlaybackBridge.close()
+        if (isFinishing) {
+            OfflinePlaybackBridge.close()
+            PlaybackSessionHost.releaseOnlinePlayerForce()
+        }
         super.onDestroy()
     }
     override fun onCreate(savedInstanceState: Bundle?) {

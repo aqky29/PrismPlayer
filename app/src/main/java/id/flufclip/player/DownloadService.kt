@@ -40,6 +40,13 @@ class DownloadService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var cancelled = false
     @Volatile private var activeId: String? = null
+    @Volatile private var activeCancelToken: Long = 0L
+
+    private fun cancelActiveWork() {
+        cancelled = true
+        activeId?.let { YoutubeDL.destroyProcessById(it) }
+        activeCancelToken.takeIf { it != 0L }?.let { NativeDownloader.nativeCancel(it) }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onCreate() {
@@ -57,8 +64,7 @@ class DownloadService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "cancel") {
-            cancelled = true
-            activeId?.let { YoutubeDL.destroyProcessById(it) }
+            cancelActiveWork()
             return START_NOT_STICKY
         }
         if (DownloadStatus.state.value.running) {
@@ -90,109 +96,92 @@ class DownloadService : Service() {
             var finalPhase = DownloadPhase.FAILED
             try {
                 check(temp.mkdirs()) { "Cannot create temporary folder" }
-                YoutubeDL.init(applicationContext)
-                YtDlpBinary.ensure(applicationContext)
-                FFmpeg.init(applicationContext)
                 if (cancelled) throw CancellationException()
-                val id = UUID.randomUUID().toString()
-                activeId = id
-                if (YouTubeAuth.isLoggedIn) {
-                    cookieFile = YouTubeAuth.writeNetscapeCookiesFile(cacheDir)
-                }
-                val request = YoutubeDLRequest(url).apply {
-                    addOption("--no-playlist")
-                    addOption("--no-mtime")
-                    addOption("--no-overwrites")
-                    addOption("--newline")
-                    addOption("--color", "never")
-                    addOption(
-                        "--progress-template",
-                        "download:[download] %(progress._default_template)s |bytes=%(progress.downloaded_bytes|0)s/%(progress.total_bytes|0)s/%(progress.total_bytes_estimate|0)s|"
-                    )
-                    if (cookieFile != null && cookieFile.exists()) {
-                        addOption("--cookies", cookieFile.absolutePath)
+                val fastResult = tryRustDirectDownload(url, title, height, audioOnly, temp)
+                val (resolvedOutput, copied) = if (fastResult != null) {
+                    destination = fastResult.first
+                    fastResult
+                } else {
+                    YoutubeDL.init(applicationContext)
+                    YtDlpBinary.ensure(applicationContext)
+                    FFmpeg.init(applicationContext)
+                    if (cancelled) throw CancellationException()
+                    val id = UUID.randomUUID().toString()
+                    activeId = id
+                    if (YouTubeAuth.isLoggedIn) {
+                        cookieFile = YouTubeAuth.writeNetscapeCookiesFile(cacheDir)
                     }
-                    addOption("-o", File(temp, "result.%(ext)s").absolutePath)
-                    if (audioOnly) {
-                        addOption("-f", "bestaudio/best")
-                        addOption("-x")
-                        addOption("--audio-format", "mp3")
-                    } else {
-                        val cap = if (height > 0) "[height<=$height]" else ""
-                        addOption("-f", "bestvideo$cap+bestaudio/best$cap/best")
-                        addOption("--merge-output-format", "mp4/mkv")
-                    }
-                }
-                if (cancelled) throw CancellationException()
-                var transferPart = 0
-                YoutubeDL.execute(request, id) { _, eta, line ->
-                    if (cancelled) YoutubeDL.destroyProcessById(id)
-                    else downloadSignal(line, eta)?.let { signal ->
-                        if (signal.newDestination) {
-                            transferPart++
-                            val destLabel = if (!audioOnly && transferPart >= 2) "Downloading audio…" else "Downloading…"
-                            update(destLabel, null, DownloadPhase.TRANSFERRING, force = true)
+                    val request = YoutubeDLRequest(url).apply {
+                        addOption("--no-playlist")
+                        addOption("--no-mtime")
+                        addOption("--no-overwrites")
+                        addOption("--newline")
+                        addOption("--color", "never")
+                        addOption(
+                            "--progress-template",
+                            "download:[download] %(progress._default_template)s |bytes=%(progress.downloaded_bytes|0)s/%(progress.total_bytes|0)s/%(progress.total_bytes_estimate|0)s|"
+                        )
+                        if (cookieFile != null && cookieFile.exists()) {
+                            addOption("--cookies", cookieFile.absolutePath)
+                        }
+                        addOption("-o", File(temp, "result.%(ext)s").absolutePath)
+                        if (audioOnly) {
+                            addOption("-f", "bestaudio/best")
+                            addOption("-x")
+                            addOption("--audio-format", "mp3")
                         } else {
-                            val message = when (signal.phase) {
-                                DownloadPhase.TRANSFERRING -> {
-                                    val phaseLabel = if (!audioOnly && transferPart >= 2) "Downloading audio" else signal.phase.label
-                                    formatTransferProgressMessage(
-                                        label = phaseLabel,
-                                        percent = signal.percent,
-                                        downloadedBytes = signal.downloadedBytes,
-                                        totalBytes = signal.totalBytes,
-                                        totalEstimated = signal.totalEstimated,
-                                    ) { Formatter.formatFileSize(this@DownloadService, it) }
+                            val cap = if (height > 0) "[height<=$height]" else ""
+                            addOption("-f", "bestvideo$cap+bestaudio/best$cap/best")
+                            addOption("--merge-output-format", "mp4/mkv")
+                        }
+                    }
+                    if (cancelled) throw CancellationException()
+                    var transferPart = 0
+                    YoutubeDL.execute(request, id) { _, eta, line ->
+                        if (cancelled) YoutubeDL.destroyProcessById(id)
+                        else downloadSignal(line, eta)?.let { signal ->
+                            if (signal.newDestination) {
+                                transferPart++
+                                val destLabel = if (!audioOnly && transferPart >= 2) "Downloading audio…" else "Downloading…"
+                                update(destLabel, null, DownloadPhase.TRANSFERRING, force = true)
+                            } else {
+                                val message = when (signal.phase) {
+                                    DownloadPhase.TRANSFERRING -> {
+                                        val phaseLabel = if (!audioOnly && transferPart >= 2) "Downloading audio" else signal.phase.label
+                                        formatTransferProgressMessage(
+                                            label = phaseLabel,
+                                            percent = signal.percent,
+                                            downloadedBytes = signal.downloadedBytes,
+                                            totalBytes = signal.totalBytes,
+                                            totalEstimated = signal.totalEstimated,
+                                        ) { Formatter.formatFileSize(this@DownloadService, it) }
+                                    }
+                                    else -> signal.phase.label
                                 }
-                                else -> signal.phase.label
+                                update(
+                                    message = message,
+                                    progress = signal.percent,
+                                    phase = signal.phase,
+                                    eta = signal.etaSeconds,
+                                    downloadedBytes = signal.downloadedBytes,
+                                    totalBytes = signal.totalBytes,
+                                    totalEstimated = signal.totalEstimated,
+                                )
                             }
-                            update(
-                                message = message,
-                                progress = signal.percent,
-                                phase = signal.phase,
-                                eta = signal.etaSeconds,
-                                downloadedBytes = signal.downloadedBytes,
-                                totalBytes = signal.totalBytes,
-                                totalEstimated = signal.totalEstimated,
-                            )
                         }
                     }
+                    if (cancelled) throw CancellationException()
+                    val result = temp.listFiles()?.firstOrNull { file ->
+                        file.isFile && file.name.startsWith("result.") && file.length() > 0 &&
+                            !file.name.endsWith(".part") && !file.name.endsWith(".ytdl")
+                    } ?: error("Downloaded file not found")
+                    val ext = result.extension.lowercase()
+                    val output = DownloadDestination.create(this@DownloadService, title, audioOnly, ext)
+                    destination = output
+                    val copiedBytes = copyFileToDestination(result, output)
+                    output to copiedBytes
                 }
-                if (cancelled) throw CancellationException()
-                val result = temp.listFiles()?.firstOrNull { file ->
-                    file.isFile && file.name.startsWith("result.") && file.length() > 0 &&
-                        !file.name.endsWith(".part") && !file.name.endsWith(".ytdl")
-                } ?: error("Downloaded file not found")
-                val totalLength = result.length()
-                val initialCopyMessage = formatTransferProgressMessage("Saving file", 0, 0L, totalLength, false) {
-                    Formatter.formatFileSize(this@DownloadService, it)
-                }
-                update(initialCopyMessage, 0, DownloadPhase.COPYING, downloadedBytes = 0L, totalBytes = totalLength, force = true)
-                val ext = result.extension.lowercase()
-                val output = DownloadDestination.create(this@DownloadService, title, audioOnly, ext)
-                destination = output
-                val copied = output.open().use { out ->
-                    result.inputStream().use { input ->
-                        val buffer = ByteArray(128 * 1024)
-                        var count = 0L
-                        while (true) {
-                            if (cancelled) throw CancellationException()
-                            currentCoroutineContext().ensureActive()
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            out.write(buffer, 0, read)
-                            count += read
-                            val pct = (count * 100 / totalLength).toInt().coerceIn(0, 100)
-                            val copyMessage = formatTransferProgressMessage("Saving file", pct, count, totalLength, false) {
-                                Formatter.formatFileSize(this@DownloadService, it)
-                            }
-                            update(copyMessage, pct, DownloadPhase.COPYING, downloadedBytes = count, totalBytes = totalLength)
-                        }
-                        out.flush()
-                        count
-                    }
-                }
-                check(copied == result.length()) { "The file was not completely copied" }
+                val output = resolvedOutput
                 update("Verifying file…", null, DownloadPhase.VERIFYING, force = true)
                 output.verify(copied)
                 if (cancelled) throw CancellationException()
@@ -289,5 +278,150 @@ class DownloadService : Service() {
             .addAction(0, getString(R.string.cancel), cancel)
             .build()
     }
-    override fun onDestroy() { cancelled = true; activeId?.let { YoutubeDL.destroyProcessById(it) }; scope.cancel(); super.onDestroy() }
+    private suspend fun copyFileToDestination(source: File, output: DownloadDestination): Long {
+        val totalLength = source.length()
+        val initialCopyMessage = formatTransferProgressMessage("Saving file", 0, 0L, totalLength, false) {
+            Formatter.formatFileSize(this@DownloadService, it)
+        }
+        update(initialCopyMessage, 0, DownloadPhase.COPYING, downloadedBytes = 0L, totalBytes = totalLength, force = true)
+        val copied = output.open().use { out ->
+            source.inputStream().use { input ->
+                val buffer = ByteArray(128 * 1024)
+                var count = 0L
+                while (true) {
+                    if (cancelled) throw CancellationException()
+                    currentCoroutineContext().ensureActive()
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                    count += read
+                    val pct = if (totalLength > 0L) (count * 100 / totalLength).toInt().coerceIn(0, 100) else null
+                    val copyMessage = formatTransferProgressMessage("Saving file", pct, count, totalLength, false) {
+                        Formatter.formatFileSize(this@DownloadService, it)
+                    }
+                    update(copyMessage, pct, DownloadPhase.COPYING, downloadedBytes = count, totalBytes = totalLength)
+                }
+                out.flush()
+                count
+            }
+        }
+        check(copied == source.length()) { "The file was not completely copied" }
+        return copied
+    }
+
+    private suspend fun tryRustDirectDownload(
+        url: String,
+        title: String,
+        height: Int,
+        audioOnly: Boolean,
+        temp: File,
+    ): Pair<DownloadDestination, Long>? {
+        if (audioOnly || !NativeDownloader.isAvailable) return null
+        val info = runCatching { VideoRepository.resolve(url, applicationContext) }.getOrNull() ?: return null
+        if (cancelled) throw CancellationException()
+        val plan = selectRustDirectDownloadPlan(info, height, audioOnly) ?: return null
+
+        val token = NativeDownloader.nativeCreateCancelToken()
+        activeCancelToken = token
+        if (cancelled) {
+            NativeDownloader.nativeCancel(token)
+            activeCancelToken = 0L
+            NativeDownloader.nativeDestroyCancelToken(token)
+            throw CancellationException()
+        }
+
+        var partialOutput: DownloadDestination? = null
+        try {
+            fun downloadStream(streamUrl: String, targetFile: File, label: String) {
+                val headers = NativeDownloader.flattenHeaders(playbackRequestHeaders(streamUrl, YouTubeAuth.getCookies()))
+                update("$label…", null, DownloadPhase.TRANSFERRING, force = true)
+                NativeDownloader.nativeDownloadFile(
+                    url = streamUrl,
+                    headerPairs = headers,
+                    destPath = targetFile.absolutePath,
+                    cancelToken = token,
+                    listener = object : DownloadProgressCallback {
+                        override fun onProgress(downloadedBytes: Long, totalBytes: Long, etaSeconds: Long) {
+                            val total = totalBytes.takeIf { it > 0L }
+                            val pct = if (total != null) ((downloadedBytes * 100L) / total).toInt().coerceIn(0, 100) else null
+                            val eta = etaSeconds.takeIf { it >= 0L }
+                            val msg = formatTransferProgressMessage(
+                                label = label,
+                                percent = pct,
+                                downloadedBytes = downloadedBytes,
+                                totalBytes = total,
+                                totalEstimated = false,
+                            ) { Formatter.formatFileSize(this@DownloadService, it) }
+                            update(
+                                message = msg,
+                                progress = pct,
+                                phase = DownloadPhase.TRANSFERRING,
+                                eta = eta,
+                                downloadedBytes = downloadedBytes,
+                                totalBytes = total,
+                                totalEstimated = false,
+                            )
+                        }
+                    },
+                )
+            }
+
+            return when (plan) {
+                is RustDownloadPlan.CombinedMp4 -> {
+                    val rawVideo = File(temp, "rust_video.mp4")
+                    downloadStream(plan.videoUrl, rawVideo, "Downloading")
+                    if (cancelled) throw CancellationException()
+                    val output = DownloadDestination.create(this@DownloadService, title, false, "mp4")
+                    partialOutput = output
+                    val copied = copyFileToDestination(rawVideo, output)
+                    partialOutput = null
+                    output to copied
+                }
+                is RustDownloadPlan.MuxMp4 -> {
+                    val rawVideo = File(temp, "rust_video.mp4")
+                    val rawAudio = File(temp, "rust_audio.m4a")
+                    downloadStream(plan.videoUrl, rawVideo, "Downloading")
+                    if (cancelled) throw CancellationException()
+                    downloadStream(plan.audioUrl, rawAudio, "Downloading audio")
+                    if (cancelled) throw CancellationException()
+
+                    update(DownloadPhase.PROCESSING.label, null, DownloadPhase.PROCESSING, force = true)
+                    val output = DownloadDestination.create(this@DownloadService, title, false, "mp4")
+                    partialOutput = output
+                    val legacyPath = output.legacyFilePath()
+                    val finalBytes = if (legacyPath != null) {
+                        NativeDownloader.nativeMuxMp4(rawVideo.absolutePath, rawAudio.absolutePath, legacyPath, token)
+                    } else {
+                        val pfd = output.openWriteFd()
+                        if (pfd != null) {
+                            pfd.use { fd ->
+                                NativeDownloader.nativeMuxMp4ToFd(rawVideo.absolutePath, rawAudio.absolutePath, fd.fd, token)
+                            }
+                        } else {
+                            val muxedTemp = File(temp, "rust_muxed.mp4")
+                            NativeDownloader.nativeMuxMp4(rawVideo.absolutePath, rawAudio.absolutePath, muxedTemp.absolutePath, token)
+                            copyFileToDestination(muxedTemp, output)
+                        }
+                    }
+                    partialOutput = null
+                    output to finalBytes
+                }
+            }
+        } catch (e: CancellationException) {
+            runCatching { partialOutput?.abort() }
+            throw e
+        } catch (e: Exception) {
+            runCatching { partialOutput?.abort() }
+            if (cancelled) throw CancellationException()
+            Log.w("FlufPlayDownload", "Rust fast-path failed, falling back to yt-dlp", e)
+            VideoRepository.evict(url)
+            temp.listFiles()?.forEach { it.deleteRecursively() }
+            return null
+        } finally {
+            activeCancelToken = 0L
+            NativeDownloader.nativeDestroyCancelToken(token)
+        }
+    }
+
+    override fun onDestroy() { cancelActiveWork(); scope.cancel(); super.onDestroy() }
 }

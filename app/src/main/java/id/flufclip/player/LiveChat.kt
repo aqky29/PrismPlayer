@@ -501,7 +501,7 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
         if (apiKey.isNotBlank()) "https://www.youtube.com/youtubei/v1/live_chat/$path?key=$apiKey"
         else "https://www.youtube.com/youtubei/v1/live_chat/$path?prettyPrint=false"
 
-    private fun post(path: String, body: JSONObject): JSONObject {
+    private fun postRaw(path: String, body: JSONObject): String {
         val builder = Request.Builder().url(chatEndpointUrl(path)).header("User-Agent", agent)
             .header("X-Youtube-Client-Name", "1")
             .header("X-Youtube-Client-Version", "2.20261030.00.00")
@@ -509,8 +509,33 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
         if (YouTubeAuth.isLoggedIn) YouTubeAuth.buildAuthHeaders().forEach { (k, v) -> builder.header(k, v) }
         return client.newCall(builder.build()).execute().use {
             if (!it.isSuccessful) throw ChatHttpException(it.code, it.header("Retry-After")?.toLongOrNull()?.coerceIn(0L, 120L)?.times(1_000L))
-            JSONObject(it.body?.string() ?: error("Respons chat kosong"))
+            it.body?.string() ?: error("Respons chat kosong")
         }
+    }
+    private fun post(path: String, body: JSONObject): JSONObject = JSONObject(postRaw(path, body))
+    private fun applyNativeBatch(decoded: NativeChatBatchDecoded): ChatBatch {
+        continuation = decoded.batch.continuation
+        if (!decoded.seekContinuation.isNullOrBlank()) seekContinuation = decoded.seekContinuation
+        decoded.batch.offset?.let { offset = it }
+        decoded.batch.actionPanel?.let { currentActionPanel = it }
+        return decoded.batch
+    }
+    private fun parseResponseJson(rawJson: String, errorLabel: String = "Unrecognized chat response"): ChatBatch {
+        if (NativeParsers.isAvailable) {
+            runCatching {
+                NativeParsers.parseLiveChatResponse(
+                    rawJson,
+                    topChat,
+                    YouTubeAuth.profile.name,
+                    YouTubeAuth.profile.avatarUrl
+                )
+            }.getOrNull()?.let { return applyNativeBatch(it) }
+        }
+        val data = JSONObject(rawJson)
+        parseInputState(data)
+        val renderer = data.optJSONObject("continuationContents")?.optJSONObject("liveChatContinuation")
+            ?: error(errorLabel)
+        return parse(renderer)
     }
     private fun ytcfg(html: String): JSONObject? = Regex("ytcfg\\.set\\(\\s*\\{").findAll(html).mapNotNull { match ->
         runCatching { JSONTokener(html.substring(match.range.last)).nextValue() as JSONObject }.getOrNull()
@@ -578,6 +603,37 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
     /** Replay: token bootstrap penuh dari watch page (continuations[0]), lalu POST langsung ke get_live_chat_replay. */
     private fun startReplay(): ChatBatch {
         val watch = runCatching { get("https://www.youtube.com/watch?v=$videoId") }.getOrNull()
+        if (watch != null && NativeParsers.isAvailable) {
+            val boot = runCatching {
+                NativeParsers.parseLiveChatHtmlBootstrap(
+                    watch,
+                    isLive = false,
+                    topChat = topChat,
+                    fallbackAuthor = YouTubeAuth.profile.name,
+                    fallbackPhoto = YouTubeAuth.profile.avatarUrl
+                )
+            }.getOrNull()
+            if (boot != null && boot.found && !boot.watchContinuation.isNullOrBlank()) {
+                apiKey = boot.apiKey.orEmpty()
+                context = boot.context ?: defaultWebContext()
+                var raw = postRaw("get_live_chat_replay", JSONObject().put("context", context).put("continuation", boot.watchContinuation))
+                var decoded = runCatching {
+                    NativeParsers.parseLiveChatResponse(raw, topChat, YouTubeAuth.profile.name, YouTubeAuth.profile.avatarUrl)
+                }.getOrNull()
+                if (decoded != null) {
+                    if (!topChat && !decoded.chosenReloadToken.isNullOrBlank()) {
+                        raw = postRaw("get_live_chat_replay", JSONObject().put("context", context).put("continuation", decoded.chosenReloadToken))
+                        decoded = NativeParsers.parseLiveChatResponse(raw, topChat, YouTubeAuth.profile.name, YouTubeAuth.profile.avatarUrl)
+                            ?: error("Unrecognized chat replay response")
+                    }
+                    val batch = applyNativeBatch(decoded)
+                    if (batch.messages.isEmpty() && batch.continuation == null && seekContinuation == null) {
+                        error("Live chat replay is unavailable for this video")
+                    }
+                    return batch
+                }
+            }
+        }
         val watchData = watch?.let { extractInitialData(it) }
         val chat = watchData?.let { findObject(it, "liveChatRenderer") }
         val config = watch?.let { ytcfg(it) }
@@ -607,6 +663,26 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
         if (!live) return startReplay()
         val endpoint = "live_chat"
         val html = runCatching { get("https://www.youtube.com/$endpoint?v=$videoId", withAuth = true) }.getOrNull().orEmpty()
+        if (html.isNotEmpty() && NativeParsers.isAvailable) {
+            val boot = runCatching {
+                NativeParsers.parseLiveChatHtmlBootstrap(
+                    html,
+                    isLive = true,
+                    topChat = topChat,
+                    fallbackAuthor = YouTubeAuth.profile.name,
+                    fallbackPhoto = YouTubeAuth.profile.avatarUrl
+                )
+            }.getOrNull()
+            if (boot != null && boot.found && boot.batch != null) {
+                apiKey = boot.apiKey.orEmpty()
+                context = boot.context ?: defaultWebContext()
+                val batch = applyNativeBatch(boot.batch)
+                if (!boot.batch.chosenReloadToken.isNullOrBlank()) {
+                    continuation = boot.batch.chosenReloadToken
+                }
+                return batch
+            }
+        }
         val data = extractInitialData(html)
         if (data == null) {
             return bootstrapViaInnerTubeNext()
@@ -639,10 +715,7 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
         val token = continuation ?: return null
         val path = if (live) "get_live_chat" else "get_live_chat_replay"
         val body = JSONObject().put("context", context ?: defaultWebContext()).put("continuation", token)
-        val data = post(path, body)
-        parseInputState(data)
-        val renderer = data.optJSONObject("continuationContents")?.optJSONObject("liveChatContinuation") ?: error("Unrecognized chat response")
-        return parse(renderer)
+        return parseResponseJson(postRaw(path, body), "Unrecognized chat response")
     }
 
     private fun parseInputState(root: JSONObject) {
@@ -659,9 +732,7 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
             .put("context", context ?: defaultWebContext())
             .put("continuation", token)
             .put("currentPlayerState", JSONObject().put("playerOffsetMs", targetOffsetMs.coerceAtLeast(0L).toString()))
-        val data = post("get_live_chat_replay", body)
-        val renderer = data.optJSONObject("continuationContents")?.optJSONObject("liveChatContinuation") ?: return null
-        return parse(renderer)
+        return runCatching { parseResponseJson(postRaw("get_live_chat_replay", body)) }.getOrNull()
     }
 
     fun sendMessage(rawText: String, customEmojis: List<CustomChatEmoji>, revision: Int, headers: Map<String, String>): ChatMessage? {

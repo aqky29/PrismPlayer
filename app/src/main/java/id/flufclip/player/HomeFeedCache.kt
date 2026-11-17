@@ -11,6 +11,7 @@ import org.schabi.newpipe.extractor.stream.StreamType
 internal object HomeFeedCache {
     private const val KEY = "items"
     private const val ENTRIES_KEY = "entries"
+    private const val CHIPS_KEY = "chips"
     private const val LIMIT = 40
 
     fun read(prefs: SharedPreferences): List<StreamInfoItem> = runCatching {
@@ -143,5 +144,43 @@ internal object HomeFeedCache {
             .apply()
     }
 
-    fun clear(prefs: SharedPreferences) { prefs.edit().remove(KEY).remove(ENTRIES_KEY).apply() }
+    internal fun encodeChipsJson(chips: List<HomeChip>): String {
+        val array = JSONArray()
+        chips.forEach { chip ->
+            if (chip.title.isNotBlank()) {
+                array.put(
+                    JSONObject()
+                        .put("title", chip.title)
+                        .put("token", chip.token.orEmpty())
+                        .put("params", chip.params.orEmpty())
+                        .put("selected", chip.selected)
+                )
+            }
+        }
+        return array.toString()
+    }
+
+    internal fun decodeChipsJson(raw: String?): List<HomeChip> = runCatching {
+        if (raw.isNullOrBlank()) return@runCatching emptyList()
+        val array = JSONArray(raw)
+        (0 until array.length()).mapNotNull { index ->
+            val obj = array.optJSONObject(index) ?: return@mapNotNull null
+            val title = obj.optString("title").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            HomeChip(
+                title = title,
+                token = obj.optString("token").takeIf { it.isNotBlank() },
+                params = obj.optString("params").takeIf { it.isNotBlank() },
+                selected = obj.optBoolean("selected", false)
+            )
+        }
+    }.getOrDefault(emptyList())
+
+    fun readChips(prefs: SharedPreferences): List<HomeChip> = decodeChipsJson(prefs.getString(CHIPS_KEY, null))
+
+    fun saveChips(prefs: SharedPreferences, chips: List<HomeChip>) {
+        if (chips.isEmpty()) return
+        prefs.edit().putString(CHIPS_KEY, encodeChipsJson(chips)).apply()
+    }
+
+    fun clear(prefs: SharedPreferences) { prefs.edit().remove(KEY).remove(ENTRIES_KEY).remove(CHIPS_KEY).apply() }
 }
