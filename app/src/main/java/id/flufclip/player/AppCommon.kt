@@ -136,8 +136,38 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
 
 internal val Background = Color(0xFF0F0F0F)
 internal val Surface = Color(0xFF272727)
+internal val SurfaceElevated = Color(0xFF212121)
 internal val WatchActionSurface = Color(0xFF343434)
-internal val Accent = Color(0xFFFF0000)
+internal val HairlineBorder = Color(0xFF616161) // >= 3.1:1 against #0F0F0F (WCAG 1.4.11)
+internal val DragHandleInk = Color(0xFF767676) // >= 4.2:1 against #0F0F0F
+internal val TextPrimary = Color(0xFFF1F1F1)
+internal val TextSecondary = Color(0xFFAAAAAA)
+internal val TextSubMuted = Color(0xFF9E9E9E) // >= 5.58:1 against #272727
+internal val Accent = Color(0xFFFF0033)
+internal val LiveBadgeRed = Color(0xFFCC0000) // >= 5.89:1 with white label
+internal val MembershipGreen = Color(0xFF6DD58C) // >= 10.5:1 on #0F0F0F
+internal val MembershipSelectedTint = Color(0xFF34C77B) // >= 8.76:1 on #0F0F0F
+internal val ErrorText = Color(0xFFFF8A80) // >= 6.5:1 on #272727, 8.4:1 on #0F0F0F
+internal val CallToActionBlue = Color(0xFF3EA6FF)
+
+/** Returns true when system animator transitions are disabled (reduced-motion accessibility). */
+@Composable
+internal fun rememberReduceMotion(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            !android.animation.ValueAnimator.areAnimatorsEnabled()
+        } else {
+            runCatching {
+                android.provider.Settings.Global.getFloat(
+                    context.contentResolver,
+                    android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+                    1f
+                ) == 0f
+            }.getOrDefault(false)
+        }
+    }
+}
 
 /**
  * Menentukan apakah layout layar tonton menggunakan 2 kolom lebar (seperti YouTube `qye.java`),

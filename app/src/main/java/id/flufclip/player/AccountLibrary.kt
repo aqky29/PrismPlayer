@@ -21,16 +21,41 @@ internal data class AccountPlaylistPage(
     val videos: List<WatchedVideo>, val continuation: String?,
     val header: AccountPlaylistHeader? = null, val filters: List<AccountPlaylistFilter> = emptyList(),
 )
-internal data class PlaylistChoice(val id: String, val title: String, val selected: Boolean, val add: JSONObject?, val remove: JSONObject?)
+internal data class PlaylistChoice(
+    val id: String,
+    val title: String,
+    val selected: Boolean,
+    val add: JSONObject?,
+    val remove: JSONObject?,
+    val privacy: String = "",
+    val thumbnail: String = "",
+)
 
 internal object AccountLibrary {
+    private val cachedLock = Any()
+    private var cachedRevision = -1
+    private var cachedPlaylists = emptyMap<String, AccountPlaylist>()
+
+    internal fun cachedPlaylistMeta(id: String, revision: Int): AccountPlaylist? = synchronized(cachedLock) {
+        if (cachedRevision == revision) cachedPlaylists[id.removePrefix("VL")] else null
+    }
+
+    private fun rememberPlaylists(list: List<AccountPlaylist>, revision: Int) {
+        synchronized(cachedLock) {
+            cachedRevision = revision
+            cachedPlaylists = list.associateBy { it.id.removePrefix("VL") }
+        }
+    }
+
     suspend fun playlists(): AccountPlaylistsPage = withContext(Dispatchers.IO) {
+        val rev = YouTubeAuth.sessionRevision
         val json = HomeFeed.accountRequest("browse", JSONObject().put("browseId", "FElibrary"))
         val aggregation = HomeFeed.accountRequest("browse", JSONObject().put("browseId", "FEplaylist_aggregation"))
         val playlists = (parsePlaylists(json) + parsePlaylists(aggregation)).distinctBy { it.id }
         // Built-in YouTube collections have stable IDs even when the shelf omits an empty collection.
         val all = playlists + listOf(AccountPlaylist("LL", "Liked videos", subtitle = "Private"),
             AccountPlaylist("WL", "Watch later", subtitle = "Private")).filter { builtin -> playlists.none { it.id == builtin.id } }
+        rememberPlaylists(all, rev)
         AccountPlaylistsPage(all, continuation(aggregation))
     }
 
@@ -316,9 +341,26 @@ internal object AccountLibrary {
             if (id.isBlank() || title.isBlank()) return@visit
             val selected = option.optBoolean("containsVideo") || option.optString("containsSelectedVideos") in setOf("ALL", "ALL_SELECTED")
             val service = option.optJSONObject("serviceEndpoint")
-            result[id] = PlaylistChoice(id, title, selected,
+            val rawPrivacy = option.optString("privacy").ifBlank {
+                option.optJSONObject("privacyIcon")?.optString("iconType").orEmpty()
+            }.uppercase()
+            val privacy = when {
+                rawPrivacy.contains("PRIVATE") || rawPrivacy == "LOCK" -> "Private"
+                rawPrivacy.contains("UNLISTED") -> "Unlisted"
+                rawPrivacy.contains("PUBLIC") -> "Public"
+                id == "WL" || id == "LL" -> "Private"
+                else -> ""
+            }
+            val thumb = thumbnail(option)
+            result[id] = PlaylistChoice(
+                id,
+                title,
+                selected,
                 option.optJSONObject("addToPlaylistServiceEndpoint") ?: option.optJSONObject("onAddCommand") ?: option.optJSONObject("addCommand") ?: service.takeUnless { selected },
-                option.optJSONObject("removeFromPlaylistServiceEndpoint") ?: option.optJSONObject("onRemoveCommand") ?: option.optJSONObject("removeCommand") ?: service.takeIf { selected })
+                option.optJSONObject("removeFromPlaylistServiceEndpoint") ?: option.optJSONObject("onRemoveCommand") ?: option.optJSONObject("removeCommand") ?: service.takeIf { selected },
+                privacy = privacy,
+                thumbnail = thumb,
+            )
         }
         check(found) { "YouTube did not return playlist choices" }
         return result.values.toList()

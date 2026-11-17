@@ -8,6 +8,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 
@@ -41,6 +43,42 @@ internal fun Modifier.shortsGestures(
     if (!enabled) return this
     return pointerInput(Unit) {
         val pullPx = PULL_DP.dp.toPx()
+        suspend fun AwaitPointerEventScope.handleHold(pointer: PointerInputChange) {
+            // Zona tepi (20% lebar di kiri dan kanan) = 2x. Zona tengah = perintah tahan dari server, yang di YouTube
+            // membuka panel deskripsi (`atez.ci(2)` menjalankan `blgz.x`); sentuhan tetap dikonsumsi agar pager tidak menggulir.
+            val edge = pointer.position.x < size.width * EDGE_ZONE || pointer.position.x > size.width * (1f - EDGE_ZONE)
+            if (!edge) {
+                holdCenter()
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == pointer.id } ?: break
+                    change.consume()
+                    if (!change.pressed) break
+                }
+                return
+            }
+            holdStart()
+            var pulled = false
+            var released = false
+            try {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == pointer.id } ?: break
+                    change.consume()
+                    if (!change.pressed) {
+                        released = true
+                        break
+                    }
+                    val nowPulled = change.position.y - pointer.position.y > pullPx
+                    if (nowPulled != pulled) {
+                        pulled = nowPulled
+                        holdPull(pulled)
+                    }
+                }
+            } finally {
+                holdEnd(if (released) pulled else false)
+            }
+        }
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             var cancelled = false
@@ -49,30 +87,7 @@ internal fun Modifier.shortsGestures(
             }
             if (up == null) {
                 if (cancelled) return@awaitEachGesture
-                // Zona tepi (20% lebar di kiri dan kanan) = 2x. Zona tengah = perintah tahan dari server, yang di YouTube
-                // membuka panel deskripsi (`atez.ci(2)` menjalankan `blgz.x`); sentuhan tetap dikonsumsi agar pager tidak menggulir.
-                val edge = down.position.x < size.width * EDGE_ZONE || down.position.x > size.width * (1f - EDGE_ZONE)
-                if (!edge) {
-                    holdCenter()
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        change.consume()
-                        if (!change.pressed) break
-                    }
-                    return@awaitEachGesture
-                }
-                holdStart()
-                var pulled = false
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                    change.consume()
-                    if (!change.pressed) break
-                    val nowPulled = change.position.y - down.position.y > pullPx
-                    if (nowPulled != pulled) { pulled = nowPulled; holdPull(pulled) }
-                }
-                holdEnd(pulled)
+                handleHold(down)
                 return@awaitEachGesture
             }
             up.consume()
@@ -80,8 +95,16 @@ internal fun Modifier.shortsGestures(
             val second = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) { awaitFirstDown(requireUnconsumed = false) }
             if (second == null) { tap(); return@awaitEachGesture }
             second.consume()
-            val secondUp = waitForUpOrCancellation()
-            if (secondUp != null) { secondUp.consume(); doubleTap(second.position) }
+            var secondCancelled = false
+            val secondUp = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                waitForUpOrCancellation().also { if (it == null) secondCancelled = true }
+            }
+            if (secondUp != null) {
+                secondUp.consume()
+                doubleTap(second.position)
+            } else if (!secondCancelled) {
+                handleHold(second)
+            }
         }
     }
 }

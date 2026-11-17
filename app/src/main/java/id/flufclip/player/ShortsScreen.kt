@@ -22,6 +22,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -132,6 +134,7 @@ internal fun ShortsScreen(
     onShare: (StreamInfo) -> Unit,
     onSave: (String) -> Unit,
     onRate: (StreamInfo, Int) -> Unit,
+    onSubscribe: (StreamInfo, Boolean) -> Unit = { _, _ -> },
     onNeedLogin: () -> Unit,
     onNotInterested: (StreamInfoItem) -> Unit,
     onSearch: () -> Unit,
@@ -257,12 +260,13 @@ internal fun ShortsScreen(
                             showsPlayer = settled && activeKey == videoKey(item.url),
                             player = player, playing = playing, buffering = buffering, userPaused = userPaused,
                             rating = Engagement.rating(videoKey(item.url)).value ?: 0, onRate = rate, onDoubleTapLike = doubleTapLike,
+                            onSubscribe = onSubscribe,
                             ui = ui, chrome = chrome,
                             feedMessage = feedMessage.takeIf { page == items.lastIndex },
                             onTogglePlay = { if (player.isPlaying) { player.pause(); userPaused = true } else { player.play(); userPaused = false } },
                             commentCount = resolver.info(item.url)?.let { commentStates[it.url]?.info?.commentsCount }?.takeIf { it >= 0 },
                             onComments = { commentsOf(it); descriptionFor = null; commentsFor = it }, onDescription = { commentsFor = null; descriptionFor = it },
-                            onChannel = onChannel, onShare = onShare, onDownload = onDownload,
+                            onChannel = onChannel, onShare = onShare, onSave = onSave, onDownload = onDownload,
                             onLink = { onLink(resolver.info(item.url) ?: StreamInfo(0, item.url, item.url, org.schabi.newpipe.extractor.stream.StreamType.VIDEO_STREAM, videoKey(item.url), item.name, 0), it) },
                             onRetryItem = { onRetryItem(item.url) }, onRetryMore = onRetryMore,
                         )
@@ -272,11 +276,9 @@ internal fun ShortsScreen(
                 Box(Modifier.fillMaxWidth().height(96.dp).align(Alignment.TopCenter).graphicsLayer { alpha = chrome.value }.background(Brush.verticalGradient(listOf(Color(0x99000000), Color.Transparent))))
                 Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().fillMaxWidth().height(56.dp).graphicsLayer { alpha = chrome.value }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (onClose != null) IconButton(onClick = onClose, modifier = Modifier.clip(CircleShape).background(Color(0x66000000))) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
-                    else Spacer(Modifier.width(8.dp))
-                    Text("Shorts", Modifier.weight(1f).padding(start = if (onClose != null) 12.dp else 0.dp), color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = { ui.muted = !ui.muted }) { Icon(painterResource(if (ui.muted) R.drawable.yt_volume_off else R.drawable.yt_volume_up), if (ui.muted) "Unmute" else "Mute", Modifier.size(24.dp), tint = Color.White) }
+                    Spacer(Modifier.weight(1f))
                     IconButton(onClick = onSearch) { Icon(painterResource(R.drawable.yt_reel_search), "Telusuri", tint = Color.White) }
-                    IconButton(onClick = { menuOpen = true }) { Icon(painterResource(R.drawable.yt_reel_more), "Opsi", tint = Color.White) }
+                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreHoriz, "Opsi", tint = Color.White) }
                 }
             }
             commentsFor?.let { info ->
@@ -319,8 +321,11 @@ internal fun ShortsScreen(
                 val menuItem = items.getOrNull(pagerState.settledPage)
                 val menuLink = menuItem?.let { "https://www.youtube.com/shorts/${videoKey(it.url)}" }
                 ShortsMenuSheet(
-                    speed = ui.speed, canAct = menuLink != null, canHide = menuItem != null,
-                    onSpeed = { ui.speed = it },
+                    speed = if (ui.locked) 2f else ui.speed, canAct = menuLink != null, canHide = menuItem != null,
+                    onSpeed = {
+                        ui.locked = false
+                        ui.speed = it
+                    },
                     onSave = { menuItem?.let { onSave(videoKey(it.url)) } },
                     onCopy = {
                         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Video link", menuLink))
@@ -358,6 +363,7 @@ private fun ShortPage(
     rating: Int,
     onRate: (StreamInfo, Int) -> Unit,
     onDoubleTapLike: (StreamInfo) -> Boolean,
+    onSubscribe: (StreamInfo, Boolean) -> Unit,
     ui: ShortsUiState,
     chrome: State<Float>,
     feedMessage: String?,
@@ -367,6 +373,7 @@ private fun ShortPage(
     onDescription: (StreamInfo) -> Unit,
     onChannel: (String) -> Unit,
     onShare: (StreamInfo) -> Unit,
+    onSave: (String) -> Unit,
     onDownload: (StreamInfo) -> Unit,
     onLink: (String) -> Unit,
     onRetryItem: () -> Unit,
@@ -389,6 +396,8 @@ private fun ShortPage(
         onDispose {
             player.removeListener(listener)
             firstFrameRendered = false
+            ui.holding = false
+            ui.pulled = false
         }
     }
     val hearts = remember { mutableStateListOf<Heart>() }
@@ -449,10 +458,46 @@ private fun ShortPage(
                 }
             }
             if (info != null) {
+                val channelId = remember(info.uploaderUrl) {
+                    Regex("/channel/(UC[\\w-]{22})").find(info.uploaderUrl.orEmpty())?.groupValues?.get(1)
+                }
+                val subState = channelId?.let { Engagement.subscription(it) }
+                val isSubscribed = subState?.subscribed == true
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     val channelAvatar = rememberAvatarUrl(info.uploaderAvatars.lastOrNull()?.url, info.uploaderUrl)
+                    val channelLabel = remember(info.uploaderUrl, info.uploaderName) {
+                        val handle = Regex("/(@[\\w.-]+)").find(info.uploaderUrl.orEmpty())?.groupValues?.get(1)
+                        handle ?: info.uploaderName.orEmpty().let { if (it.isNotBlank() && !it.startsWith("@")) "@$it" else it }
+                    }
                     Avatar(channelAvatar, info.uploaderName, 36, Modifier.clickable(enabled = !info.uploaderUrl.isNullOrBlank()) { onChannel(info.uploaderUrl) })
-                    Text(info.uploaderName.orEmpty(), Modifier.weight(1f, fill = false).clickable(enabled = !info.uploaderUrl.isNullOrBlank()) { onChannel(info.uploaderUrl) }.padding(start = 8.dp, end = 8.dp), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        channelLabel,
+                        Modifier.weight(1f, fill = false).clickable(enabled = !info.uploaderUrl.isNullOrBlank()) { onChannel(info.uploaderUrl) }.padding(start = 8.dp, end = 8.dp),
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (channelId != null) {
+                        Box(
+                            modifier = Modifier
+                                .height(28.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (isSubscribed) Color(0x4DFFFFFF) else Color.White)
+                                .clickable { onSubscribe(info, !isSubscribed) }
+                                .padding(horizontal = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (isSubscribed) "Subscribed" else "Subscribe",
+                                color = if (isSubscribed) Color.White else Color.Black,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
                 // Ketuk judul membuka deskripsi (`reelTitleOnClickCommand` = showEngagementPanelEndpoint, tag structured-description).
                 Text(info.name, Modifier.padding(top = 10.dp).clickable { onDescription(info) }, color = Color.White, fontSize = 14.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -482,17 +527,18 @@ private fun ShortPage(
                         fontWeight = FontWeight.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee()
                     )
                 }
             }
             if (feedMessage != null) Text(feedMessage, Modifier.padding(top = 8.dp).clickable(onClick = onRetryMore), color = Color.White, style = MaterialTheme.typography.labelMedium)
         }
         Column(Modifier.align(Alignment.BottomEnd).graphicsLayer { alpha = chrome.value }.padding(end = 8.dp, bottom = 96.dp).width(64.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            // Kolom aksi Shorts: Like, Dislike, Comments, Share, Audio track
+            // Kolom aksi Shorts: Like, Comments, Save, Share, Audio track
             val likeState = info?.let { Engagement.rating(videoKey(it.url)) }
             ShortsAction(if (rating == 1) R.drawable.yt_shorts_modern_like_on else R.drawable.yt_shorts_modern_like, if (info != null && info.likeCount >= 0) formatCount((info.likeCount + (likeState?.likeDelta ?: 0)).coerceAtLeast(0)) + if (likeState?.uncertain == true) "?" else "" else "Like", "Like", tint = Color.White) { info?.let { onRate(it, 1) } }
-            ShortsAction(if (rating == -1) R.drawable.yt_short_dislike_on else R.drawable.yt_shorts_modern_dislike, "Dislike", "Dislike", tint = Color.White) { info?.let { onRate(it, -1) } }
             ShortsAction(R.drawable.yt_shorts_modern_comment, commentCount?.let { formatCount(it.toLong()) } ?: "Comments", "Comments", tint = Color.White) { info?.let(onComments) }
+            ShortsAction(R.drawable.yt_w_save, "Save", "Save", tint = Color.White) { info?.let { onSave(videoKey(it.url)) } }
             ShortsAction(R.drawable.yt_shorts_modern_share, "Share", "Share", tint = Color.White) { info?.let(onShare) }
             // Pivot thumbnail audio di pojok kanan bawah aksi
             if (meta?.audioThumbnail != null) {
@@ -513,7 +559,7 @@ private fun ShortPage(
                 }
             }
         }
-        if (showsPlayer) ShortsProgress(player, playing, ui, showPaused, Modifier.align(Alignment.BottomCenter))
+        if (showsPlayer) ShortsProgress(player, playing, ui, showPaused, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp))
         // Keadaan jeda: scrim tipis di seluruh halaman dan ikon putar 96 dp yang muncul/menghilang dengan animasi.
         AnimatedVisibility(showPaused, enter = fadeIn(tween(120)), exit = fadeOut(tween(200)), modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().background(Color(0x33000000)))
@@ -527,7 +573,10 @@ private fun ShortPage(
                 Icon(painterResource(R.drawable.yt_download), "Download", Modifier.size(26.dp), tint = Color.White)
             }
         }
-        if (showsPlayer && (ui.holding || ui.locked)) SpeedChip(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp))
+        if (showsPlayer && (ui.holding || ui.locked)) SpeedChip(
+            onClick = { ui.locked = false },
+            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp),
+        )
         if (showsPlayer && ui.holding) SpeedHint(ui.locked, ui.pulled, Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp))
         if (showsPlayer && ui.scrubbing) {
             val duration = player.duration.coerceAtLeast(0L)
@@ -569,8 +618,19 @@ private fun HeartBurst(heart: Heart, onDone: () -> Unit) {
 
 /** Lencana kecepatan di tengah-atas: tinggi 32 dp, padding 12 dp, teks 14 sp, ikon maju-cepat 18 dp. */
 @Composable
-private fun SpeedChip(modifier: Modifier = Modifier) {
-    Row(modifier.height(32.dp).clip(RoundedCornerShape(50)).background(Color(0x99000000)).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun SpeedChip(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
+) {
+    Row(
+        modifier = modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Color(0x99000000))
+            .clickable(onClickLabel = "Reset playback speed", onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text("2x", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.width(4.dp))
         PlayerGlyph("forward", Modifier.size(18.dp))

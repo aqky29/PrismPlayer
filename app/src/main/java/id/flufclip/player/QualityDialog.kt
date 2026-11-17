@@ -234,7 +234,21 @@ internal fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List
         }
         return
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF272727), contentColor = Color.White, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Surface,
+        contentColor = Color.White,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        dragHandle = {
+            Box(
+                Modifier
+                    .padding(vertical = 10.dp)
+                    .size(width = 40.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFF717171))
+            )
+        }
+    ) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = if (page == "quality" || page == "advanced" || page == "menu") 20.dp else 4.dp, end = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (page != "menu" && page != "quality" && page != "advanced") IconButton(onClick = { page = "menu" }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }

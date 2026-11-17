@@ -114,7 +114,9 @@ object YouTubeAuth {
         try {
             savedAccounts = AccountVault.read(context)
             accountStorageError = false
-            if (isLoggedIn) saveCurrentAccount(context)
+            if (isLoggedIn) scope.launch {
+                try { saveCurrentAccount(context) } catch (_: Exception) { accountStorageError = true }
+            }
         } catch (_: Exception) { accountStorageError = true }
 
         if (isLoggedIn && (name.isBlank() || avatar.isNullOrBlank())) {
@@ -186,7 +188,9 @@ object YouTubeAuth {
             .apply()
 
         if (isLoggedIn) {
-            try { saveCurrentAccount(context) } catch (_: Exception) { accountStorageError = true }
+            scope.launch {
+                try { saveCurrentAccount(context) } catch (_: Exception) { accountStorageError = true }
+            }
             refreshProfile(context)
         }
     }
@@ -257,11 +261,24 @@ object YouTubeAuth {
         headers["X-Origin"] = origin
         headers["X-Goog-AuthUser"] = "0"
 
-        val sapisid = getSapisid()
-        if (!sapisid.isNullOrBlank()) {
-            val epochSec = System.currentTimeMillis() / 1000L
-            val hash = sha1("$epochSec $sapisid $origin")
-            headers["Authorization"] = "SAPISIDHASH ${epochSec}_$hash"
+        val epochSec = System.currentTimeMillis() / 1000L
+        val authParts = mutableListOf<String>()
+        val sapisid = extractCookie("SAPISID")
+        val sapisid1p = extractCookie("__Secure-1PAPISID")
+        val sapisid3p = extractCookie("__Secure-3PAPISID")
+
+        val primarySapisid = sapisid ?: sapisid3p ?: sapisid1p
+        if (!primarySapisid.isNullOrBlank()) {
+            authParts.add("SAPISIDHASH ${epochSec}_${sha1("$epochSec $primarySapisid $origin")}")
+        }
+        if (!sapisid1p.isNullOrBlank()) {
+            authParts.add("SAPISID1PHASH ${epochSec}_${sha1("$epochSec $sapisid1p $origin")}")
+        }
+        if (!sapisid3p.isNullOrBlank()) {
+            authParts.add("SAPISID3PHASH ${epochSec}_${sha1("$epochSec $sapisid3p $origin")}")
+        }
+        if (authParts.isNotEmpty()) {
+            headers["Authorization"] = authParts.joinToString(" ")
         }
         return headers
     }
@@ -384,12 +401,20 @@ object YouTubeAuth {
                         )
                         profile = updated
                         profileError = null
-                        try { if (!accountStorageError) saveCurrentAccount(appContext) } catch (_: Exception) { accountStorageError = true }
                         appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
                             .putString(KEY_NAME, updated.name)
                             .putString(KEY_EMAIL, updated.emailOrHandle)
                             .putString(KEY_AVATAR, updated.avatarUrl)
                             .apply()
+                    }
+                    if (!accountStorageError) {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                saveCurrentAccount(appContext)
+                            }
+                        } catch (_: Exception) {
+                            accountStorageError = true
+                        }
                     }
                 }
             } catch (e: CancellationException) {
@@ -414,6 +439,7 @@ fun YouTubeLoginDialog(
     var loading by remember { mutableStateOf(true) }
     var webReady by remember(addAccount) { mutableStateOf(!addAccount) }
     var completed by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
     val previousCookies = remember(addAccount) { if (addAccount) YouTubeAuth.getCookies() else "" }
     DisposableEffect(addAccount) {
         if (addAccount) CookieManager.getInstance().removeAllCookies { webReady = true }
@@ -508,15 +534,23 @@ fun YouTubeLoginDialog(
 
                                     if (isYouTube && hasAuth) {
                                         completed = true
-                                        YouTubeAuth.saveAuth(ctx, cookies)
-                                        Toast.makeText(ctx, "Signed in to YouTube", Toast.LENGTH_SHORT).show()
-                                        onDismiss()
+                                        coroutineScope.launch(Dispatchers.IO) {
+                                            YouTubeAuth.saveAuth(ctx, cookies)
+                                            withContext(Dispatchers.Main) {
+                                                Toast.makeText(ctx, "Signed in to YouTube", Toast.LENGTH_SHORT).show()
+                                                onDismiss()
+                                            }
+                                        }
                                     }
                                 }
                             }
 
                             loadUrl("https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fm.youtube.com%2F")
                         }
+                    },
+                    onRelease = { webView ->
+                        webView.stopLoading()
+                        webView.destroy()
                     }
                 )
             }

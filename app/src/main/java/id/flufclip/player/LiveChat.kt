@@ -24,12 +24,19 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.WatchLater
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,14 +55,18 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -99,6 +110,23 @@ internal data class ChatInputConfig(
     val customEmojis: List<CustomChatEmoji> = emptyList()
 )
 
+internal sealed class LiveChatActionPanel {
+    data class Input(val config: ChatInputConfig) : LiveChatActionPanel()
+
+    data class SignInRequired(
+        val buttonText: String = "Sign in to chat",
+        val subtext: String? = "All messages you send will appear publicly"
+    ) : LiveChatActionPanel()
+
+    data class Restricted(
+        val message: String,
+        val iconType: String? = null,
+        val learnMoreLabel: String? = null,
+        val learnMoreUrl: String? = null,
+        val isSubscribersOnly: Boolean = false
+    ) : LiveChatActionPanel()
+}
+
 internal data class ChatBadge(
     val type: String,
     val imageUrl: String? = null,
@@ -119,7 +147,9 @@ internal data class ChatMessage(
     val isMembership: Boolean = false,
     val membershipSubtext: String? = null,
     val membershipHeader: String? = null,
-    val isSystemNotice: Boolean = false
+    val isSystemNotice: Boolean = false,
+    val actionLabel: String? = null,
+    val actionUrl: String? = null
 )
 
 internal data class ChatBatch(
@@ -128,10 +158,283 @@ internal data class ChatBatch(
     val timeout: Long,
     val offset: Long?,
     val inputConfig: ChatInputConfig? = null,
+    val actionPanel: LiveChatActionPanel? = null,
     val pinnedMessage: ChatMessage? = null,
     val unpinBanner: Boolean = false,
     val modeNotice: String? = null
 )
+
+internal fun findJsonObject(value: Any?, key: String): JSONObject? {
+    if (value is JSONObject) {
+        value.optJSONObject(key)?.let { return it }
+        val keys = value.keys()
+        while (keys.hasNext()) findJsonObject(value.opt(keys.next()), key)?.let { return it }
+    } else if (value is JSONArray) {
+        for (i in 0 until value.length()) findJsonObject(value.opt(i), key)?.let { return it }
+    }
+    return null
+}
+
+internal fun parseJsonText(value: JSONObject?, emojis: MutableMap<String, String>? = null): String {
+    if (value == null) return ""
+    value.optString("simpleText").takeIf { it.isNotBlank() }?.let { return it }
+    val runs = value.optJSONArray("runs") ?: return ""
+    return (0 until runs.length()).joinToString("") { i ->
+        val run = runs.optJSONObject(i)
+        run?.optString("text")?.takeIf { it.isNotEmpty() } ?: run?.optJSONObject("emoji")?.let { emoji ->
+            val shortcut = emoji.optJSONArray("shortcuts")?.optString(0).orEmpty()
+            val thumbs = emoji.optJSONObject("image")?.optJSONArray("thumbnails")
+            val url = thumbs?.optJSONObject(thumbs.length() - 1)?.optString("url").orEmpty()
+            if (emojis != null && url.startsWith("https://")) {
+                val token = "\uFFF0${emojis.size}\uFFF1"
+                emojis[token] = url
+                token
+            } else shortcut
+        }.orEmpty()
+    }
+}
+
+internal fun normalizeLiveChatUrl(rawUrl: String?): String? {
+    val trimmed = rawUrl?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    return when {
+        trimmed.startsWith("//") -> "https:$trimmed"
+        trimmed.startsWith("/") -> "https://www.youtube.com$trimmed"
+        trimmed.startsWith("https://") || trimmed.startsWith("http://") -> trimmed
+        else -> null
+    }
+}
+
+internal fun parseChatInputRenderer(
+    inputRenderer: JSONObject,
+    fallbackAuthorName: String = "",
+    fallbackAuthorPhoto: String? = null
+): ChatInputConfig? {
+    val sendEndpoint = findJsonObject(inputRenderer, "sendLiveChatMessageEndpoint") ?: return null
+    val sendParams = sendEndpoint.optString("params").takeIf { it.isNotBlank() } ?: return null
+    val authorName = parseJsonText(inputRenderer.optJSONObject("authorName")).ifBlank { fallbackAuthorName }
+    val authorThumbs = inputRenderer.optJSONObject("authorPhoto")?.optJSONArray("thumbnails")
+    val authorPhotoUrl = authorThumbs?.let {
+        if (it.length() > 0) it.optJSONObject(it.length() - 1)?.optString("url")?.let { u -> normalizeLiveChatUrl(u) ?: u } else null
+    } ?: fallbackAuthorPhoto
+
+    val userBadges = mutableListOf<ChatBadge>()
+    val rawBadges = inputRenderer.optJSONArray("authorBadges")
+    if (rawBadges != null) {
+        for (b in 0 until rawBadges.length()) {
+            val bObj = rawBadges.optJSONObject(b)?.let {
+                it.optJSONObject("liveChatAuthorBadgeRenderer") ?: it.optJSONObject("authorBadgeRenderer")
+            } ?: continue
+            val tooltip = bObj.optString("tooltip").takeIf { it.isNotBlank() }
+            val thumbs = bObj.optJSONObject("customThumbnail")?.optJSONArray("thumbnails")
+                ?: bObj.optJSONObject("image")?.optJSONArray("thumbnails")
+            val customUrl = thumbs?.let {
+                if (it.length() > 0) it.optJSONObject(it.length() - 1)?.optString("url") else null
+            }?.takeIf { it.isNotBlank() }
+            userBadges.add(ChatBadge(type = "MEMBER", imageUrl = normalizeLiveChatUrl(customUrl) ?: customUrl, tooltip = tooltip ?: "Member"))
+        }
+    }
+
+    val emojiList = mutableListOf<CustomChatEmoji>()
+    val picker = findJsonObject(inputRenderer, "liveChatEmojiPickerRenderer")
+    if (picker != null) {
+        val categories = picker.optJSONArray("categories")
+        if (categories != null) {
+            for (c in 0 until categories.length()) {
+                val cat = categories.optJSONObject(c)?.optJSONObject("liveChatEmojiPickerCategoryRenderer") ?: continue
+                val emojis = cat.optJSONArray("emojis")
+                if (emojis != null) {
+                    for (e in 0 until emojis.length()) {
+                        val em = emojis.optJSONObject(e) ?: continue
+                        val eid = em.optString("emojiId")
+                        val shortcuts = em.optJSONArray("shortcuts")
+                        val shortcut = shortcuts?.optString(0).orEmpty()
+                        val ethumbs = em.optJSONObject("image")?.optJSONArray("thumbnails")
+                        val eurl = ethumbs?.let {
+                            if (it.length() > 0) it.optJSONObject(it.length() - 1)?.optString("url") else null
+                        }.orEmpty()
+                        if (eid.isNotBlank() && eurl.isNotBlank()) {
+                            emojiList.add(
+                                CustomChatEmoji(
+                                    emojiId = eid,
+                                    shortcut = shortcut.ifBlank { ":emoji:" },
+                                    imageUrl = normalizeLiveChatUrl(eurl) ?: eurl,
+                                    isCustomEmoji = em.optBoolean("isCustomEmoji", true)
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return ChatInputConfig(
+        sendParams = sendParams,
+        authorName = authorName,
+        authorPhotoUrl = authorPhotoUrl,
+        badges = userBadges,
+        customEmojis = emojiList
+    )
+}
+
+private fun parseRestrictedParticipation(restricted: JSONObject): LiveChatActionPanel.Restricted {
+    val msgObj = restricted.optJSONObject("message")
+    val rawMessage = parseJsonText(msgObj).trim()
+    val iconType = restricted.optJSONObject("icon")?.optString("iconType")?.takeIf { it.isNotBlank() }
+
+    val explicitBtn = restricted.optJSONObject("learnMore")?.optJSONObject("buttonRenderer")
+        ?: restricted.optJSONArray("buttons")?.let { arr ->
+            (0 until arr.length())
+                .mapNotNull { arr.optJSONObject(it)?.optJSONObject("buttonRenderer") }
+                .firstOrNull { findJsonObject(it, "urlEndpoint") != null }
+        }
+
+    var learnMoreLabel = parseJsonText(explicitBtn?.optJSONObject("text")).trim().takeIf { it.isNotBlank() }
+    var learnMoreUrl = normalizeLiveChatUrl(findJsonObject(explicitBtn, "urlEndpoint")?.optString("url"))
+
+    if (learnMoreUrl == null) {
+        val runs = msgObj?.optJSONArray("runs")
+        if (runs != null) {
+            for (i in 0 until runs.length()) {
+                val run = runs.optJSONObject(i) ?: continue
+                val url = normalizeLiveChatUrl(findJsonObject(run, "urlEndpoint")?.optString("url"))
+                if (url != null) {
+                    val runLabel = run.optString("text").trim()
+                    learnMoreUrl = url
+                    if (learnMoreLabel == null && runLabel.isNotBlank()) learnMoreLabel = runLabel
+                    break
+                }
+            }
+        }
+    }
+
+    val cleanMessage = if (!learnMoreLabel.isNullOrBlank() && rawMessage.endsWith(learnMoreLabel, ignoreCase = true)) {
+        rawMessage.dropLast(learnMoreLabel.length).trimEnd(' ', '•', '\u00A0')
+    } else {
+        rawMessage
+    }
+
+    val isSubscribersOnly =
+        rawMessage.contains("subscriber", ignoreCase = true) ||
+            rawMessage.contains("subscribe", ignoreCase = true) ||
+            rawMessage.contains("pelanggan", ignoreCase = true) ||
+            (learnMoreUrl?.contains("subs_only", ignoreCase = true) == true)
+
+    return LiveChatActionPanel.Restricted(
+        message = cleanMessage.ifBlank { "Chat is restricted" },
+        iconType = iconType,
+        learnMoreLabel = learnMoreLabel,
+        learnMoreUrl = learnMoreUrl,
+        isSubscribersOnly = isSubscribersOnly
+    )
+}
+
+private fun parseActionMessageRenderer(msgObj: JSONObject): LiveChatActionPanel? {
+    val btn = msgObj.optJSONObject("button")?.optJSONObject("buttonRenderer") ?: findJsonObject(msgObj, "buttonRenderer")
+    val btnText = parseJsonText(btn?.optJSONObject("text")).trim()
+    val hasSignIn =
+        btn?.let { findJsonObject(it, "signInEndpoint") != null } == true ||
+            findJsonObject(msgObj, "signInEndpoint") != null ||
+            btnText.contains("sign in", ignoreCase = true) ||
+            btnText.contains("masuk", ignoreCase = true)
+    val subtext = parseJsonText(msgObj.optJSONObject("subtext")?.optJSONObject("messageSubtextRenderer")?.optJSONObject("text")).takeIf { it.isNotBlank() }
+        ?: parseJsonText(msgObj.optJSONObject("subtext")).takeIf { it.isNotBlank() }
+        ?: parseJsonText(msgObj.optJSONObject("text")).takeIf { it.isNotBlank() }
+
+    if (hasSignIn) {
+        return LiveChatActionPanel.SignInRequired(
+            buttonText = btnText.ifBlank { "Sign in to chat" },
+            subtext = subtext ?: "All messages you send will appear publicly"
+        )
+    }
+
+    val mainText = parseJsonText(msgObj.optJSONObject("text")).trim()
+    val restrictedText = mainText.ifBlank { subtext.orEmpty().trim() }
+    if (restrictedText.isBlank()) return null
+    val url = normalizeLiveChatUrl(findJsonObject(btn, "urlEndpoint")?.optString("url"))
+        ?: if (btn != null && (findJsonObject(btn, "channelCreationFormEndpoint") != null || findJsonObject(btn, "createChannelEndpoint") != null)) {
+            "https://www.youtube.com/create_channel"
+        } else null
+    return LiveChatActionPanel.Restricted(
+        message = restrictedText,
+        iconType = msgObj.optJSONObject("icon")?.optString("iconType")?.takeIf { it.isNotBlank() },
+        learnMoreLabel = btnText.takeIf { it.isNotBlank() && url != null },
+        learnMoreUrl = url,
+        isSubscribersOnly = restrictedText.contains("subscriber", ignoreCase = true) || restrictedText.contains("pelanggan", ignoreCase = true)
+    )
+}
+
+internal fun parseLiveChatActionPanel(
+    root: JSONObject,
+    fallbackAuthorName: String = "",
+    fallbackAuthorPhoto: String? = null
+): LiveChatActionPanel? {
+    val rawPanel = root.optJSONObject("continuationContents")?.optJSONObject("liveChatContinuation")?.optJSONObject("actionPanel")
+        ?: root.optJSONObject("contents")?.optJSONObject("liveChatRenderer")?.optJSONObject("actionPanel")
+        ?: findJsonObject(root, "actionPanel")
+        ?: root.optJSONObject("liveChatActionPanelRenderer")
+    val panelObj = rawPanel?.let { it.optJSONObject("liveChatActionPanelRenderer") ?: it }
+
+    if (panelObj != null) {
+        panelObj.optJSONObject("liveChatMessageInputRenderer")?.let {
+            parseChatInputRenderer(it, fallbackAuthorName, fallbackAuthorPhoto)?.let { cfg ->
+                return LiveChatActionPanel.Input(cfg)
+            }
+        }
+        panelObj.optJSONObject("liveChatRestrictedParticipationRenderer")?.let {
+            return parseRestrictedParticipation(it)
+        }
+        panelObj.optJSONObject("messageRenderer")?.let {
+            parseActionMessageRenderer(it)?.let { parsed -> return parsed }
+        }
+    }
+
+    findJsonObject(root, "liveChatMessageInputRenderer")?.let {
+        parseChatInputRenderer(it, fallbackAuthorName, fallbackAuthorPhoto)?.let { cfg ->
+            return LiveChatActionPanel.Input(cfg)
+        }
+    }
+    findJsonObject(root, "liveChatRestrictedParticipationRenderer")?.let {
+        return parseRestrictedParticipation(it)
+    }
+    return null
+}
+
+internal fun parseLiveChatNoticeItem(modeObj: JSONObject, offsetMs: Long?): ChatMessage? {
+    val msgText = listOf(
+        parseJsonText(modeObj.optJSONObject("text")),
+        parseJsonText(modeObj.optJSONObject("subtext")),
+        parseJsonText(modeObj.optJSONObject("message"))
+    ).filter { it.isNotBlank() }.joinToString(" ").trim()
+    val isEligibleNotice =
+        msgText.contains("mode", ignoreCase = true) ||
+            msgText.contains("subscriber", ignoreCase = true) ||
+            msgText.contains("member", ignoreCase = true) ||
+            msgText.contains("pelanggan", ignoreCase = true) ||
+            msgText.contains("anggota", ignoreCase = true) ||
+            msgText.contains("slow", ignoreCase = true)
+    if (!isEligibleNotice) return null
+
+    val button = modeObj.optJSONObject("actionButton")?.optJSONObject("buttonRenderer")
+        ?: findJsonObject(modeObj, "buttonRenderer")
+    val actionLabel = parseJsonText(button?.optJSONObject("text")).trim().takeIf { it.isNotBlank() }
+    val actionUrl = normalizeLiveChatUrl(findJsonObject(button, "urlEndpoint")?.optString("url"))
+    val cleanMsg = if (!actionLabel.isNullOrBlank() && msgText.endsWith(actionLabel, ignoreCase = true)) {
+        msgText.dropLast(actionLabel.length).trimEnd()
+    } else {
+        msgText
+    }
+    val noticeId = modeObj.optString("id").ifBlank { "${modeObj.optString("timestampUsec")}:$msgText" }
+    return ChatMessage(
+        id = noticeId,
+        author = "YouTube",
+        text = cleanMsg,
+        offset = offsetMs,
+        isSystemNotice = true,
+        actionLabel = actionLabel,
+        actionUrl = actionUrl
+    )
+}
 
 /** YouTube's web chat endpoint is separate from its video comments. */
 internal class ChatSession(private val videoId: String, private val live: Boolean, private val topChat: Boolean = false) {
@@ -142,8 +445,10 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
     private var continuation: String? = null
     private var seekContinuation: String? = null
     private var offset = 0L
-    var currentInputConfig: ChatInputConfig? = null
+    var currentActionPanel: LiveChatActionPanel? = null
         private set
+    val currentInputConfig: ChatInputConfig?
+        get() = (currentActionPanel as? LiveChatActionPanel.Input)?.config
 
     private fun get(url: String, withAuth: Boolean = true): String {
         val desktopUrl = if (url.contains("?")) "$url&app=desktop&persist_app=1" else "$url?app=desktop&persist_app=1"
@@ -247,9 +552,7 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
         val path = if (live) "get_live_chat" else "get_live_chat_replay"
         fun fetch(t: String): JSONObject {
             val res = post(path, JSONObject().put("context", context).put("continuation", t))
-            if (currentInputConfig == null) {
-                findObject(res, "liveChatMessageInputRenderer")?.let { currentInputConfig = parseInputConfig(it) }
-            }
+            parseInputState(res)
             return res.optJSONObject("continuationContents")?.optJSONObject("liveChatContinuation")
                 ?: error("Unrecognized chat response")
         }
@@ -303,12 +606,8 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
     fun start(): ChatBatch {
         if (!live) return startReplay()
         val endpoint = "live_chat"
-        var html = runCatching { get("https://www.youtube.com/$endpoint?v=$videoId", withAuth = true) }.getOrNull().orEmpty()
-        var data = extractInitialData(html)
-        if (data == null && YouTubeAuth.isLoggedIn) {
-            html = runCatching { get("https://www.youtube.com/$endpoint?v=$videoId", withAuth = false) }.getOrNull().orEmpty()
-            data = extractInitialData(html)
-        }
+        val html = runCatching { get("https://www.youtube.com/$endpoint?v=$videoId", withAuth = true) }.getOrNull().orEmpty()
+        val data = extractInitialData(html)
         if (data == null) {
             return bootstrapViaInnerTubeNext()
         }
@@ -316,10 +615,7 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
         apiKey = config?.optString("INNERTUBE_API_KEY").orEmpty()
         context = config?.optJSONObject("INNERTUBE_CONTEXT") ?: defaultWebContext()
 
-        val inputRenderer = findObject(data, "liveChatMessageInputRenderer")
-        if (inputRenderer != null) {
-            currentInputConfig = parseInputConfig(inputRenderer)
-        }
+        parseInputState(data)
 
         val contents = data.optJSONObject("contents")
         val renderer = contents?.optJSONObject("liveChatRenderer")
@@ -337,27 +633,24 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
         }
         return parse(renderer)
     }
-    private fun findObject(value: Any?, key: String): JSONObject? {
-        if (value is JSONObject) {
-            value.optJSONObject(key)?.let { return it }
-            val keys = value.keys()
-            while (keys.hasNext()) findObject(value.opt(keys.next()), key)?.let { return it }
-        } else if (value is JSONArray) {
-            for (i in 0 until value.length()) findObject(value.opt(i), key)?.let { return it }
-        }
-        return null
-    }
+    private fun findObject(value: Any?, key: String): JSONObject? = findJsonObject(value, key)
+
     fun next(): ChatBatch? {
         val token = continuation ?: return null
         val path = if (live) "get_live_chat" else "get_live_chat_replay"
         val body = JSONObject().put("context", context ?: defaultWebContext()).put("continuation", token)
         val data = post(path, body)
-        if (currentInputConfig == null) {
-            val inputRenderer = findObject(data, "liveChatMessageInputRenderer")
-            if (inputRenderer != null) currentInputConfig = parseInputConfig(inputRenderer)
-        }
+        parseInputState(data)
         val renderer = data.optJSONObject("continuationContents")?.optJSONObject("liveChatContinuation") ?: error("Unrecognized chat response")
         return parse(renderer)
+    }
+
+    private fun parseInputState(root: JSONObject) {
+        parseLiveChatActionPanel(
+            root = root,
+            fallbackAuthorName = YouTubeAuth.profile.name,
+            fallbackAuthorPhoto = YouTubeAuth.profile.avatarUrl
+        )?.let { currentActionPanel = it }
     }
     fun seek(targetOffsetMs: Long): ChatBatch? {
         if (live) return null
@@ -369,80 +662,6 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
         val data = post("get_live_chat_replay", body)
         val renderer = data.optJSONObject("continuationContents")?.optJSONObject("liveChatContinuation") ?: return null
         return parse(renderer)
-    }
-
-    private fun parseInputConfig(inputRenderer: JSONObject): ChatInputConfig? {
-        val sendEndpoint = findObject(inputRenderer, "sendLiveChatMessageEndpoint") ?: return null
-        val sendParams = sendEndpoint.optString("params").takeIf { it.isNotBlank() } ?: return null
-        val authorName = text(inputRenderer.optJSONObject("authorName")).ifBlank { YouTubeAuth.profile.name }
-        val authorThumbs = inputRenderer.optJSONObject("authorPhoto")?.optJSONArray("thumbnails")
-        val authorPhotoUrl = authorThumbs?.let {
-            if (it.length() > 0) it.optJSONObject(it.length() - 1)?.optString("url") else null
-        } ?: YouTubeAuth.profile.avatarUrl
-
-        val userBadges = mutableListOf<ChatBadge>()
-        val rawBadges = inputRenderer.optJSONArray("authorBadges")
-        if (rawBadges != null) {
-            for (b in 0 until rawBadges.length()) {
-                val bObj = rawBadges.optJSONObject(b)?.let {
-                    it.optJSONObject("liveChatAuthorBadgeRenderer") ?: it.optJSONObject("authorBadgeRenderer")
-                } ?: continue
-                val tooltip = bObj.optString("tooltip").takeIf { it.isNotBlank() }
-                val thumbs = bObj.optJSONObject("customThumbnail")?.optJSONArray("thumbnails")
-                    ?: bObj.optJSONObject("image")?.optJSONArray("thumbnails")
-                val customUrl = thumbs?.let {
-                    if (it.length() > 0) it.optJSONObject(it.length() - 1)?.optString("url") else null
-                }?.takeIf { it.isNotBlank() }
-                val resolvedUrl = when {
-                    customUrl == null -> null
-                    customUrl.startsWith("//") -> "https:$customUrl"
-                    else -> customUrl
-                }
-                userBadges.add(ChatBadge(type = "MEMBER", imageUrl = resolvedUrl, tooltip = tooltip ?: "Member"))
-            }
-        }
-
-        val emojiList = mutableListOf<CustomChatEmoji>()
-        val picker = findObject(inputRenderer, "liveChatEmojiPickerRenderer")
-        if (picker != null) {
-            val categories = picker.optJSONArray("categories")
-            if (categories != null) {
-                for (c in 0 until categories.length()) {
-                    val cat = categories.optJSONObject(c)?.optJSONObject("liveChatEmojiPickerCategoryRenderer") ?: continue
-                    val emojis = cat.optJSONArray("emojis")
-                    if (emojis != null) {
-                        for (e in 0 until emojis.length()) {
-                            val em = emojis.optJSONObject(e) ?: continue
-                            val eid = em.optString("emojiId")
-                            val shortcuts = em.optJSONArray("shortcuts")
-                            val shortcut = shortcuts?.optString(0).orEmpty()
-                            val ethumbs = em.optJSONObject("image")?.optJSONArray("thumbnails")
-                            val eurl = ethumbs?.let {
-                                if (it.length() > 0) it.optJSONObject(it.length() - 1)?.optString("url") else null
-                            }.orEmpty()
-                            if (eid.isNotBlank() && eurl.isNotBlank()) {
-                                emojiList.add(
-                                    CustomChatEmoji(
-                                        emojiId = eid,
-                                        shortcut = shortcut.ifBlank { ":emoji:" },
-                                        imageUrl = if (eurl.startsWith("//")) "https:$eurl" else eurl,
-                                        isCustomEmoji = em.optBoolean("isCustomEmoji", true)
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return ChatInputConfig(
-            sendParams = sendParams,
-            authorName = authorName,
-            authorPhotoUrl = authorPhotoUrl,
-            badges = userBadges,
-            customEmojis = emojiList
-        )
     }
 
     fun sendMessage(rawText: String, customEmojis: List<CustomChatEmoji>, revision: Int, headers: Map<String, String>): ChatMessage? {
@@ -483,8 +702,10 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
             }
         }
 
+        val reqContext = context ?: defaultWebContext()
+        val clientVersion = reqContext.optJSONObject("client")?.optString("clientVersion")?.takeIf { it.isNotBlank() } ?: "2.20261030.00.00"
         val reqBody = JSONObject().apply {
-            put("context", context)
+            put("context", reqContext)
             put("params", config.sendParams)
             put("clientMessageId", java.util.UUID.randomUUID().toString())
             put("richMessage", JSONObject().put("textSegments", segments))
@@ -494,15 +715,25 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
             .url(url)
             .header("User-Agent", agent)
             .header("Content-Type", "application/json")
+            .header("X-Youtube-Client-Name", "1")
+            .header("X-Youtube-Client-Version", clientVersion)
+            .header("X-Youtube-Bootstrap-Logged-In", "true")
+            .header("Referer", "https://www.youtube.com/live_chat?v=$videoId")
             .post(reqBody.toString().toRequestBody("application/json".toMediaType()))
 
         check(YouTubeAuth.isLoggedIn && revision == YouTubeAuth.sessionRevision && headers.isNotEmpty()) { "Account changed" }
         headers.forEach { (k, v) -> builder.header(k, v) }
 
         val response = client.newCall(builder.build()).execute().use { res ->
-            if (!res.isSuccessful) error("YouTube merespons ${res.code}")
-            JSONObject(res.body?.string() ?: error("Empty send message response"))
+            val rawBody = res.body?.string().orEmpty()
+            val json = runCatching { JSONObject(rawBody) }.getOrNull()
+            if (!res.isSuccessful) {
+                val errMsg = json?.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }
+                error(errMsg ?: "YouTube merespons ${res.code}")
+            }
+            json ?: error("Empty send message response")
         }
+        response.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }?.let { error(it) }
 
         val actions = response.optJSONArray("actions")
         if (actions != null && actions.length() > 0) {
@@ -545,23 +776,12 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
         )
     }
     private fun parse(renderer: JSONObject): ChatBatch {
+        parseInputState(renderer)
         val messages = mutableListOf<ChatMessage>()
         var pinnedMessage: ChatMessage? = null
         var unpinBanner = false
         var modeNotice: String? = null
         var lastOffset: Long? = null
-        findObject(renderer, "liveChatRestrictedParticipationRenderer")?.let { restricted ->
-            val restrictedMsg = text(restricted.optJSONObject("message")).takeIf { it.isNotBlank() }
-            if (restrictedMsg != null) {
-                messages += ChatMessage(
-                    id = "restricted_notice_${System.currentTimeMillis()}",
-                    author = "YouTube",
-                    text = restrictedMsg,
-                    offset = null,
-                    isSystemNotice = true
-                )
-            }
-        }
         fun parseMessageObj(
             message: JSONObject,
             time: Long?,
@@ -740,27 +960,7 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
             val modeObj = item.optJSONObject("liveChatModeChangeMessageRenderer")
                 ?: item.optJSONObject("liveChatViewerEngagementMessageRenderer")
             if (modeObj != null) {
-                val msgText = listOf(
-                    text(modeObj.optJSONObject("text")),
-                    text(modeObj.optJSONObject("subtext")),
-                    text(modeObj.optJSONObject("message"))
-                ).filter { it.isNotBlank() }.joinToString(" ")
-                if (
-                    msgText.contains("mode", ignoreCase = true) ||
-                    msgText.contains("subscriber", ignoreCase = true) ||
-                    msgText.contains("member", ignoreCase = true)
-                ) {
-                    val learnMore = text(findObject(modeObj, "buttonRenderer")?.optJSONObject("text")).takeIf { it.isNotBlank() }
-                    val finalNotice = if (learnMore != null && !msgText.endsWith(learnMore)) "$msgText $learnMore" else msgText
-                    val noticeId = modeObj.optString("id", "${modeObj.optString("timestampUsec")}:$finalNotice")
-                    messages += ChatMessage(
-                        id = noticeId,
-                        author = "YouTube",
-                        text = finalNotice,
-                        offset = time,
-                        isSystemNotice = true
-                    )
-                }
+                parseLiveChatNoticeItem(modeObj, time)?.let { messages += it }
                 return
             }
 
@@ -856,26 +1056,9 @@ internal class ChatSession(private val videoId: String, private val live: Boolea
             nextContObj != null -> nextContObj.optLong("timeoutMs", 2500L).coerceIn(1000L, 5000L)
             else -> 2500L
         }
-        return ChatBatch(messages, continuation, timeoutMs, lastOffset, currentInputConfig, pinnedMessage, unpinBanner, modeNotice)
+        return ChatBatch(messages, continuation, timeoutMs, lastOffset, currentInputConfig, currentActionPanel, pinnedMessage, unpinBanner, modeNotice)
     }
-    private fun text(value: JSONObject?, emojis: MutableMap<String, String>? = null): String {
-        if (value == null) return ""
-        value.optString("simpleText").takeIf { it.isNotBlank() }?.let { return it }
-        val runs = value.optJSONArray("runs") ?: return ""
-        return (0 until runs.length()).joinToString("") { i ->
-            val run = runs.optJSONObject(i)
-            run?.optString("text")?.takeIf { it.isNotEmpty() } ?: run?.optJSONObject("emoji")?.let { emoji ->
-                val shortcut = emoji.optJSONArray("shortcuts")?.optString(0).orEmpty()
-                val thumbs = emoji.optJSONObject("image")?.optJSONArray("thumbnails")
-                val url = thumbs?.optJSONObject(thumbs.length() - 1)?.optString("url").orEmpty()
-                if (emojis != null && url.startsWith("https://")) {
-                    val token = "\uFFF0${emojis.size}\uFFF1"
-                    emojis[token] = url
-                    token
-                } else shortcut
-            }.orEmpty()
-        }
-    }
+    private fun text(value: JSONObject?, emojis: MutableMap<String, String>? = null): String = parseJsonText(value, emojis)
 }
 
 /** State holder for YouTube live chat / replay chat */
@@ -894,9 +1077,11 @@ internal class LiveChatState(val videoUrl: String, val live: Boolean, val postLi
     var position by mutableLongStateOf(0L)
     var retryTrigger by mutableIntStateOf(0)
     var inputConfig by mutableStateOf<ChatInputConfig?>(null)
+    var actionPanel by mutableStateOf<LiveChatActionPanel?>(null)
     var sending by mutableStateOf(false)
     var sendError by mutableStateOf<String?>(null)
     var activeSession: ChatSession? = null
+    private var subscriptionRefreshQueued = false
 
     val visibleMessages: List<ChatMessage>
         get() = if (live) messages.takeLast(150) else messages.filter { it.offset != null && it.offset <= position }.takeLast(150)
@@ -905,7 +1090,19 @@ internal class LiveChatState(val videoUrl: String, val live: Boolean, val postLi
         get() = visibleMessages.filter { it.isSuperChat || !it.purchaseAmount.isNullOrBlank() }.takeLast(15)
 
     fun retry() {
+        subscriptionRefreshQueued = false
         retryTrigger++
+    }
+
+    fun refreshAfterSubscribe() {
+        if (actionPanel is LiveChatActionPanel.Restricted && !subscriptionRefreshQueued) {
+            subscriptionRefreshQueued = true
+            retryTrigger++
+        }
+    }
+
+    internal fun clearQueuedSubscribeRefresh() {
+        subscriptionRefreshQueued = false
     }
 
     fun switchFilter(useTopChat: Boolean) {
@@ -919,8 +1116,10 @@ internal class LiveChatState(val videoUrl: String, val live: Boolean, val postLi
         if (revision != YouTubeAuth.sessionRevision || !YouTubeAuth.isLoggedIn) return@withContext false
         val sess = activeSession ?: return@withContext false
         if (text.isBlank() || sending) return@withContext false
-        sending = true
-        sendError = null
+        withContext(Dispatchers.Main) {
+            sending = true
+            sendError = null
+        }
         try {
             val emojis = inputConfig?.customEmojis ?: emptyList()
             val sentMsg = sess.sendMessage(text, emojis, revision, headers)
@@ -932,10 +1131,14 @@ internal class LiveChatState(val videoUrl: String, val live: Boolean, val postLi
             }
             true
         } catch (e: Exception) {
-            sendError = e.message ?: "Failed to send message"
+            withContext(Dispatchers.Main) {
+                sendError = e.message ?: "Failed to send message"
+            }
             false
         } finally {
-            sending = false
+            withContext(Dispatchers.Main) {
+                sending = false
+            }
         }
     }
 }
@@ -951,19 +1154,38 @@ internal fun rememberLiveChat(videoUrl: String, live: Boolean, postLive: Boolean
         state.pinnedMessage = null
         state.modeNotice = null
         state.error = null
+        state.inputConfig = null
+        state.actionPanel = if (state.live && !YouTubeAuth.isLoggedIn) LiveChatActionPanel.SignInRequired() else null
         state.hasChat = state.live || state.postLive
         // Video biasa tidak mungkin punya live chat maupun replay chat; jangan buka watch page hanya untuk mencarinya.
         if (!state.live && !state.postLive) { state.loading = false; return@LaunchedEffect }
         state.loading = true
+
+        fun applyBatchMeta(batch: ChatBatch) {
+            val resolvedPanel = when {
+                !state.live -> null
+                !YouTubeAuth.isLoggedIn -> (batch.actionPanel as? LiveChatActionPanel.SignInRequired)
+                    ?: LiveChatActionPanel.SignInRequired()
+                batch.actionPanel != null -> batch.actionPanel
+                batch.inputConfig != null -> LiveChatActionPanel.Input(batch.inputConfig)
+                else -> null
+            }
+            if (resolvedPanel != null) {
+                state.actionPanel = resolvedPanel
+                state.inputConfig = (resolvedPanel as? LiveChatActionPanel.Input)?.config
+            }
+            if (batch.unpinBanner) state.pinnedMessage = null
+            if (batch.pinnedMessage != null) state.pinnedMessage = batch.pinnedMessage
+            if (batch.modeNotice != null) state.modeNotice = batch.modeNotice
+        }
+
         try {
             var session = ChatSession(state.videoId, state.live, state.topChat)
             state.activeSession = session
             var batch = retryChatRead { withContext(Dispatchers.IO) { session.start() } }
+            state.clearQueuedSubscribeRefresh()
             state.hasChat = true
-            if (batch.inputConfig != null) state.inputConfig = batch.inputConfig
-            if (batch.unpinBanner) state.pinnedMessage = null
-            if (batch.pinnedMessage != null) state.pinnedMessage = batch.pinnedMessage
-            if (batch.modeNotice != null) state.modeNotice = batch.modeNotice
+            applyBatchMeta(batch)
 
             val initialPos = player.currentPosition.coerceAtLeast(0L)
             state.position = initialPos
@@ -994,10 +1216,7 @@ internal fun rememberLiveChat(videoUrl: String, live: Boolean, postLive: Boolean
             }
 
             while (true) {
-                if (batch.inputConfig != null) state.inputConfig = batch.inputConfig
-                if (batch.unpinBanner) state.pinnedMessage = null
-                if (batch.pinnedMessage != null) state.pinnedMessage = batch.pinnedMessage
-                if (batch.modeNotice != null) state.modeNotice = batch.modeNotice
+                applyBatchMeta(batch)
                 state.loading = false
 
                 if (state.live) {
@@ -1072,7 +1291,7 @@ internal fun rememberLiveChat(videoUrl: String, live: Boolean, postLive: Boolean
         }
     }
 
-    LaunchedEffect(videoUrl) {
+    LaunchedEffect(state, player) {
         while (true) {
             state.position = player.currentPosition.coerceAtLeast(0L)
             delay(100)
@@ -1089,13 +1308,26 @@ internal fun rememberLiveChat(videoUrl: String, live: Boolean, postLive: Boolean
  * - Saat replay (`isLive == false`), menampilkan cuplikan pesan atau ajakan memutar video.
  */
 @Composable
+private fun SyncChatOnSubscribe(state: LiveChatState, subscribed: Boolean?) {
+    var previousSubscribed by remember(state) { mutableStateOf(subscribed) }
+    LaunchedEffect(state, subscribed) {
+        if (subscribed == true && previousSubscribed == false) {
+            state.refreshAfterSubscribe()
+        }
+        previousSubscribed = subscribed
+    }
+}
+
+@Composable
 internal fun LiveChatTeaser(
     state: LiveChatState,
     isLive: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    pageIndicator: (@Composable () -> Unit)? = null
+    pageIndicator: (@Composable () -> Unit)? = null,
+    subscribed: Boolean? = null
 ) {
+    SyncChatOnSubscribe(state, subscribed)
     val latest = state.visibleMessages.lastOrNull { it.text.isNotBlank() }
     Box(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Surface).clickable(onClick = onClick)) {
         Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)) {
@@ -1112,53 +1344,156 @@ internal fun LiveChatTeaser(
             Box(Modifier.padding(top = 10.dp)) {
                 when {
                     isLive -> {
+                        val panel = state.actionPanel
                         val rawName = state.inputConfig?.authorName?.takeIf { it.isNotBlank() }
                             ?: (if (YouTubeAuth.isLoggedIn) YouTubeAuth.profile.name.takeIf { it.isNotBlank() } else null)
                         val displayName = rawName?.removePrefix("@")?.substringBefore("-")?.trim()?.takeIf { it.isNotBlank() }
                             ?: rawName?.removePrefix("@")?.trim()
                         val avatarUrl = state.inputConfig?.authorPhotoUrl?.takeIf { it.isNotBlank() }
                             ?: (if (YouTubeAuth.isLoggedIn) YouTubeAuth.profile.avatarUrl?.takeIf { it.isNotBlank() } else null)
-                        val initial = displayName?.firstOrNull()?.uppercaseChar() ?: 'I'
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (avatarUrl != null) {
-                                Avatar(avatarUrl, displayName ?: "You", 24)
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF33691E)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = initial.toString(),
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                            when {
+                                !YouTubeAuth.isLoggedIn || panel is LiveChatActionPanel.SignInRequired -> {
+                                    val signInLabel = (panel as? LiveChatActionPanel.SignInRequired)?.buttonText ?: "Sign in to chat"
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF383838)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = null,
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+                                    Spacer(Modifier.width(10.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(32.dp)
+                                            .clip(RoundedCornerShape(50))
+                                            .background(Color(0xFF383838))
+                                            .padding(horizontal = 14.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Text(
+                                            text = signInLabel,
+                                            color = TextSecondary,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(32.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(Color(0xFF383838))
-                                    .padding(horizontal = 14.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                Text(
-                                    text = if (!displayName.isNullOrBlank()) "Chat publicly as $displayName..." else "Chat publicly...",
-                                    color = Color(0xFFAAAAAA),
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+
+                                panel is LiveChatActionPanel.Restricted -> {
+                                    val isTimer = panel.iconType?.let {
+                                        it.contains("TIMER", true) || it.contains("CLOCK", true) || it.contains("SLOW", true)
+                                    } == true
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF383838)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isTimer) Icons.Default.WatchLater else Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                    Spacer(Modifier.width(10.dp))
+                                    val teaserMessage = if (panel.isSubscribersOnly && subscribed == false) {
+                                        "Subscribers-only mode. Subscribe to chat"
+                                    } else {
+                                        panel.message
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(32.dp)
+                                            .clip(RoundedCornerShape(50))
+                                            .background(Color(0xFF383838))
+                                            .padding(horizontal = 14.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Text(
+                                            text = teaserMessage,
+                                            color = TextSecondary,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                else -> {
+                                    if (avatarUrl != null) {
+                                        Avatar(avatarUrl, displayName ?: "You", 24)
+                                    } else if (!displayName.isNullOrBlank()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF33691E)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = displayName.first().uppercaseChar().toString(),
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF383838)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = null,
+                                                tint = TextSecondary,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(10.dp))
+                                    val promptText = when {
+                                        panel == null && !state.loading -> "Chat input unavailable"
+                                        !displayName.isNullOrBlank() -> "Chat publicly as $displayName..."
+                                        else -> "Chat publicly..."
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(32.dp)
+                                            .clip(RoundedCornerShape(50))
+                                            .background(Color(0xFF383838))
+                                            .padding(horizontal = 14.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Text(
+                                            text = promptText,
+                                            color = TextSecondary,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1227,7 +1562,7 @@ internal fun LiveChatFullscreenOverlay(
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = msg.text,
+                        text = if (!msg.actionLabel.isNullOrBlank()) "${msg.text} ${msg.actionLabel}" else msg.text,
                         fontSize = 11.sp,
                         lineHeight = 15.sp,
                         color = Color(0xFFCCCCCC)
@@ -1600,22 +1935,34 @@ private fun MembershipMessageCard(msg: ChatMessage) {
  * Flows seamlessly with the stream and scrolls away as new messages arrive.
  */
 @Composable
-private fun SystemNoticeItem(text: String) {
-    val noticeAnnotated = remember(text) {
+private fun SystemNoticeItem(msg: ChatMessage) {
+    val context = LocalContext.current
+    val noticeAnnotated = remember(msg.text, msg.actionLabel, msg.actionUrl) {
         buildAnnotatedString {
-            val learnIdx = text.indexOf("Learn more", ignoreCase = true).let {
-                if (it >= 0) it else text.indexOf("Pelajari lebih lanjut", ignoreCase = true)
+            withStyle(SpanStyle(color = Color(0xFFDDDDDD))) {
+                append(msg.text)
             }
-            if (learnIdx >= 0) {
-                withStyle(SpanStyle(color = Color(0xFFDDDDDD))) {
-                    append(text.substring(0, learnIdx))
-                }
-                withStyle(SpanStyle(color = Color(0xFF3EA6FF))) {
-                    append(text.substring(learnIdx))
-                }
-            } else {
-                withStyle(SpanStyle(color = Color(0xFFDDDDDD))) {
-                    append(text)
+            val label = msg.actionLabel
+            val url = msg.actionUrl
+            if (!label.isNullOrBlank()) {
+                if (msg.text.isNotEmpty()) append(" ")
+                if (!url.isNullOrBlank()) {
+                    withLink(
+                        LinkAnnotation.Clickable(
+                            tag = "notice-action",
+                            styles = TextLinkStyles(SpanStyle(color = Color(0xFF3EA6FF)))
+                        ) {
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            }
+                        }
+                    ) {
+                        append(label)
+                    }
+                } else {
+                    withStyle(SpanStyle(color = Color(0xFFAAAAAA))) {
+                        append(label)
+                    }
                 }
             }
         }
@@ -1644,7 +1991,7 @@ private fun SystemNoticeItem(text: String) {
 @Composable
 private fun LiveChatMessageItem(msg: ChatMessage, compact: Boolean = false) {
     if (msg.isSystemNotice) {
-        SystemNoticeItem(msg.text)
+        SystemNoticeItem(msg)
         return
     }
 
@@ -1840,7 +2187,7 @@ private fun PinnedChatBannerCard(
                     isExpanded = !isExpanded
                 }
             }
-            .padding(start = 10.dp, end = 6.dp, top = 7.dp, bottom = 7.dp),
+            .padding(start = 10.dp, end = 2.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (!msg.authorPhotoUrl.isNullOrBlank()) {
@@ -1925,12 +2272,12 @@ private fun PinnedChatBannerCard(
             modifier = Modifier.weight(1f)
         )
 
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(2.dp))
 
         Box {
             IconButton(
                 onClick = { showMenu = true },
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(44.dp)
             ) {
                 Icon(
                     painter = painterResource(R.drawable.yt_reel_more),
@@ -2575,26 +2922,31 @@ private fun LiveChatSuperChatDialog(
  */
 @Composable
 private fun LiveChatShimmerLoading(modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "chat_shimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmer_offset"
-    )
-    val shimmerColors = listOf(
-        Color(0xFF1E1E1E),
-        Color(0xFF2B2B2B),
-        Color(0xFF1E1E1E)
-    )
-    val brush = Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset(translateAnim - 250f, translateAnim - 250f),
-        end = Offset(translateAnim, translateAnim)
-    )
+    val reduceMotion = rememberReduceMotion()
+    val brush = if (reduceMotion) {
+        SolidColor(Color(0xFF232323))
+    } else {
+        val transition = rememberInfiniteTransition(label = "chat_shimmer")
+        val translateAnim by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1000f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "shimmer_offset"
+        )
+        val shimmerColors = listOf(
+            Color(0xFF1E1E1E),
+            Color(0xFF2B2B2B),
+            Color(0xFF1E1E1E)
+        )
+        Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset(translateAnim - 250f, translateAnim - 250f),
+            end = Offset(translateAnim, translateAnim)
+        )
+    }
 
     Column(
         modifier = modifier
@@ -2647,13 +2999,130 @@ private fun LiveChatShimmerLoading(modifier: Modifier = Modifier) {
  * - Pill-shaped "Chat..." input bar with avatar, monochrome Emoji outline icon, Gift icon & Super Chat [$] icon
  */
 @Composable
+private fun LiveChatRestrictedBar(
+    restricted: LiveChatActionPanel.Restricted,
+    loading: Boolean,
+    subscribed: Boolean?,
+    onSubscribe: (() -> Unit)?
+) {
+    val context = LocalContext.current
+    val isTimerIcon = restricted.iconType?.let {
+        it.contains("TIMER", true) || it.contains("CLOCK", true) || it.contains("SLOW", true) || it.contains("HOURGLASS", true)
+    } == true
+
+    val annotatedMessage = remember(restricted.message, restricted.learnMoreLabel, restricted.learnMoreUrl) {
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = Color(0xFFCCCCCC))) {
+                append(restricted.message)
+            }
+            val label = restricted.learnMoreLabel
+            val url = restricted.learnMoreUrl
+            if (!label.isNullOrBlank()) {
+                append("  •  ")
+                if (!url.isNullOrBlank()) {
+                    withLink(
+                        LinkAnnotation.Clickable(
+                            tag = "restricted-learn-more",
+                            styles = TextLinkStyles(SpanStyle(color = CallToActionBlue, fontWeight = FontWeight.Medium))
+                        ) {
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            }
+                        }
+                    ) {
+                        append(label)
+                    }
+                } else {
+                    withStyle(SpanStyle(color = TextSecondary)) {
+                        append(label)
+                    }
+                }
+            }
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 44.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Surface)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    color = TextSecondary,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    imageVector = if (isTimerIcon) Icons.Default.WatchLater else Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = annotatedMessage,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        if (!loading && restricted.isSubscribersOnly && subscribed == false && onSubscribe != null) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .semantics { role = Role.Button }
+                    .clickable(onClick = onSubscribe),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color.White)
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Subscribe",
+                        color = Color(0xFF0F0F0F),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun LiveChatPanel(
     state: LiveChatState,
     draggable: Boolean,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    watchingCount: Long = 0L
+    watchingCount: Long = 0L,
+    subscribed: Boolean? = null,
+    onSubscribe: (() -> Unit)? = null
 ) {
+    SyncChatOnSubscribe(state, subscribed)
     val scope = rememberCoroutineScope()
     val visible = state.visibleMessages
     val listState = rememberLazyListState()
@@ -2719,7 +3188,7 @@ internal fun LiveChatPanel(
                         .padding(top = 8.dp, bottom = 2.dp)
                         .size(width = 36.dp, height = 4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0xFF606060))
+                        .background(DragHandleInk)
                 )
             } else {
                 Spacer(Modifier.height(6.dp))
@@ -2752,7 +3221,7 @@ internal fun LiveChatPanel(
                             color = Color(0xFFAAAAAA),
                             fontSize = 12.sp
                         )
-                        if (watchingCount > 0L) {
+                        if (state.live && watchingCount > 0L) {
                             Spacer(Modifier.width(8.dp))
                             Icon(
                                 imageVector = Icons.Default.Person,
@@ -2793,7 +3262,7 @@ internal fun LiveChatPanel(
                 Box {
                     IconButton(
                         onClick = { showFilterMenu = true },
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
                         ChatTuneFilterIcon(Modifier.size(22.dp))
                     }
@@ -2805,8 +3274,8 @@ internal fun LiveChatPanel(
                         DropdownMenuItem(
                             text = {
                                 Column {
-                                    Text("Top messages", color = Color.White, fontSize = 14.sp, fontWeight = if (state.topChat) FontWeight.Bold else FontWeight.Normal)
-                                    Text("Some messages, such as potential spam, may not be visible", color = Color(0xFFAAAAAA), fontSize = 11.sp)
+                                    Text("Top messages", color = TextPrimary, fontSize = 14.sp, fontWeight = if (state.topChat) FontWeight.Bold else FontWeight.Normal)
+                                    Text("Some messages, such as potential spam, may not be visible", color = TextSecondary, fontSize = 11.sp)
                                 }
                             },
                             onClick = {
@@ -2817,8 +3286,13 @@ internal fun LiveChatPanel(
                         DropdownMenuItem(
                             text = {
                                 Column {
-                                    Text("Live chat", color = Color.White, fontSize = 14.sp, fontWeight = if (!state.topChat) FontWeight.Bold else FontWeight.Normal)
-                                    Text("All messages are visible", color = Color(0xFFAAAAAA), fontSize = 11.sp)
+                                    Text(
+                                        if (state.live) "Live chat" else "All chat replay",
+                                        color = TextPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (!state.topChat) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    Text("All messages are visible", color = TextSecondary, fontSize = 11.sp)
                                 }
                             },
                             onClick = {
@@ -2831,12 +3305,12 @@ internal fun LiveChatPanel(
 
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Close live chat",
-                        tint = Color.White,
+                        contentDescription = if (state.live) "Close live chat" else "Close replay chat",
+                        tint = TextPrimary,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -2915,27 +3389,28 @@ internal fun LiveChatPanel(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 12.dp)
+                        .heightIn(min = 44.dp)
                         .shadow(8.dp, CircleShape),
-                    color = Color(0xFF212121),
+                    color = SurfaceElevated,
                     shape = CircleShape,
                     border = BorderStroke(1.dp, Color(0x33FFFFFF))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Scroll ke bawah",
-                            tint = Color(0xFF3EA6FF),
+                            contentDescription = "Scroll to bottom",
+                            tint = CallToActionBlue,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = "Live chat paused",
-                            color = Color.White,
-                            fontSize = 12.sp,
+                            text = if (state.live) "Live chat paused" else "Replay chat paused",
+                            color = TextPrimary,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -2988,7 +3463,18 @@ internal fun LiveChatPanel(
 
             HorizontalDivider(color = Color(0xFF272727), thickness = 1.dp)
 
-            val config = state.inputConfig
+            val actionPanel = state.actionPanel
+            val config = (actionPanel as? LiveChatActionPanel.Input)?.config ?: state.inputConfig
+            val canComposeInput = YouTubeAuth.isLoggedIn && config != null && actionPanel !is LiveChatActionPanel.Restricted && actionPanel !is LiveChatActionPanel.SignInRequired
+
+            LaunchedEffect(canComposeInput) {
+                if (!canComposeInput) {
+                    showEmojiPicker = false
+                    showGiftDialog = false
+                    showSuperChatDialog = false
+                }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2997,13 +3483,13 @@ internal fun LiveChatPanel(
                 if (state.sendError != null) {
                     Text(
                         text = state.sendError!!,
-                        color = Color(0xFFFF5252),
-                        fontSize = 11.sp,
+                        color = ErrorText,
+                        fontSize = 12.sp,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )
                 }
 
-                if (showEmojiPicker) {
+                if (showEmojiPicker && canComposeInput) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -3017,41 +3503,45 @@ internal fun LiveChatPanel(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                "Emoji & Reaksi",
+                                "Emoji & Reactions",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Color.White,
+                                color = TextPrimary,
                                 fontWeight = FontWeight.Bold
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (YouTubeAuth.isLoggedIn && inputText.isNotEmpty()) {
+                                if (inputText.isNotEmpty()) {
                                     IconButton(
                                         onClick = {
                                             if (inputText.isNotEmpty()) {
                                                 inputText = inputText.dropLast(1)
                                             }
                                         },
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(44.dp)
                                     ) {
-                                        Text("⌫", color = Color.LightGray, fontSize = 16.sp)
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Backspace,
+                                            contentDescription = "Backspace",
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                     }
-                                    Spacer(Modifier.width(8.dp))
                                 }
                                 IconButton(
                                     onClick = { showEmojiPicker = false },
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(44.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, contentDescription = "Close emoji", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.Close, contentDescription = "Close emoji picker", tint = TextSecondary, modifier = Modifier.size(18.dp))
                                 }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        if (config != null && config.customEmojis.isNotEmpty()) {
+                        if (config.customEmojis.isNotEmpty()) {
                             Text(
                                 "Channel emoji (${config.customEmojis.size})",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF2BA640),
+                                color = MembershipGreen,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(bottom = 4.dp)
                             )
@@ -3063,15 +3553,11 @@ internal fun LiveChatPanel(
                                 items(config.customEmojis) { em ->
                                     Box(
                                         modifier = Modifier
-                                            .size(40.dp)
+                                            .size(44.dp)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF272727))
+                                            .background(Surface)
                                             .clickable {
-                                                if (!YouTubeAuth.isLoggedIn) {
-                                                    showLoginDialog = true
-                                                } else {
-                                                    inputText += if (inputText.endsWith(" ") || inputText.isEmpty()) em.shortcut + " " else " " + em.shortcut + " "
-                                                }
+                                                inputText += if (inputText.endsWith(" ") || inputText.isEmpty()) em.shortcut + " " else " " + em.shortcut + " "
                                             }
                                             .padding(4.dp),
                                         contentAlignment = Alignment.Center
@@ -3088,9 +3574,9 @@ internal fun LiveChatPanel(
                         }
 
                         Text(
-                            "Emoji Populer",
+                            "Popular emojis",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFAAAAAA),
+                            color = TextSecondary,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(bottom = 4.dp)
                         )
@@ -3111,249 +3597,251 @@ internal fun LiveChatPanel(
                                     row.forEach { emoji ->
                                         Box(
                                             modifier = Modifier
-                                                .size(38.dp)
+                                                .weight(1f)
+                                                .height(44.dp)
                                                 .clip(RoundedCornerShape(8.dp))
-                                                .clickable {
-                                                    if (!YouTubeAuth.isLoggedIn) {
-                                                        showLoginDialog = true
-                                                    } else {
-                                                        inputText += emoji
-                                                    }
-                                                },
+                                                .clickable { inputText += emoji },
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(text = emoji, fontSize = 20.sp)
                                         }
                                     }
                                     repeat(7 - row.size) {
-                                        Spacer(Modifier.size(38.dp))
+                                        Spacer(Modifier.weight(1f).height(44.dp))
                                     }
                                 }
                             }
                         }
                     }
-                    HorizontalDivider(color = Color(0xFF272727), thickness = 0.5.dp)
+                    HorizontalDivider(color = Surface, thickness = 0.5.dp)
                 }
 
-                // Bottom Pill Input Row matching YouTube Mobile ("Chat..." + avatar + outline emoji + Gift + [$])
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (!YouTubeAuth.isLoggedIn) {
-                        Row(
+                when {
+                    !YouTubeAuth.isLoggedIn || actionPanel is LiveChatActionPanel.SignInRequired -> {
+                        val signInPanel = (actionPanel as? LiveChatActionPanel.SignInRequired)
+                            ?: LiveChatActionPanel.SignInRequired()
+                        Column(
                             modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(Color(0xFF272727))
-                                .clickable { showLoginDialog = true }
-                                .padding(start = 12.dp, end = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF383838)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        tint = Color(0xFF888888),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    "Chat...",
-                                    color = Color(0xFF888888),
-                                    fontSize = 14.sp
-                                )
-                            }
-                            IconButton(
-                                onClick = { showEmojiPicker = !showEmojiPicker },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                ChatEmojiOutlineIcon(Modifier.size(20.dp))
-                            }
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF272727))
-                                .clickable { showGiftDialog = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            ChatGiftBoxIcon(Modifier.size(22.dp))
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF272727))
-                                .clickable { showSuperChatDialog = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            ChatSuperChatDollarIcon(Modifier.size(22.dp))
-                        }
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 40.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(Color(0xFF272727))
-                                .padding(start = 10.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val userPhoto = YouTubeAuth.profile.avatarUrl ?: config?.authorPhotoUrl
-                            if (!userPhoto.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = userPhoto,
-                                    contentDescription = "Your avatar",
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF383838)),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF383838)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        tint = Color.LightGray,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.width(8.dp))
-
                             Box(
-                                modifier = Modifier.weight(1f),
-                                contentAlignment = Alignment.CenterStart
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .semantics { role = Role.Button }
+                                    .clickable { showLoginDialog = true },
+                                contentAlignment = Alignment.Center
                             ) {
-                                if (inputText.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp)
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(Color(0xFF272727)),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Text(
-                                        text = "Chat...",
-                                        color = Color(0xFF888888),
+                                        text = signInPanel.buttonText,
+                                        color = TextPrimary,
                                         fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                                BasicTextField(
-                                    value = inputText,
-                                    onValueChange = {
-                                        if (it.length <= 250) inputText = it
-                                    },
-                                    enabled = !state.sending && config != null,
-                                    singleLine = true,
-                                    textStyle = TextStyle(
-                                        color = Color.White,
-                                        fontSize = 14.sp
-                                    ),
-                                    cursorBrush = SolidColor(Color.White),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
                             }
-
-                            if (inputText.length >= 150) {
-                                val remaining = 200 - inputText.length
+                            if (!signInPanel.subtext.isNullOrBlank()) {
+                                Spacer(Modifier.height(6.dp))
                                 Text(
-                                    text = "$remaining",
-                                    color = if (remaining < 0) Color(0xFFFF5252) else Color(0xFFAAAAAA),
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                    text = signInPanel.subtext,
+                                    color = TextSecondary,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    textAlign = TextAlign.Center
                                 )
-                            }
-
-                            IconButton(
-                                onClick = {
-                                    showEmojiPicker = !showEmojiPicker
-                                },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                ChatEmojiOutlineIcon(Modifier.size(20.dp))
                             }
                         }
+                    }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                    !canComposeInput -> {
+                        val restrictedPanel = (actionPanel as? LiveChatActionPanel.Restricted)
+                            ?: LiveChatActionPanel.Restricted(
+                                message = if (state.loading) "Checking chat availability..." else "Chat input unavailable"
+                            )
+                        LiveChatRestrictedBar(
+                            restricted = restrictedPanel,
+                            loading = state.loading && actionPanel == null,
+                            subscribed = subscribed,
+                            onSubscribe = onSubscribe
+                        )
+                    }
 
-                        val canSend = inputText.isNotBlank() && inputText.length <= 200 && !state.sending && config != null
-                        if (canSend || state.sending) {
-                            IconButton(
-                                onClick = {
-                                    val textToSend = inputText
-                                    val revision = YouTubeAuth.sessionRevision
-                                    val headers = YouTubeAuth.buildAuthHeaders()
-                                    scope.launch {
-                                        val success = state.sendMessage(textToSend, revision, headers)
-                                        if (success) {
-                                            inputText = ""
-                                            showEmojiPicker = false
-                                            autoScroll = true
-                                            listState.scrollToItem(0)
-                                        }
-                                    }
-                                },
-                                enabled = canSend,
+                    else -> {
+                        val activeConfig = config!!
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF3EA6FF))
+                                    .weight(1f)
+                                    .heightIn(min = 44.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(Surface)
+                                    .padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (state.sending) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
+                                val userPhoto = YouTubeAuth.profile.avatarUrl ?: activeConfig.authorPhotoUrl
+                                if (!userPhoto.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = userPhoto,
+                                        contentDescription = "Your avatar",
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF383838)),
+                                        contentScale = ContentScale.Crop
                                     )
                                 } else {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.Send,
-                                        contentDescription = "Send",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF383838)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = null,
+                                            tint = Color.LightGray,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(8.dp))
+
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (inputText.isEmpty()) {
+                                        Text(
+                                            text = "Chat...",
+                                            color = TextSubMuted,
+                                            fontSize = 14.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    BasicTextField(
+                                        value = inputText,
+                                        onValueChange = {
+                                            if (it.length <= 250) inputText = it
+                                        },
+                                        enabled = !state.sending,
+                                        singleLine = true,
+                                        textStyle = TextStyle(
+                                            color = TextPrimary,
+                                            fontSize = 14.sp
+                                        ),
+                                        cursorBrush = SolidColor(TextPrimary),
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
+
+                                if (inputText.length >= 150) {
+                                    val remaining = 200 - inputText.length
+                                    Text(
+                                        text = "$remaining",
+                                        color = if (remaining < 0) ErrorText else TextSecondary,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 4.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { showEmojiPicker = !showEmojiPicker },
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    ChatEmojiOutlineIcon(Modifier.size(20.dp))
+                                }
                             }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF272727))
-                                    .clickable { showGiftDialog = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                ChatGiftBoxIcon(Modifier.size(22.dp))
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF272727))
-                                    .clickable { showSuperChatDialog = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                ChatSuperChatDollarIcon(Modifier.size(22.dp))
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            val canSend = inputText.isNotBlank() && inputText.length <= 200 && !state.sending
+                            if (canSend || state.sending) {
+                                IconButton(
+                                    onClick = {
+                                        val textToSend = inputText
+                                        val revision = YouTubeAuth.sessionRevision
+                                        val headers = YouTubeAuth.buildAuthHeaders()
+                                        scope.launch {
+                                            val success = state.sendMessage(textToSend, revision, headers)
+                                            if (success) {
+                                                inputText = ""
+                                                showEmojiPicker = false
+                                                autoScroll = true
+                                                listState.scrollToItem(0)
+                                            }
+                                        }
+                                    },
+                                    enabled = canSend,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(CallToActionBlue)
+                                ) {
+                                    if (state.sending) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = Background,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.Send,
+                                            contentDescription = "Send",
+                                            tint = Background,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(Surface)
+                                        .semantics {
+                                            role = Role.Button
+                                            contentDescription = "Send gift"
+                                        }
+                                        .clickable { showGiftDialog = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    ChatGiftBoxIcon(Modifier.size(22.dp))
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(Surface)
+                                        .semantics {
+                                            role = Role.Button
+                                            contentDescription = "Send Super Chat"
+                                        }
+                                        .clickable { showSuperChatDialog = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    ChatSuperChatDollarIcon(Modifier.size(22.dp))
+                                }
                             }
                         }
                     }

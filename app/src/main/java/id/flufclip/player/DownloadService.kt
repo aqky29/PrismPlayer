@@ -22,7 +22,18 @@ import java.util.UUID
 private const val CHANNEL = "flufplay_downloads"
 private const val NOTIFICATION = 71
 
-data class DownloadState(val running: Boolean = false, val message: String = "", val progress: Int? = null, val completed: SavedDownload? = null, val video: DownloadVideo? = null, val phase: DownloadPhase = DownloadPhase.PREPARING, val etaSeconds: Long? = null)
+data class DownloadState(
+    val running: Boolean = false,
+    val message: String = "",
+    val progress: Int? = null,
+    val completed: SavedDownload? = null,
+    val video: DownloadVideo? = null,
+    val phase: DownloadPhase = DownloadPhase.PREPARING,
+    val etaSeconds: Long? = null,
+    val downloadedBytes: Long? = null,
+    val totalBytes: Long? = null,
+    val totalEstimated: Boolean = false,
+)
 object DownloadStatus { val state = MutableStateFlow(DownloadState()) }
 
 class DownloadService : Service() {
@@ -33,28 +44,50 @@ class DownloadService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onCreate() {
         super.onCreate()
+        cleanOrphanedTempDirs()
         getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(CHANNEL, getString(R.string.downloads), NotificationManager.IMPORTANCE_LOW))
     }
+
+    private fun cleanOrphanedTempDirs() {
+        runCatching {
+            cacheDir.listFiles { file -> file.isDirectory && file.name.startsWith("download-") }
+                ?.forEach { dir -> dir.deleteRecursively() }
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "cancel") {
             cancelled = true
             activeId?.let { YoutubeDL.destroyProcessById(it) }
             return START_NOT_STICKY
         }
-        if (DownloadStatus.state.value.running) return START_NOT_STICKY
-        val url = intent?.getStringExtra("url") ?: return START_NOT_STICKY.also { stopSelf(startId) }
+        if (DownloadStatus.state.value.running) {
+            val current = DownloadStatus.state.value
+            startForeground(NOTIFICATION, notification(current.message.ifBlank { "Downloading…" }, current.progress, current.video?.title))
+            return START_NOT_STICKY
+        }
+        val url = intent?.getStringExtra("url")
+        if (url.isNullOrBlank()) {
+            startForeground(NOTIFICATION, notification("Download failed", null))
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         val title = intent.getStringExtra("title").orEmpty().ifBlank { "video" }
         val video = runCatching { downloadVideo(org.json.JSONObject(intent.getStringExtra("video").orEmpty())) }.getOrDefault(DownloadVideo(sourceUrl = url, title = title))
         val height = intent.getIntExtra("height", 0)
         val audioOnly = intent.getBooleanExtra("audio", false)
         cancelled = false
         DownloadStatus.state.value = DownloadState(true, "Preparing download…", video = video)
-        startForeground(NOTIFICATION, notification("Preparing download…", null))
+        startForeground(NOTIFICATION, notification("Preparing download…", null, video.title))
         scope.launch {
             val temp = File(cacheDir, "download-${UUID.randomUUID()}")
             var cookieFile: File? = null
             var destination: DownloadDestination? = null
             var savedSuccessfully = false
+            var finalCompleted: SavedDownload? = null
+            var finalMessage = ""
+            var finalPhase = DownloadPhase.FAILED
             try {
                 check(temp.mkdirs()) { "Cannot create temporary folder" }
                 YoutubeDL.init(applicationContext)
@@ -70,6 +103,12 @@ class DownloadService : Service() {
                     addOption("--no-playlist")
                     addOption("--no-mtime")
                     addOption("--no-overwrites")
+                    addOption("--newline")
+                    addOption("--color", "never")
+                    addOption(
+                        "--progress-template",
+                        "download:[download] %(progress._default_template)s |bytes=%(progress.downloaded_bytes|0)s/%(progress.total_bytes|0)s/%(progress.total_bytes_estimate|0)s|"
+                    )
                     if (cookieFile != null && cookieFile.exists()) {
                         addOption("--cookies", cookieFile.absolutePath)
                     }
@@ -80,21 +119,57 @@ class DownloadService : Service() {
                         addOption("--audio-format", "mp3")
                     } else {
                         val cap = if (height > 0) "[height<=$height]" else ""
-                        addOption("-f", "bestvideo[ext=mp4][vcodec^=avc1]$cap+bestaudio[ext=m4a]/best[ext=mp4][vcodec^=avc1]$cap")
-                        addOption("--merge-output-format", "mp4")
+                        addOption("-f", "bestvideo$cap+bestaudio/best$cap/best")
+                        addOption("--merge-output-format", "mp4/mkv")
                     }
                 }
                 if (cancelled) throw CancellationException()
+                var transferPart = 0
                 YoutubeDL.execute(request, id) { _, eta, line ->
                     if (cancelled) YoutubeDL.destroyProcessById(id)
-                    else downloadSignal(line, eta)?.let { signal -> update(signal.phase.label, signal.percent, signal.phase, signal.etaSeconds) }
+                    else downloadSignal(line, eta)?.let { signal ->
+                        if (signal.newDestination) {
+                            transferPart++
+                            val destLabel = if (!audioOnly && transferPart >= 2) "Downloading audio…" else "Downloading…"
+                            update(destLabel, null, DownloadPhase.TRANSFERRING, force = true)
+                        } else {
+                            val message = when (signal.phase) {
+                                DownloadPhase.TRANSFERRING -> {
+                                    val phaseLabel = if (!audioOnly && transferPart >= 2) "Downloading audio" else signal.phase.label
+                                    formatTransferProgressMessage(
+                                        label = phaseLabel,
+                                        percent = signal.percent,
+                                        downloadedBytes = signal.downloadedBytes,
+                                        totalBytes = signal.totalBytes,
+                                        totalEstimated = signal.totalEstimated,
+                                    ) { Formatter.formatFileSize(this@DownloadService, it) }
+                                }
+                                else -> signal.phase.label
+                            }
+                            update(
+                                message = message,
+                                progress = signal.percent,
+                                phase = signal.phase,
+                                eta = signal.etaSeconds,
+                                downloadedBytes = signal.downloadedBytes,
+                                totalBytes = signal.totalBytes,
+                                totalEstimated = signal.totalEstimated,
+                            )
+                        }
+                    }
                 }
                 if (cancelled) throw CancellationException()
-                update("Saving file…", 0, DownloadPhase.COPYING)
-                val extension = if (audioOnly) "mp3" else "mp4"
-                val result = File(temp, "result.$extension")
-                check(result.isFile && result.length() > 0) { "Downloaded file not found" }
-                val output = DownloadDestination.create(this@DownloadService, title, audioOnly)
+                val result = temp.listFiles()?.firstOrNull { file ->
+                    file.isFile && file.name.startsWith("result.") && file.length() > 0 &&
+                        !file.name.endsWith(".part") && !file.name.endsWith(".ytdl")
+                } ?: error("Downloaded file not found")
+                val totalLength = result.length()
+                val initialCopyMessage = formatTransferProgressMessage("Saving file", 0, 0L, totalLength, false) {
+                    Formatter.formatFileSize(this@DownloadService, it)
+                }
+                update(initialCopyMessage, 0, DownloadPhase.COPYING, downloadedBytes = 0L, totalBytes = totalLength, force = true)
+                val ext = result.extension.lowercase()
+                val output = DownloadDestination.create(this@DownloadService, title, audioOnly, ext)
                 destination = output
                 val copied = output.open().use { out ->
                     result.inputStream().use { input ->
@@ -107,27 +182,36 @@ class DownloadService : Service() {
                             if (read < 0) break
                             out.write(buffer, 0, read)
                             count += read
-                            update("Saving file…", (count * 100 / result.length()).toInt().coerceIn(0, 100), DownloadPhase.COPYING)
+                            val pct = (count * 100 / totalLength).toInt().coerceIn(0, 100)
+                            val copyMessage = formatTransferProgressMessage("Saving file", pct, count, totalLength, false) {
+                                Formatter.formatFileSize(this@DownloadService, it)
+                            }
+                            update(copyMessage, pct, DownloadPhase.COPYING, downloadedBytes = count, totalBytes = totalLength)
                         }
                         out.flush()
                         count
                     }
                 }
                 check(copied == result.length()) { "The file was not completely copied" }
-                update("Verifying file…", null, DownloadPhase.VERIFYING)
+                update("Verifying file…", null, DownloadPhase.VERIFYING, force = true)
                 output.verify(copied)
                 if (cancelled) throw CancellationException()
                 output.publish()
-                val cachedVideo = cacheDownloadArtwork(this@DownloadService, video)
-                if (cancelled) throw CancellationException()
-                val saved = SavedDownload(output.uri.toString(), SavedDownloads.displayName(this@DownloadService, output.uri, output.name), if (audioOnly) "audio/mpeg" else "video/mp4", copied, cachedVideo)
-                SavedDownloads.add(this@DownloadService, saved)
                 savedSuccessfully = true
-                DownloadStatus.state.value = DownloadState(message = "Download complete · ${Formatter.formatFileSize(this@DownloadService, copied)}", completed = saved, video = video, phase = DownloadPhase.COMPLETED)
+                val cachedVideo = runCatching { cacheDownloadArtwork(this@DownloadService, video) }.getOrDefault(video)
+                val saved = SavedDownload(output.uri.toString(), SavedDownloads.displayName(this@DownloadService, output.uri, output.name), output.mime, copied, cachedVideo)
+                runCatching { SavedDownloads.add(this@DownloadService, saved) }
+                finalCompleted = saved
+                finalMessage = "Download complete · ${Formatter.formatFileSize(this@DownloadService, copied)}"
+                finalPhase = DownloadPhase.COMPLETED
+                DownloadStatus.state.value = DownloadState(running = true, message = finalMessage, completed = saved, video = video, phase = finalPhase)
                 Log.i("FlufPlayDownload", "Saved $copied bytes; audioOnly=$audioOnly")
             } catch (e: Exception) {
                 Log.e("FlufPlayDownload", "Download or destination copy failed", e)
-                DownloadStatus.state.value = DownloadState(message = if (cancelled || e is CancellationException) "Download canceled." else "Download failed: ${e.message ?: e.javaClass.simpleName}", video = video, phase = if (cancelled || e is CancellationException) DownloadPhase.CANCELLED else DownloadPhase.FAILED)
+                finalCompleted = null
+                finalMessage = if (cancelled || e is CancellationException) "Download canceled." else "Download failed: ${e.message ?: e.javaClass.simpleName}"
+                finalPhase = if (cancelled || e is CancellationException) DownloadPhase.CANCELLED else DownloadPhase.FAILED
+                DownloadStatus.state.value = DownloadState(running = true, message = finalMessage, video = video, phase = finalPhase)
             } finally {
                 if (!savedSuccessfully) runCatching { destination?.abort() }.onFailure {
                     Log.w("FlufPlayDownload", "Could not remove incomplete output", it)
@@ -136,32 +220,74 @@ class DownloadService : Service() {
                 cookieFile?.delete()
                 temp.deleteRecursively()
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                val summary = DownloadStatus.state.value.message
-                val openIntent = SavedDownloads.openIntent(this@DownloadService, DownloadStatus.state.value.completed)
+                val summary = finalMessage
+                val openIntent = SavedDownloads.openIntent(this@DownloadService, finalCompleted)
                 val open = PendingIntent.getActivity(this@DownloadService, 0, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                 try {
                     getSystemService(NotificationManager::class.java).notify(NOTIFICATION + 1,
-                        NotificationCompat.Builder(this@DownloadService, CHANNEL).setSmallIcon(android.R.drawable.stat_sys_download_done).setContentTitle(getString(R.string.download_notification_title)).setContentText(summary).setStyle(NotificationCompat.BigTextStyle().bigText(summary)).setContentIntent(open).setAutoCancel(true).build())
+                        NotificationCompat.Builder(this@DownloadService, CHANNEL)
+                            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                            .setContentTitle(video.title.ifBlank { getString(R.string.download_notification_title) })
+                            .setContentText(summary)
+                            .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
+                            .setContentIntent(open)
+                            .setAutoCancel(true)
+                            .build())
                 } catch (_: SecurityException) { }
-                stopSelf(startId)
+                DownloadStatus.state.value = DownloadState(running = false, message = finalMessage, completed = finalCompleted, video = video, phase = finalPhase)
+                stopSelf()
             }
         }
         return START_NOT_STICKY
     }
     private var lastUpdate = 0L
-    private fun update(message: String, progress: Int?, phase: DownloadPhase, eta: Long? = null) {
+    private fun update(
+        message: String,
+        progress: Int?,
+        phase: DownloadPhase,
+        eta: Long? = null,
+        downloadedBytes: Long? = null,
+        totalBytes: Long? = null,
+        totalEstimated: Boolean = false,
+        force: Boolean = false,
+    ) {
         val now = android.os.SystemClock.elapsedRealtime()
         val before = DownloadStatus.state.value
-        if (before.phase == phase && now - lastUpdate < 300 && progress != 100) return
-        if (before.phase == phase && before.progress == progress && before.etaSeconds == eta && before.message == message) return
+        if (!force && before.phase == phase && now - lastUpdate < 400 && progress != 100) return
+        if (before.phase == phase && before.progress == progress && before.etaSeconds == eta &&
+            before.downloadedBytes == downloadedBytes && before.totalBytes == totalBytes &&
+            before.totalEstimated == totalEstimated && before.message == message
+        ) return
         lastUpdate = now
-        DownloadStatus.state.value = before.copy(running = true, message = message, progress = progress, phase = phase, etaSeconds = eta)
-        getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(message, progress))
+        DownloadStatus.state.value = before.copy(
+            running = true,
+            message = message,
+            progress = progress,
+            phase = phase,
+            etaSeconds = eta,
+            downloadedBytes = downloadedBytes,
+            totalBytes = totalBytes,
+            totalEstimated = totalEstimated,
+        )
+        try {
+            getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(message, progress, before.video?.title))
+        } catch (_: SecurityException) { }
     }
-    private fun notification(message: String, progress: Int?): Notification {
+    private fun notification(message: String, progress: Int?, videoTitle: String? = null): Notification {
         val cancel = PendingIntent.getService(this, 1, Intent(this, DownloadService::class.java).setAction("cancel"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val open = PendingIntent.getActivity(this, 0, SavedDownloads.openIntent(this), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        return NotificationCompat.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle(getString(R.string.download_notification_title)).setContentText(message).setContentIntent(open).setOngoing(true).setProgress(100, progress ?: 0, progress == null).addAction(0, getString(R.string.cancel), cancel).build()
+        return NotificationCompat.Builder(this, CHANNEL)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle(videoTitle?.takeIf { it.isNotBlank() } ?: getString(R.string.download_notification_title))
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setContentIntent(open)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setProgress(100, progress ?: 0, progress == null)
+            .addAction(0, getString(R.string.cancel), cancel)
+            .build()
     }
     override fun onDestroy() { cancelled = true; activeId?.let { YoutubeDL.destroyProcessById(it) }; scope.cancel(); super.onDestroy() }
 }

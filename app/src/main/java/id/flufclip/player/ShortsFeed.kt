@@ -88,12 +88,20 @@ object ShortsFeed {
         ShortsSeqPage((listOfNotNull(seed) + page.ids).distinct().map(::item), page.next)
     }
 
-    /** Halaman berikutnya memakai token continuation dari halaman sebelumnya. */
-    suspend fun more(token: String, revision: Int = YouTubeAuth.sessionRevision): ShortsSeqPage = withContext(Dispatchers.IO) {
-        val version = clientVersion
+    private fun resolveVersion(revision: Int): String =
+        clientVersion
             ?: versionRegex.find(fetch("$HOST/shorts?hl=$lang&gl=$country", revision = revision))?.groupValues?.get(1)?.also { clientVersion = it }
             ?: error("YouTube client version not found")
-        val page = sequence(version, JSONObject().put("continuation", token), revision)
+
+    /** Halaman berikutnya memakai token continuation dari halaman sebelumnya. */
+    suspend fun more(token: String, revision: Int = YouTubeAuth.sessionRevision): ShortsSeqPage = withContext(Dispatchers.IO) {
+        val page = sequence(resolveVersion(revision), JSONObject().put("continuation", token), revision)
+        ShortsSeqPage(page.ids.distinct().map(::item), page.next)
+    }
+
+    /** Melanjutkan antrean Shorts dari `sequenceParams` pada kartu Home/Subs. */
+    suspend fun fromSequenceParams(sequenceParams: String, revision: Int = YouTubeAuth.sessionRevision): ShortsSeqPage = withContext(Dispatchers.IO) {
+        val page = sequence(resolveVersion(revision), JSONObject().put("sequenceParams", sequenceParams), revision)
         ShortsSeqPage(page.ids.distinct().map(::item), page.next)
     }
 

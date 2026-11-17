@@ -265,6 +265,10 @@ object InnerTubePlayer {
                 if (mime.isBlank()) continue
                 val contentUrl = solve(rawUrl)
                 val formatId = format.optString("itag").takeIf { it.isNotBlank() } ?: "innertube-$i"
+                val itagId = format.optInt("itag", -1)
+                val contentLength = format.optString("contentLength").toLongOrNull() ?: -1L
+                val bitrateBps = format.optInt("bitrate", 0).takeIf { it > 0 }
+                    ?: format.optInt("averageBitrate", 0).coerceAtLeast(0)
                 val formatType = if (mime.contains("webm")) MediaFormat.WEBM else MediaFormat.MPEG_4
                 when {
                     mime.startsWith("video/") -> {
@@ -273,6 +277,17 @@ object InnerTubePlayer {
                             val height = format.optInt("height")
                             if (height > 0) "${height}p" else VideoStream.RESOLUTION_UNKNOWN
                         }
+                        val itagItem = buildVideoItagItem(
+                            itagId = itagId,
+                            hasAudio = hasAudio,
+                            mediaFormat = formatType,
+                            resolution = resolution,
+                            width = format.optInt("width"),
+                            height = format.optInt("height"),
+                            fps = format.optInt("fps"),
+                            bitrateBps = bitrateBps,
+                            contentLength = contentLength,
+                        )
                         val stream = VideoStream.Builder()
                             .setId(formatId)
                             .setContent(contentUrl, true)
@@ -280,17 +295,29 @@ object InnerTubePlayer {
                             .setResolution(resolution)
                             .setMediaFormat(formatType)
                             .setDeliveryMethod(DeliveryMethod.PROGRESSIVE_HTTP)
+                            .setItagItem(itagItem)
                             .build()
                         if (hasAudio) progressive.add(stream) else videoOnly.add(stream)
                     }
                     mime.startsWith("audio/") -> {
+                        val audioFormat = if (mime.contains("webm")) MediaFormat.WEBMA_OPUS else MediaFormat.M4A
+                        val avgKbps = ((format.optInt("averageBitrate").takeIf { it > 0 } ?: bitrateBps) / 1000)
+                            .takeIf { it > 0 } ?: AudioStream.UNKNOWN_BITRATE
+                        val itagItem = buildAudioItagItem(
+                            itagId = itagId,
+                            mediaFormat = audioFormat,
+                            avgBitrateKbps = avgKbps,
+                            bitrateBps = bitrateBps,
+                            contentLength = contentLength,
+                        )
                         audio.add(
                             AudioStream.Builder()
                                 .setId(formatId)
                                 .setContent(contentUrl, true)
-                                .setAverageBitrate(format.optInt("bitrate").takeIf { it > 0 } ?: AudioStream.UNKNOWN_BITRATE)
-                                .setMediaFormat(if (mime.contains("webm")) MediaFormat.WEBMA_OPUS else MediaFormat.M4A)
+                                .setAverageBitrate(avgKbps)
+                                .setMediaFormat(audioFormat)
                                 .setDeliveryMethod(DeliveryMethod.PROGRESSIVE_HTTP)
+                                .setItagItem(itagItem)
                                 .withAudioMetadata(innerTubeAudioMetadata(format))
                                 .build()
                         )
@@ -309,7 +336,6 @@ object InnerTubePlayer {
         if (info.hlsUrl.isNullOrBlank() && info.dashMpdUrl.isNullOrBlank() && info.videoStreams.isEmpty() && info.videoOnlyStreams.isEmpty() && info.audioStreams.isEmpty()) {
             throw PlaybackUnavailableException("YouTube did not return a playable format for this video.")
         }
-        info.relatedItems = try { related(id, 20) } catch (_: Exception) { emptyList() }
         info
     }
 

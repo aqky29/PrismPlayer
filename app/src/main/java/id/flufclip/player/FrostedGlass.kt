@@ -246,11 +246,7 @@ internal fun Modifier.frostedGlassCapsule(
         }
 }
 
-// ============================================================================
-// GOOGLE / iOS LIQUID GLASS BAR + BORDERLESS SMOKED FLUID PILL
-// (Kapsul luar: kaca cair jernih membiaskan latar di sekeliling bibir kapsul;
-//  Pill aktif: bantalan smoked gelap tanpa garis putih + animasi cair halus)
-// ============================================================================
+// Liquid Glass AGSL bar and borderless smoked fluid pill for API 33+ (falls back below API 33).
 
 private const val LIQUID_BAR_BLUR_SCALE = 0.60f
 

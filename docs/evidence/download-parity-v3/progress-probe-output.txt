@@ -1,7 +1,0 @@
-progress=-1.0 eta=-1 line=[youtube] Extracting URL: synthetic
-progress=42.5 eta=12 line=[download]  42.5% of 10.00MiB at 1.0MiB/s ETA 00:12
-progress=42.5 eta=12 line=[download] 100% of 10.00MiB in 00:05
-progress=3.0 eta=2 line=[download]   3.0% of 1.00MiB at 1.0MiB/s ETA 00:02
-progress=3.0 eta=2 line=[Merger] Merging formats into synthetic.mp4
-progress=99.0 eta=2 line=size= 1234kB time=00:00:01.00 bitrate=100kbits/s
-progress=99.0 eta=2 line=[ExtractAudio] Destination: synthetic.mp3

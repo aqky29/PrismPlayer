@@ -121,4 +121,22 @@ class AccountLibraryTest {
         assertEquals(1, preview.size)
         assertEquals("ASMR", preview.single().playlistTitle)
     }
+
+    @Test fun readsChoicePrivacyAndThumbnailFromAddToPlaylistOption() {
+        val json = JSONObject("""
+            {"contents":{"addToPlaylistRenderer":{"playlists":[
+              {"playlistAddToOptionRenderer":{
+                "playlistId":"WL",
+                "title":{"simpleText":"Watch later"},
+                "containsSelectedVideos":"NONE",
+                "privacyIcon":{"iconType":"PRIVACY_PRIVATE"},
+                "thumbnail":{"thumbnails":[{"url":"https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg"}]}
+              }}
+            ]}}}
+        """.trimIndent())
+        val option = AccountLibrary.parseChoices(json).single()
+        assertEquals("WL", option.id)
+        assertEquals("Private", option.privacy)
+        assertEquals("https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg", option.thumbnail)
+    }
 }

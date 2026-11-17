@@ -28,7 +28,7 @@ internal fun HistoryVideoMenu(video: WatchedVideo, actions: HistoryActions, comp
             modifier = Modifier.size(if (compact) 28.dp else 40.dp)
         ) {
             Icon(
-                Icons.Default.MoreVert,
+                Icons.Default.MoreHoriz,
                 "Video options",
                 modifier = Modifier.size(if (compact) 18.dp else 24.dp),
                 tint = androidx.compose.ui.graphics.Color(0xFFCCCCCC)

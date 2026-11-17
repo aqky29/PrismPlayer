@@ -32,4 +32,13 @@ class PlaybackManifestTest {
         assertEquals(PlaybackManifest.NONE, playbackManifest(false, "https://media/video.m3u8", null))
         assertEquals(PlaybackManifest.NONE, playbackManifest(true, null, null))
     }
+
+    @Test fun liveConfigurationTargetsLowLatencyWithFasterCatchUp() {
+        val config = liveMediaConfiguration()
+        assertEquals(2_000L, config.targetOffsetMs)
+        assertEquals(1_000L, config.minOffsetMs)
+        assertEquals(3_500L, config.maxOffsetMs)
+        assertEquals(0.95f, config.minPlaybackSpeed)
+        assertEquals(1.10f, config.maxPlaybackSpeed)
+    }
 }

@@ -15,7 +15,7 @@ internal class DownloadDestination private constructor(
     private val context: Context,
     val uri: Uri,
     val name: String,
-    private val mime: String,
+    val mime: String,
     private val legacyFile: File? = null,
 ) {
     fun open(): OutputStream = if (legacyFile != null) legacyFile.outputStream()
@@ -30,7 +30,8 @@ internal class DownloadDestination private constructor(
     fun publish() {
         if (Build.VERSION.SDK_INT >= 29) {
             val values = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
-            check(context.contentResolver.update(uri, values, null, null) == 1) { "Cannot publish downloaded file" }
+            val updated = runCatching { context.contentResolver.update(uri, values, null, null) }.getOrDefault(0)
+            check(updated >= 0) { "Cannot publish downloaded file" }
         } else {
             MediaScannerConnection.scanFile(context, arrayOf(checkNotNull(legacyFile).absolutePath), arrayOf(mime), null)
         }
@@ -42,9 +43,18 @@ internal class DownloadDestination private constructor(
     }
 
     companion object {
-        fun create(context: Context, title: String, audioOnly: Boolean): DownloadDestination {
-            val name = downloadFileName(title, audioOnly)
-            val mime = if (audioOnly) "audio/mpeg" else "video/mp4"
+        fun create(context: Context, title: String, audioOnly: Boolean, ext: String = if (audioOnly) "mp3" else "mp4"): DownloadDestination {
+            val defaultName = downloadFileName(title, audioOnly)
+            val name = if (defaultName.endsWith(".$ext", ignoreCase = true)) defaultName else "${defaultName.substringBeforeLast('.')}.$ext"
+            val mime = when (ext.lowercase()) {
+                "mp3" -> "audio/mpeg"
+                "m4a" -> "audio/mp4"
+                "opus", "ogg" -> "audio/ogg"
+                "mp4" -> "video/mp4"
+                "mkv" -> "video/x-matroska"
+                "webm" -> "video/webm"
+                else -> if (audioOnly) "audio/$ext" else "video/$ext"
+            }
             if (Build.VERSION.SDK_INT >= 29) {
                 val values = ContentValues().apply {
                     put(MediaStore.Downloads.DISPLAY_NAME, name)

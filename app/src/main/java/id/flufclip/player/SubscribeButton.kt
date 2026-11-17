@@ -57,8 +57,11 @@ import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -134,7 +137,7 @@ import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.AudioTrackType
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 
-/** Tombol di kanan baris channel: terang "Subscribe", atau pill lonceng + "Disubscribe" + panah bawah saat sudah Subscribed (tinggi 32 dp). */
+/** Channel subscribe pill with >=44dp touch target, notification sheet, and unsubscribe confirmation. */
 @Composable internal fun SubscribeButton(
     subscribed: Boolean,
     onSubscribe: () -> Unit,
@@ -144,10 +147,25 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     channelName: String? = null,
     notificationPreference: NotificationPreference = NotificationPreference.PERSONALIZED,
     onNotificationPreference: (NotificationPreference) -> Unit = {},
+    fullWidth: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showNotificationSheet by remember { mutableStateOf(false) }
+    val wasSubscribed = remember { mutableStateOf(subscribed) }
+    val pillScale = remember { Animatable(1f) }
+    val bellRotation = remember { Animatable(0f) }
+
+    LaunchedEffect(subscribed) {
+        if (subscribed && !wasSubscribed.value) {
+            pillScale.animateTo(1.05f, tween(durationMillis = 120, easing = FastOutSlowInEasing))
+            pillScale.animateTo(1f, tween(durationMillis = 160, easing = FastOutSlowInEasing))
+            for (angle in listOf(-18f, 16f, -10f, 6f, 0f)) {
+                bellRotation.animateTo(angle, tween(durationMillis = 85))
+            }
+        }
+        wasSubscribed.value = subscribed
+    }
 
     if (showNotificationSheet) {
         NotificationOptionsSheet(
@@ -160,15 +178,15 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     }
 
     if (showConfirmDialog) {
-        val targetName = channelName?.takeIf { it.isNotBlank() } ?: "channel ini"
+        val targetName = channelName?.takeIf { it.isNotBlank() } ?: "this channel"
         AlertDialog(
             onDismissRequest = { showConfirmDialog = false },
             title = {
                 Text(
-                    text = "Unsubscribe dari $targetName?",
+                    text = "Unsubscribe from $targetName?",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = TextPrimary
                 )
             },
             confirmButton = {
@@ -180,19 +198,19 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 ) {
                     Text(
                         "Unsubscribe",
-                        color = Color(0xFFFF4E4E),
+                        color = ErrorText,
                         fontWeight = FontWeight.Bold
                     )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showConfirmDialog = false }) {
-                    Text("Batal", color = Color.White)
+                    Text("Cancel", color = TextPrimary)
                 }
             },
-            containerColor = Color(0xFF282828),
-            textContentColor = Color.White,
-            titleContentColor = Color.White,
+            containerColor = Surface,
+            textContentColor = TextPrimary,
+            titleContentColor = TextPrimary,
             shape = RoundedCornerShape(16.dp)
         )
     }
@@ -203,56 +221,71 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         NotificationPreference.NONE -> Icons.Outlined.NotificationsOff
     }
 
+    val touchShape = RoundedCornerShape(50)
     Box(
-        modifier
-            .height(32.dp)
-            .clip(RoundedCornerShape(50))
-            .background(if (subscribed) Surface else Color(0xFFF1F1F1))
+        modifier = modifier
+            .heightIn(min = 44.dp)
+            .clip(touchShape)
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = if (subscribed) "Subscribed, notification options" else "Subscribe"
+            }
             .clickable(enabled = enabled) {
                 if (subscribed) {
                     showNotificationSheet = true
                 } else {
                     onSubscribe()
                 }
-            }
-            .padding(horizontal = if (subscribed) 10.dp else 14.dp),
+            },
         contentAlignment = Alignment.Center
     ) {
-        if (subscribed) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Icon(
-                    imageVector = bellIcon,
-                    contentDescription = "Subscribed",
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
+        Box(
+            modifier = (if (fullWidth) Modifier.fillMaxWidth() else Modifier)
+                .height(36.dp)
+                .graphicsLayer { scaleX = pillScale.value; scaleY = pillScale.value }
+                .clip(touchShape)
+                .background(if (subscribed) Surface else TextPrimary)
+                .padding(horizontal = if (subscribed) 12.dp else 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (subscribed) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = bellIcon,
+                        contentDescription = null,
+                        tint = TextPrimary,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .graphicsLayer { rotationZ = bellRotation.value }
+                    )
+                    Text(
+                        text = "Subscribed",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = TextPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            } else {
                 Text(
-                    text = "Disubscribe",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
+                    text = "Subscribe",
+                    color = Background,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     softWrap = false
                 )
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
             }
-        } else {
-            Text(
-                "Subscribe",
-                color = Color.Black,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                softWrap = false
-            )
         }
     }
 }
@@ -268,8 +301,8 @@ internal fun NotificationOptionsSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF272727),
-        contentColor = Color.White,
+        containerColor = Surface,
+        contentColor = TextPrimary,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
@@ -278,18 +311,18 @@ internal fun NotificationOptionsSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp)
         ) {
-            val title = channelName?.takeIf { it.isNotBlank() }?.let { "Notifikasi untuk $it" } ?: "Notifikasi"
+            val title = channelName?.takeIf { it.isNotBlank() }?.let { "Notifications for $it" } ?: "Notifications"
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = TextPrimary,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
             )
 
             NotificationOptionRow(
                 icon = Icons.Filled.NotificationsActive,
-                label = "Semua",
+                label = "All",
                 selected = currentPreference == NotificationPreference.ALL,
                 onClick = {
                     onSelectPreference(NotificationPreference.ALL)
@@ -299,7 +332,7 @@ internal fun NotificationOptionsSheet(
 
             NotificationOptionRow(
                 icon = Icons.Outlined.Notifications,
-                label = "Dipersonalisasi",
+                label = "Personalized",
                 selected = currentPreference == NotificationPreference.PERSONALIZED,
                 onClick = {
                     onSelectPreference(NotificationPreference.PERSONALIZED)
@@ -309,7 +342,7 @@ internal fun NotificationOptionsSheet(
 
             NotificationOptionRow(
                 icon = Icons.Outlined.NotificationsOff,
-                label = "Tidak ada",
+                label = "None",
                 selected = currentPreference == NotificationPreference.NONE,
                 onClick = {
                     onSelectPreference(NotificationPreference.NONE)
@@ -325,24 +358,25 @@ internal fun NotificationOptionsSheet(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .clickable {
                         onDismiss()
                         onUnsubscribe()
                     }
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Outlined.PersonRemove,
                     contentDescription = null,
-                    tint = Color(0xFFFF4E4E),
+                    tint = ErrorText,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(Modifier.width(16.dp))
                 Text(
-                    text = "Berhenti berlangganan",
+                    text = "Unsubscribe",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFFF4E4E),
+                    color = ErrorText,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -360,29 +394,31 @@ internal fun NotificationOptionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .semantics { this.selected = selected }
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (selected) Color.White else Color(0xFFAAAAAA),
+            tint = if (selected) TextPrimary else TextSecondary,
             modifier = Modifier.size(24.dp)
         )
         Spacer(Modifier.width(16.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (selected) Color.White else Color(0xFFAAAAAA),
+            color = if (selected) TextPrimary else TextSecondary,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             modifier = Modifier.weight(1f)
         )
         if (selected) {
             Icon(
                 imageVector = Icons.Default.Check,
-                contentDescription = "Terpilih",
-                tint = Color.White,
+                contentDescription = "Selected",
+                tint = TextPrimary,
                 modifier = Modifier.size(22.dp)
             )
         }

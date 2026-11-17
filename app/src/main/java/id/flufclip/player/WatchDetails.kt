@@ -47,6 +47,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
@@ -57,8 +58,12 @@ import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -151,111 +156,120 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         val activeDownload by DownloadStatus.state.collectAsState()
         val isDownloading = activeDownload.running && activeDownload.video?.sourceUrl?.takeIf { it.isNotBlank() }?.let { videoKey(it) == videoKey(info.url) } == true
 
+        var showMoreSheet by remember { mutableStateOf(false) }
+        val likeLabel = (if (info.likeCount >= 0) formatCount((info.likeCount + engagement.likeDelta).coerceAtLeast(0)) else "Like") +
+            if (engagement.ratingUncertain) "?" else ""
+
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp),
+                .padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Sisi Kiri: Avatar + Subscribe (Tanpa weight agar teks Subscribe tidak pernah terpotong)
             Row(
+                Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(enabled = channelAvailable, onClick = onChannel)
+                    .padding(vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(Modifier.clip(CircleShape).clickable(enabled = channelAvailable, onClick = onChannel)) {
-                    Avatar(channelAvatar, info.uploaderName, 32)
-                }
-                Spacer(Modifier.width(8.dp))
-                SubscribeButton(
-                    subscribed = engagement.subscribed,
-                    onSubscribe = engagement.onSubscribe,
-                    onUnsubscribe = engagement.onUnsubscribe,
-                    uncertain = engagement.subscriptionUncertain,
-                    channelName = info.uploaderName,
-                    notificationPreference = engagement.notificationPreference,
-                    onNotificationPreference = engagement.onNotificationPreference
-                )
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            // Sisi Kanan: Action Icons (Like, Dislike, Share, Ask, More)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                // 1. Like with Particle Burst Animation
-                AnimatedLikeButton(
-                    liked = engagement.rating == 1,
-                    onLike = engagement.onLike
-                )
-
-                // 2. Dislike
-                IconButton(onClick = engagement.onDislike, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        painter = painterResource(if (engagement.rating == -1) R.drawable.yt_w_dislike_on else R.drawable.yt_w_dislike),
-                        contentDescription = "Dislike",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                Avatar(channelAvatar, info.uploaderName, 40)
+                Column(Modifier.padding(start = 10.dp, end = 8.dp)) {
+                    Text(
+                        text = info.uploaderName.orEmpty(),
+                        color = TextPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                }
-
-                // 3. Share
-                IconButton(onClick = onShare, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        painter = painterResource(R.drawable.yt_w_share),
-                        contentDescription = "Share",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // 4. Ask (bila tersedia)
-                if (askAvailable) {
-                    IconButton(onClick = onAsk, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            painter = painterResource(R.drawable.yt_w_spark),
-                            contentDescription = "Ask",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                    if (info.uploaderSubscriberCount >= 0) {
+                        Text(
+                            text = "${formatCount(info.uploaderSubscriberCount)} subscribers",
+                            color = TextSecondary,
+                            fontSize = 12.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
-
-                // 5. More actions (••• horizontal) -> Membuka Bottom Sheet persis aplikasi YouTube
-                var showMoreSheet by remember { mutableStateOf(false) }
-                IconButton(onClick = { showMoreSheet = true }, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        painter = painterResource(R.drawable.yt_reel_more),
-                        contentDescription = "More actions",
-                        tint = Color.White,
-                        modifier = Modifier
-                            .size(20.dp)
-                            .graphicsLayer { rotationZ = 90f }
-                    )
-                }
-                if (showMoreSheet) {
-                    WatchMoreBottomSheet(
-                        isDownloaded = isDownloaded,
-                        isDownloading = isDownloading,
-                        saved = engagement.saved,
-                        duration = info.duration,
-                        isLive = isLive,
-                        onDownload = {
-                            if (isDownloading) SavedDownloads.open(downloadContext)
-                            else if (!downloaded && localCopy != null) SavedDownloads.open(downloadContext, localCopy)
-                            else onDownload()
-                        },
-                        onSave = engagement.onSave,
-                        onCopy = onCopy,
-                        onClip = onClip,
-                        onDismiss = { showMoreSheet = false }
-                    )
-                }
             }
+            SubscribeButton(
+                subscribed = engagement.subscribed,
+                onSubscribe = engagement.onSubscribe,
+                onUnsubscribe = engagement.onUnsubscribe,
+                uncertain = engagement.subscriptionUncertain,
+                channelName = info.uploaderName,
+                notificationPreference = engagement.notificationPreference,
+                onNotificationPreference = engagement.onNotificationPreference
+            )
+        }
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LikeDislikePill(
+                likeLabel = likeLabel,
+                rating = engagement.rating,
+                onLike = engagement.onLike,
+                onDislike = engagement.onDislike
+            )
+            WatchChip(R.drawable.yt_w_share, "Share", onShare)
+            if (askAvailable) WatchChip(R.drawable.yt_w_spark, "Ask", onAsk)
+            if (!isLive) {
+                WatchChip(
+                    icon = if (isDownloaded) R.drawable.yt_watch_downloaded_arrow else R.drawable.yt_w_download,
+                    label = when {
+                        isDownloading -> "Downloading…"
+                        isDownloaded -> "Downloaded"
+                        else -> "Download"
+                    },
+                    onClick = {
+                        if (isDownloading) SavedDownloads.open(downloadContext)
+                        else if (!downloaded && localCopy != null) SavedDownloads.open(downloadContext, localCopy)
+                        else onDownload()
+                    },
+                    selected = isDownloaded
+                )
+            }
+            WatchChip(
+                icon = if (engagement.saved) R.drawable.yt_w_save_on else R.drawable.yt_w_save,
+                label = if (engagement.saved) "Saved" else "Save",
+                onClick = engagement.onSave,
+                selected = engagement.saved
+            )
+            WatchChip(R.drawable.yt_reel_more, "More", { showMoreSheet = true })
+        }
+
+        if (showMoreSheet) {
+            WatchMoreBottomSheet(
+                videoUrl = info.url,
+                isDownloaded = isDownloaded,
+                isDownloading = isDownloading,
+                saved = engagement.saved,
+                duration = info.duration,
+                isLive = isLive,
+                onDownload = {
+                    if (isDownloading) SavedDownloads.open(downloadContext)
+                    else if (!downloaded && localCopy != null) SavedDownloads.open(downloadContext, localCopy)
+                    else onDownload()
+                },
+                onSave = engagement.onSave,
+                onCopy = onCopy,
+                onClip = onClip,
+                onDismiss = { showMoreSheet = false }
+            )
         }
         if (isLive) {
-            Box(Modifier.padding(top = 16.dp)) {
-                LiveChatTeaser(chatState, isLive = true, onClick = onChat)
+            Box(Modifier.padding(top = 14.dp)) {
+                LiveChatTeaser(chatState, isLive = true, onClick = onChat, subscribed = engagement.subscribed)
             }
         } else {
             val openComments = { if (comments.error != null && comments.info == null) comments.retry(); onComments() }
@@ -268,15 +282,16 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 onComments = openComments,
                 onChapters = { onChapters?.invoke() ?: onDescription() },
                 onChat = onChat,
-                modifier = Modifier.padding(top = 16.dp)
+                modifier = Modifier.padding(top = 14.dp)
             )
         }
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
+        error?.let { Text(it, color = ErrorText, modifier = Modifier.padding(top = 8.dp)) }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun WatchMoreBottomSheet(
+    videoUrl: String = "",
     isDownloaded: Boolean,
     isDownloading: Boolean,
     saved: Boolean,
@@ -288,10 +303,11 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     onClip: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF272727),
-        contentColor = Color.White,
+        containerColor = Surface,
+        contentColor = TextPrimary,
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
         dragHandle = {
             Box(
@@ -299,7 +315,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     .padding(vertical = 10.dp)
                     .size(width = 40.dp, height = 4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color(0xFF717171))
+                    .background(DragHandleInk)
             )
         }
     ) {
@@ -315,21 +331,33 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 label = if (saved) "Saved to playlist" else "Save",
                 onClick = { onDismiss(); onSave() }
             )
-            WatchSheetOption(
-                icon = painterResource(R.drawable.yt_w_download),
-                label = if (isDownloading) "Downloading..." else if (isDownloaded) "Downloaded" else "Download",
-                onClick = { onDismiss(); onDownload() }
-            )
+            if (!isLive) {
+                WatchSheetOption(
+                    icon = painterResource(R.drawable.yt_w_download),
+                    label = if (isDownloading) "Downloading..." else if (isDownloaded) "Downloaded" else "Download",
+                    onClick = { onDismiss(); onDownload() }
+                )
+            }
             WatchSheetOption(
                 icon = painterResource(R.drawable.yt_w_copy),
                 label = "Copy link",
                 onClick = { onDismiss(); onCopy() }
             )
             WatchSheetOption(
-                icon = painterResource(R.drawable.yt_reel_more),
-                label = "Report",
-                onClick = { onDismiss() }
+                icon = painterResource(R.drawable.yt_w_clip),
+                label = "Copy link at current time",
+                onClick = { onDismiss(); onClip() }
             )
+            if (videoUrl.isNotBlank()) {
+                WatchSheetOption(
+                    icon = rememberVectorPainter(Icons.AutoMirrored.Filled.OpenInNew),
+                    label = "Open in browser",
+                    onClick = {
+                        onDismiss()
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(videoUrl))) }
+                    }
+                )
+            }
         }
     }
 }
@@ -342,21 +370,22 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     Row(
         Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             painter = icon,
             contentDescription = null,
-            tint = Color.White,
+            tint = TextPrimary,
             modifier = Modifier.size(22.dp)
         )
         Spacer(Modifier.width(18.dp))
         Text(
             text = label,
-            color = Color.White,
+            color = TextPrimary,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium
         )
@@ -372,35 +401,30 @@ internal class WatchEngagement(
     val onNotificationPreference: (NotificationPreference) -> Unit = {},
 )
 
-@Composable internal fun WatchAction(icon: String, label: String, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    Row(
-        Modifier
-            .height(32.dp)
-            .raisedWatchAction(interaction = interaction)
-            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
-            .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        ActionGlyph(icon, Modifier.size(18.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
 @Composable internal fun WatchChip(icon: Int, label: String, onClick: () -> Unit, selected: Boolean = false) {
     val interaction = remember { MutableInteractionSource() }
-    Row(
-        Modifier
-            .height(34.dp)
-            .raisedWatchAction(selected = selected, interaction = interaction)
-            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Box(
+        modifier = Modifier
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(50))
+            .semantics(mergeDescendants = true) {
+                this.selected = selected
+                this.role = Role.Button
+            }
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Image(painterResource(icon), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(Color.White))
-        Spacer(Modifier.width(6.dp))
-        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        Row(
+            Modifier
+                .height(36.dp)
+                .raisedWatchAction(selected = selected, interaction = interaction)
+                .padding(horizontal = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Image(painterResource(icon), null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(TextPrimary))
+            Spacer(Modifier.width(6.dp))
+            Text(label, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        }
     }
 }
 
@@ -415,12 +439,14 @@ internal class WatchEngagement(
     onLike: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val reduceMotion = rememberReduceMotion()
     val coroutineScope = rememberCoroutineScope()
     val scale = remember { androidx.compose.animation.core.Animatable(1f) }
     val rotation = remember { androidx.compose.animation.core.Animatable(0f) }
     val burstProgress = remember { androidx.compose.animation.core.Animatable(0f) }
 
     fun triggerLikeAnimation() {
+        if (reduceMotion) return
         coroutineScope.launch {
             launch {
                 rotation.animateTo(-8f, androidx.compose.animation.core.tween(60))
@@ -439,11 +465,11 @@ internal class WatchEngagement(
     }
 
     Box(
-        modifier = modifier.size(36.dp),
+        modifier = modifier.size(44.dp),
         contentAlignment = Alignment.Center
     ) {
         val progress = burstProgress.value
-        if (progress > 0f && progress < 1f) {
+        if (!reduceMotion && progress > 0f && progress < 1f) {
             Canvas(Modifier.fillMaxSize()) {
                 val center = Offset(size.width / 2f, size.height / 2f)
                 val baseRadius = size.width * 0.35f
@@ -472,12 +498,12 @@ internal class WatchEngagement(
                 if (!liked) triggerLikeAnimation()
                 onLike()
             },
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier.size(44.dp)
         ) {
             Icon(
                 painter = painterResource(if (liked) R.drawable.yt_w_like_on else R.drawable.yt_w_like),
-                contentDescription = "Like",
-                tint = Color.White,
+                contentDescription = if (liked) "Liked" else "Like",
+                tint = TextPrimary,
                 modifier = Modifier
                     .size(20.dp)
                     .graphicsLayer {
@@ -490,86 +516,93 @@ internal class WatchEngagement(
     }
 }
 
-/** Pil gabungan suka | tidak suka dengan pemisah tipis, seperti di YouTube (tinggi 34 dp, mikro-animasi bounce). */
+/** Combined Like | Dislike capsule with >= 44dp touch height around the 36dp visual pill. */
 @Composable internal fun LikeDislikePill(likeLabel: String, rating: Int, onLike: () -> Unit, onDislike: () -> Unit, enabled: Boolean = true) {
-    val likeScale by androidx.compose.animation.core.animateFloatAsState(
+    val reduceMotion = rememberReduceMotion()
+    val animatedLikeScale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (rating == 1) 1.25f else 1.0f,
         animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 500f),
         label = "likeBounce"
     )
-    val dislikeScale by androidx.compose.animation.core.animateFloatAsState(
+    val animatedDislikeScale by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (rating == -1) 1.25f else 1.0f,
         animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 500f),
         label = "dislikeBounce"
     )
+    val likeScale = if (reduceMotion) 1f else animatedLikeScale
+    val dislikeScale = if (reduceMotion) 1f else animatedDislikeScale
 
     val ratingInteraction = remember { MutableInteractionSource() }
-    Row(
-        Modifier
-            .height(34.dp)
-            .raisedWatchAction(selected = rating != 0, interaction = ratingInteraction),
-        verticalAlignment = Alignment.CenterVertically
+    Box(
+        modifier = Modifier.height(44.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
+        Box(
             Modifier
-                .fillMaxHeight()
-                .clickable(enabled = enabled, interactionSource = ratingInteraction, indication = LocalIndication.current, onClick = onLike)
-                .padding(start = 12.dp, end = 10.dp),
+                .matchParentSize()
+                .padding(vertical = 4.dp)
+                .raisedWatchAction(selected = rating != 0, interaction = ratingInteraction)
+        )
+        Row(
+            Modifier.height(44.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painterResource(if (rating == 1) R.drawable.yt_w_like_on else R.drawable.yt_w_like),
-                "Like",
+            Row(
                 Modifier
-                    .size(18.dp)
-                    .graphicsLayer(scaleX = likeScale, scaleY = likeScale)
-            )
-            Text(
-                likeLabel,
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = if (rating == 1) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 6.dp)
-            )
-        }
-        Box(
-            Modifier
-                .width(1.dp)
-                .height(18.dp)
-                .background(Color.White.copy(alpha = .20f))
-        )
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .clickable(enabled = enabled, interactionSource = ratingInteraction, indication = LocalIndication.current, onClick = onDislike)
-                .padding(start = 10.dp, end = 12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Image(
-                painterResource(if (rating == -1) R.drawable.yt_w_dislike_on else R.drawable.yt_w_dislike),
-                "Dislike",
-                Modifier
-                    .size(18.dp)
-                    .graphicsLayer(scaleX = dislikeScale, scaleY = dislikeScale)
-            )
-        }
-    }
-}
-
-@Composable internal fun ActionGlyph(icon: String, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        val w = size.width; val h = size.height; val stroke = 1.8.dp.toPx()
-        fun line(x1: Float, y1: Float, x2: Float, y2: Float) = drawLine(Color.White, Offset(w*x1,h*y1), Offset(w*x2,h*y2), strokeWidth = stroke, cap = StrokeCap.Round)
-        when (icon) {
-            "chat" -> {
-                drawRoundRect(Color.White, topLeft = Offset(w*.12f, h*.16f), size = androidx.compose.ui.geometry.Size(w*.76f, h*.54f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w*.14f), style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
-                line(.28f, .70f, .20f, .88f); line(.20f, .88f, .44f, .70f)
-                line(.28f, .36f, .72f, .36f); line(.28f, .50f, .58f, .50f)
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(topStart = 50.dp, bottomStart = 50.dp))
+                    .semantics(mergeDescendants = true) {
+                        this.selected = rating == 1
+                        this.role = Role.Button
+                    }
+                    .clickable(enabled = enabled, interactionSource = ratingInteraction, indication = LocalIndication.current, onClick = onLike)
+                    .padding(start = 13.dp, end = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    painterResource(if (rating == 1) R.drawable.yt_w_like_on else R.drawable.yt_w_like),
+                    "Like",
+                    Modifier
+                        .size(18.dp)
+                        .graphicsLayer(scaleX = likeScale, scaleY = likeScale),
+                    colorFilter = ColorFilter.tint(TextPrimary)
+                )
+                Text(
+                    likeLabel,
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = if (rating == 1) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = 6.dp)
+                )
             }
-            "share" -> { line(.27f,.50f,.72f,.25f); line(.27f,.50f,.72f,.75f); listOf(Offset(.23f,.50f), Offset(.76f,.23f), Offset(.76f,.77f)).forEach { drawCircle(Color.White, radius = w*.10f, center = Offset(it.x*w,it.y*h)) } }
-            "download" -> { line(.5f,.12f,.5f,.68f); line(.27f,.47f,.5f,.70f); line(.73f,.47f,.5f,.70f); line(.18f,.84f,.82f,.84f) }
-            else -> { drawRoundRect(Color.White, topLeft = Offset(w*.31f,h*.28f), size = androidx.compose.ui.geometry.Size(w*.52f,h*.58f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(w*.06f), style = androidx.compose.ui.graphics.drawscope.Stroke(stroke)); line(.19f,.66f,.19f,.14f); line(.19f,.14f,.69f,.14f) }
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(18.dp)
+                    .background(Color.White.copy(alpha = .20f))
+            )
+            Box(
+                Modifier
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(topEnd = 50.dp, bottomEnd = 50.dp))
+                    .semantics(mergeDescendants = true) {
+                        this.selected = rating == -1
+                        this.role = Role.Button
+                    }
+                    .clickable(enabled = enabled, interactionSource = ratingInteraction, indication = LocalIndication.current, onClick = onDislike)
+                    .padding(start = 10.dp, end = 13.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painterResource(if (rating == -1) R.drawable.yt_w_dislike_on else R.drawable.yt_w_dislike),
+                    "Dislike",
+                    Modifier
+                        .size(18.dp)
+                        .graphicsLayer(scaleX = dislikeScale, scaleY = dislikeScale),
+                    colorFilter = ColorFilter.tint(TextPrimary)
+                )
+            }
         }
     }
 }

@@ -17,15 +17,20 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
+import okhttp3.ConnectionPool
+
+private val clientParamRegex = Regex("(?:[?&]c=|/c/)([^/&?#]+)")
 
 /** Match each signed media URL's client; YouTube login cookies belong only on YouTube hosts. */
 internal fun playbackRequestHeaders(url: String, cookies: String, original: Map<String, String> = emptyMap()): Map<String, String> {
     val target = url.toHttpUrlOrNull()
-    val client = Regex("(?:[?&]c=|/c/)([^/&?#]+)").find(url)?.groupValues?.get(1)
+    val client = clientParamRegex.find(url)?.groupValues?.get(1)
     val agent = when (client) {
         "ANDROID" -> YoutubeParsingHelper.getAndroidUserAgent(Localization.DEFAULT)
         "IOS" -> YoutubeParsingHelper.getIosUserAgent(Localization.DEFAULT)
@@ -45,11 +50,15 @@ internal fun youTubeHttpDataSourceFactory(context: Context): DataSource.Factory 
         spec.withRequestHeaders(playbackRequestHeaders(spec.uri.toString(), YouTubeAuth.getCookies(), spec.httpRequestHeaders))
     }
 
-private val playbackHttpClient = OkHttpClient.Builder().addNetworkInterceptor(accountHeaderInterceptor).build()
+private val playbackHttpClient = OkHttpClient.Builder()
+    .connectTimeout(8, TimeUnit.SECONDS)
+    .connectionPool(ConnectionPool(8, 5, TimeUnit.MINUTES))
+    .addNetworkInterceptor(accountHeaderInterceptor)
+    .build()
 
 /** Probe only manifests, using the same per-hop header policy as playback. */
 internal fun inspectLiveDvr(hlsUrl: String, dashUrl: String, cookies: String): Boolean {
-    val client = playbackHttpClient.newBuilder().callTimeout(3, TimeUnit.SECONDS).build()
+    val client = playbackHttpClient.newBuilder().callTimeout(1_500, TimeUnit.MILLISECONDS).build()
     fun read(url: String): String? {
         val target = url.toHttpUrlOrNull() ?: return null
         if (target.scheme != "https") return null
@@ -94,14 +103,36 @@ internal fun youTubeMediaSourceFactory(context: Context): DefaultMediaSourceFact
     DefaultMediaSourceFactory(DefaultDataSource.Factory(context, youTubeHttpDataSourceFactory(context)))
         .setLoadErrorHandlingPolicy(YouTubeLoadErrorPolicy())
 
+internal fun liveMediaConfiguration(): MediaItem.LiveConfiguration =
+    MediaItem.LiveConfiguration.Builder()
+        .setTargetOffsetMs(2_000L)
+        .setMinOffsetMs(1_000L)
+        .setMaxOffsetMs(3_500L)
+        .setMinPlaybackSpeed(0.95f)
+        .setMaxPlaybackSpeed(1.10f)
+        .build()
+
+internal fun playbackLoadControl(): DefaultLoadControl =
+    DefaultLoadControl.Builder()
+        .setBufferDurationsMsForStreaming(12_000, 30_000, 500, 1_000)
+        .setPrioritizeTimeOverSizeThresholdsForStreaming(true)
+        .build()
+
+internal fun playbackLiveSpeedControl(): DefaultLivePlaybackSpeedControl =
+    DefaultLivePlaybackSpeedControl.Builder()
+        .setFallbackMinPlaybackSpeed(0.95f)
+        .setFallbackMaxPlaybackSpeed(1.10f)
+        .setMinUpdateIntervalMs(300L)
+        .setProportionalControlFactor(0.35f)
+        .setMaxLiveOffsetErrorMsForUnitSpeed(100L)
+        .setTargetLiveOffsetIncrementOnRebufferMs(250L)
+        .setMinPossibleLiveOffsetSmoothingFactor(0.90f)
+        .build()
+
 internal fun youTubeHlsSource(context: Context, url: String, mediaId: String? = null, isLive: Boolean = false): MediaSource {
     val item = MediaItem.Builder().setUri(url).apply {
         if (!mediaId.isNullOrBlank()) setMediaId(mediaId)
-        if (isLive) setLiveConfiguration(MediaItem.LiveConfiguration.Builder()
-            .setTargetOffsetMs(5_000L)
-            .setMinPlaybackSpeed(.97f)
-            .setMaxPlaybackSpeed(1.03f)
-            .build())
+        if (isLive) setLiveConfiguration(liveMediaConfiguration())
     }.build()
     return HlsMediaSource.Factory(DefaultDataSource.Factory(context, youTubeHttpDataSourceFactory(context)))
         .setLoadErrorHandlingPolicy(YouTubeLoadErrorPolicy())

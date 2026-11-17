@@ -35,6 +35,7 @@ internal fun WatchPageHost(
     fullscreen: Boolean,
     verticalProgress: Float,
     exitDragging: Boolean,
+    keepChatOpenOnFullscreenExit: Boolean = false,
     wideWatch: Boolean,
     error: String?,
     queue: List<StreamInfoItem>,
@@ -86,14 +87,26 @@ internal fun WatchPageHost(
         if (fullscreen) modifier.fillMaxSize()
         else modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
     ) {
-        val isLive = info.isOngoingLive() || playerLive
         val isPostLive = info.streamType == StreamType.POST_LIVE_STREAM ||
             info.streamType == StreamType.POST_LIVE_AUDIO_STREAM
+        val isLive = info.isOngoingLive() || (!isPostLive && playerLive)
         val chatState = activeChatState ?: rememberLiveChat(info.url, isLive, isPostLive, player)
         var showComments by remember(info.url) { mutableStateOf(false) }
         var showChat by remember(info.url, isLive) { mutableStateOf(isLive) }
         var showDescription by remember(info.url) { mutableStateOf(false) }
         var showAsk by remember(info.url) { mutableStateOf(false) }
+        var prevFullscreen by remember(info.url) { mutableStateOf(fullscreen) }
+        LaunchedEffect(fullscreen, exitDragging, keepChatOpenOnFullscreenExit, chatState.hasChat) {
+            val exiting = (fullscreen && exitDragging) || (!fullscreen && prevFullscreen)
+            if (exiting && keepChatOpenOnFullscreenExit && (isLive || chatState.hasChat) && !showChat) {
+                onChaptersOpenChange(false)
+                showComments = false
+                showDescription = false
+                showAsk = false
+                showChat = true
+            }
+            prevFullscreen = fullscreen
+        }
         // Ask hanya ada bila server mengirim panelnya untuk akun dan video ini (lihat AskYouTube.panel); tanpa itu tombolnya tidak muncul.
         val askPanel by produceState<AskPanel?>(null, info.url, YouTubeAuth.isLoggedIn) { value = null; value = AskYouTube.panel(info.url) }
         // Status akun dibaca ulang saat video dibuka. Generasi menolak respons basi yang dimulai sebelum

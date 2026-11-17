@@ -1,5 +1,6 @@
 package id.flufclip.player
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,7 +63,9 @@ internal fun LibraryTab(
             val compact = LocalConfiguration.current.screenWidthDp < 600
             val cardWidth = if (compact) 164.dp else 208.dp
             val downloadsRevision by SavedDownloads.revision.collectAsState()
-            val savedDownloadsCount = remember(downloadsRevision) { SavedDownloads.list(context).size }
+            val savedDownloadsList = remember(downloadsRevision) { SavedDownloads.list(context) }
+            val savedDownloadsCount = savedDownloadsList.size
+            val savedDownloadsBytes = remember(savedDownloadsList) { savedDownloadsList.sumOf { it.bytes.coerceAtLeast(0L) } }
 
             LazyColumn(
                 modifier = modifier.fillMaxWidth(),
@@ -72,18 +75,33 @@ internal fun LibraryTab(
                     ProfileHeaderSection(
                         compact = compact,
                         onAccount = onAccount,
-                        onHistory = onHistory
+                        onHistory = onHistory,
+                        onDownloads = onDownloads
                     )
                 }
 
                 item {
-                    SectionHeaderRow(
-                        title = "History",
-                        subtitle = historySource,
-                        actionText = "View all",
-                        onAction = onHistory,
-                        modifier = Modifier.padding(top = 18.dp, bottom = 10.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onHistory)
+                            .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "History",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            painter = painterResource(R.drawable.yt_chevron_right),
+                            contentDescription = "View all history",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
 
                 if (videos.isEmpty()) {
@@ -199,8 +217,9 @@ internal fun LibraryTab(
 
                 item {
                     HorizontalDivider(
-                        modifier = Modifier.padding(top = 20.dp, bottom = 6.dp),
-                        color = Color(0xFF242424)
+                        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+                        thickness = 1.dp,
+                        color = Color(0x1AFFFFFF)
                     )
                     LibraryRow(
                         label = "Watch history",
@@ -211,14 +230,17 @@ internal fun LibraryTab(
                                 painterResource(R.drawable.yt_w_history),
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp),
-                                tint = Color.White
+                                tint = TextPrimary
                             )
                         }
                     )
                     LibraryRow(
                         label = "Downloads",
                         subtitle = if (savedDownloadsCount > 0) {
-                            "$savedDownloadsCount ${if (savedDownloadsCount == 1) "video" else "videos"}"
+                            val countLabel = "$savedDownloadsCount ${if (savedDownloadsCount == 1) "video" else "videos"}"
+                            if (savedDownloadsBytes > 0L) {
+                                "$countLabel · ${android.text.format.Formatter.formatFileSize(context, savedDownloadsBytes)}"
+                            } else countLabel
                         } else {
                             "0 videos · Watch offline"
                         },
@@ -229,14 +251,14 @@ internal fun LibraryTab(
                                     Icons.Default.CheckCircle,
                                     contentDescription = "Downloaded",
                                     modifier = Modifier.size(18.dp),
-                                    tint = Color.White
+                                    tint = TextPrimary
                                 )
                             } else {
                                 Icon(
                                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp),
-                                    tint = Color(0xFF777777)
+                                    tint = Color(0xFF888888)
                                 )
                             }
                         },
@@ -245,7 +267,27 @@ internal fun LibraryTab(
                                 painterResource(R.drawable.yt_w_download),
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp),
-                                tint = Color.White
+                                tint = TextPrimary
+                            )
+                        }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        thickness = 1.dp,
+                        color = Color(0x1AFFFFFF)
+                    )
+                    LibraryRow(
+                        label = if (YouTubeAuth.isLoggedIn) "Switch account" else "Sign in",
+                        subtitle = if (YouTubeAuth.isLoggedIn) {
+                            YouTubeAuth.profile.emailOrHandle.ifBlank { YouTubeAuth.profile.name.ifBlank { null } }
+                        } else "Sync history, playlists & subscriptions",
+                        onClick = onAccount,
+                        icon = {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp),
+                                tint = TextPrimary
                             )
                         }
                     )
@@ -371,11 +413,12 @@ internal fun LibraryTab(
 private fun ProfileHeaderSection(
     compact: Boolean,
     onAccount: () -> Unit,
-    onHistory: () -> Unit
+    onHistory: () -> Unit,
+    onDownloads: () -> Unit
 ) {
     val profile = YouTubeAuth.profile
     val loggedIn = YouTubeAuth.isLoggedIn
-    val avatarSize = if (compact) 68.dp else 76.dp
+    val avatarSize = if (compact) 72.dp else 76.dp
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -385,8 +428,8 @@ private fun ProfileHeaderSection(
                 .padding(
                     start = 16.dp,
                     end = 16.dp,
-                    top = if (compact) 14.dp else 18.dp,
-                    bottom = 12.dp
+                    top = if (compact) 12.dp else 16.dp,
+                    bottom = 14.dp
                 ),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -394,8 +437,8 @@ private fun ProfileHeaderSection(
                 modifier = Modifier
                     .size(avatarSize)
                     .clip(CircleShape)
-                    .background(Color(0xFF242424))
-                    .border(1.dp, Color(0xFF333333), CircleShape),
+                    .background(Color(0xFF212121))
+                    .border(1.dp, Color(0x1AFFFFFF), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (!profile.avatarUrl.isNullOrBlank()) {
@@ -409,8 +452,8 @@ private fun ProfileHeaderSection(
                     Icon(
                         Icons.Default.AccountCircle,
                         contentDescription = null,
-                        modifier = Modifier.size(avatarSize * 0.78f),
-                        tint = Color(0xFFAAAAAA)
+                        modifier = Modifier.size(avatarSize * 0.72f),
+                        tint = TextSecondary
                     )
                 }
             }
@@ -418,14 +461,14 @@ private fun ProfileHeaderSection(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 14.dp)
+                    .padding(start = 16.dp)
             ) {
                 Text(
                     text = profile.name.ifBlank { if (loggedIn) "YouTube account" else "You" },
-                    fontSize = if (compact) 22.sp else 24.sp,
-                    lineHeight = if (compact) 26.sp else 28.sp,
+                    fontSize = 24.sp,
+                    lineHeight = 28.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = TextPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -438,8 +481,8 @@ private fun ProfileHeaderSection(
                     }
                     Text(
                         text = secondary,
-                        color = Color(0xFFAAAAAA),
-                        fontSize = 13.sp,
+                        color = TextSecondary,
+                        fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -449,8 +492,8 @@ private fun ProfileHeaderSection(
                         contentDescription = null,
                         modifier = Modifier
                             .padding(start = 2.dp)
-                            .size(16.dp),
-                        tint = Color(0xFFAAAAAA)
+                            .size(15.dp),
+                        tint = TextSecondary
                     )
                 }
             }
@@ -467,12 +510,13 @@ private fun ProfileHeaderSection(
             YouTubeActionChip(
                 label = if (loggedIn) "Switch account" else "Sign in",
                 onClick = onAccount,
+                primary = !loggedIn,
                 leadingIcon = {
                     Icon(
                         Icons.Default.AccountCircle,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = Color.White
+                        modifier = Modifier.size(18.dp),
+                        tint = if (!loggedIn) Background else TextPrimary
                     )
                 }
             )
@@ -484,8 +528,8 @@ private fun ProfileHeaderSection(
                         Icon(
                             Icons.Default.CheckCircle,
                             contentDescription = null,
-                            modifier = Modifier.size(15.dp),
-                            tint = Color(0xFF2BA640)
+                            modifier = Modifier.size(16.dp),
+                            tint = MembershipSelectedTint
                         )
                     }
                 )
@@ -497,8 +541,20 @@ private fun ProfileHeaderSection(
                     Icon(
                         painterResource(R.drawable.yt_w_history),
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = Color.White
+                        modifier = Modifier.size(18.dp),
+                        tint = TextPrimary
+                    )
+                }
+            )
+            YouTubeActionChip(
+                label = "Downloads",
+                onClick = onDownloads,
+                leadingIcon = {
+                    Icon(
+                        painterResource(R.drawable.yt_w_download),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = TextPrimary
                     )
                 }
             )
@@ -523,14 +579,14 @@ internal fun SectionHeaderRow(
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 19.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = TextPrimary
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    color = Color(0xFF9E9E9E),
+                    color = TextSecondary,
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -538,7 +594,11 @@ internal fun SectionHeaderRow(
             }
         }
         if (!actionText.isNullOrBlank() && onAction != null) {
-            YouTubePillButton(text = actionText, onClick = onAction)
+            YouTubePillButton(
+                text = actionText,
+                onClick = onAction,
+                outlined = true
+            )
         }
     }
 }
@@ -548,15 +608,28 @@ internal fun YouTubePillButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    outlined: Boolean = false,
+    primary: Boolean = false
 ) {
+    val containerColor = when {
+        outlined -> Color.Transparent
+        primary -> TextPrimary
+        else -> Color(0x1AFFFFFF)
+    }
+    val contentColor = when {
+        !enabled -> Color(0xFF777777)
+        primary -> Background
+        else -> TextPrimary
+    }
     Surface(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.height(32.dp),
         shape = CircleShape,
-        color = Color(0xFF272727),
-        contentColor = if (enabled) Color.White else Color(0xFF777777)
+        color = containerColor,
+        contentColor = contentColor,
+        border = if (outlined) BorderStroke(1.dp, Color(0x33FFFFFF)) else null
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 14.dp),
@@ -575,13 +648,14 @@ internal fun YouTubePillButton(
 private fun YouTubeActionChip(
     label: String,
     onClick: () -> Unit,
+    primary: Boolean = false,
     leadingIcon: @Composable () -> Unit
 ) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = Color(0xFF272727),
-        contentColor = Color.White,
+        color = if (primary) TextPrimary else Color(0x1AFFFFFF),
+        contentColor = if (primary) Background else TextPrimary,
         modifier = Modifier.height(32.dp)
     ) {
         Row(
@@ -594,7 +668,7 @@ private fun YouTubeActionChip(
                 text = label,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color.White,
+                color = if (primary) Background else TextPrimary,
                 maxLines = 1
             )
         }
@@ -612,15 +686,13 @@ private fun LibraryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF1F1F1F)),
+            modifier = Modifier.size(24.dp),
             contentAlignment = Alignment.Center
         ) {
             icon()
@@ -628,19 +700,20 @@ private fun LibraryRow(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 16.dp, end = 8.dp)
+                .padding(start = 20.dp, end = 8.dp)
         ) {
             Text(
                 text = label,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
+                color = TextPrimary
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
+                    modifier = Modifier.padding(top = 1.dp),
                     fontSize = 12.sp,
-                    color = Color(0xFF9E9E9E),
+                    color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -653,7 +726,7 @@ private fun LibraryRow(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = Color(0xFF777777)
+                tint = Color(0xFF888888)
             )
         }
     }
@@ -682,12 +755,11 @@ private fun HistoryPreviewCard(
                 progressFraction = progress
             )
         } else {
-            Spacer(Modifier.height(10.dp))
             Box(
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFF212121))
                     .clickable(onClick = onClick)
             ) {
@@ -770,10 +842,10 @@ private fun HistoryPreviewCard(
                     text = primaryTitle,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 13.sp,
-                    lineHeight = 17.sp,
+                    fontSize = 14.sp,
+                    lineHeight = 18.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color.White
+                    color = TextPrimary
                 )
                 val byline = if (playlistId != null) {
                     listOf(video.uploader, "Playlist").filter { it.isNotBlank() }.joinToString(" · ")
@@ -784,8 +856,8 @@ private fun HistoryPreviewCard(
                         modifier = Modifier.padding(top = 2.dp),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = Color(0xFF9E9E9E),
-                        fontSize = 11.sp
+                        color = TextSecondary,
+                        fontSize = 12.sp
                     )
                 }
             }

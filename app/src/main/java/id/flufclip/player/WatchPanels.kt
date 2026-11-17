@@ -20,10 +20,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.ui.res.painterResource
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -45,6 +49,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.font.FontWeight
@@ -169,19 +175,110 @@ internal fun startedStreamingText(date: DateWrapper?): String? {
 
 internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerInstance(java.util.Locale.US).format(count)
 
-@Composable internal fun RichText(html: String, onLink: (String) -> Unit, modifier: Modifier = Modifier, collapsedLines: Int = Int.MAX_VALUE, fontSize: Int = 14) {
-    val latestOnLink by rememberUpdatedState(onLink)
-    val text = remember(html) {
-        AnnotatedString.fromHtml(html, linkStyles = TextLinkStyles(SpanStyle(color = LinkBlue)),
-            linkInteractionListener = LinkInteractionListener { link -> (link as? LinkAnnotation.Url)?.url?.let { latestOnLink(it) } })
+private fun applyCommentEmojis(
+    base: AnnotatedString,
+    emojis: Map<String, String>,
+): Pair<AnnotatedString, Map<String, String>> {
+    if (emojis.isEmpty() || base.isEmpty()) return base to emptyMap()
+    val links = base.getLinkAnnotations(0, base.length)
+    val matches = CommentEmojiParser.findMatches(base.text, emojis, links.map { it.start until it.end })
+    if (matches.isEmpty()) return base to emptyMap()
+
+    val offsetMap = IntArray(base.length + 1)
+    val usedEmojis = LinkedHashMap<String, String>()
+    val annotated = buildAnnotatedString {
+        var cursor = 0
+        for (match in matches) {
+            val start = match.range.first
+            val end = match.range.last + 1
+            if (start > cursor) {
+                for (i in cursor until start) offsetMap[i] = length + (i - cursor)
+                append(base.text.substring(cursor, start))
+            }
+            val beforeLen = length
+            offsetMap[start] = beforeLen
+            appendInlineContent(match.token, match.token)
+            val afterLen = length
+            for (i in (start + 1)..end) offsetMap[i] = afterLen
+            usedEmojis[match.token] = match.url
+            cursor = end
+        }
+        if (cursor < base.length) {
+            for (i in cursor until base.length) offsetMap[i] = length + (i - cursor)
+            append(base.text.substring(cursor))
+        }
+        offsetMap[base.length] = length
+
+        base.spanStyles.forEach { range ->
+            val s = offsetMap[range.start]
+            val e = offsetMap[range.end]
+            if (s < e) addStyle(range.item, s, e)
+        }
+        base.paragraphStyles.forEach { range ->
+            val s = offsetMap[range.start]
+            val e = offsetMap[range.end]
+            if (s < e) addStyle(range.item, s, e)
+        }
+        links.forEach { range ->
+            val s = offsetMap[range.start]
+            val e = offsetMap[range.end]
+            if (s < e) {
+                when (val link = range.item) {
+                    is LinkAnnotation.Url -> addLink(link, s, e)
+                    is LinkAnnotation.Clickable -> addLink(link, s, e)
+                }
+            }
+        }
     }
+    return annotated to usedEmojis
+}
+
+@Composable
+private fun rememberInlineEmojiContent(usedEmojis: Map<String, String>, sizeSp: Int): Map<String, InlineTextContent> =
+    remember(usedEmojis, sizeSp) {
+        if (usedEmojis.isEmpty()) emptyMap()
+        else usedEmojis.mapValues { (token, url) ->
+            InlineTextContent(Placeholder(sizeSp.sp, sizeSp.sp, PlaceholderVerticalAlign.TextCenter)) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = token,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+
+@Composable internal fun RichText(html: String, onLink: (String) -> Unit, modifier: Modifier = Modifier, collapsedLines: Int = Int.MAX_VALUE, fontSize: Int = 14, emojis: Map<String, String> = emptyMap()) {
+    val latestOnLink by rememberUpdatedState(onLink)
+    val (text, usedEmojis) = remember(html, emojis) {
+        val base = AnnotatedString.fromHtml(html, linkStyles = TextLinkStyles(SpanStyle(color = LinkBlue)),
+            linkInteractionListener = LinkInteractionListener { link -> (link as? LinkAnnotation.Url)?.url?.let { latestOnLink(it) } })
+        applyCommentEmojis(base, emojis)
+    }
+    val inlineContent = rememberInlineEmojiContent(usedEmojis, fontSize + 4)
     var expanded by remember(html) { mutableStateOf(false) }
     var overflow by remember(html) { mutableStateOf(false) }
     Column(modifier) {
-        Text(text, color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize + 6).sp, maxLines = if (expanded) Int.MAX_VALUE else collapsedLines,
+        Text(text, inlineContent = inlineContent, color = Color.White, fontSize = fontSize.sp, lineHeight = (fontSize + 6).sp, maxLines = if (expanded) Int.MAX_VALUE else collapsedLines,
             overflow = TextOverflow.Ellipsis, onTextLayout = { if (!expanded) overflow = it.hasVisualOverflow })
-        if (overflow || expanded) Text(if (expanded) "Show less" else "Baca selengkapnya", color = Muted, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(top = 4.dp).clickable { expanded = !expanded })
+        if (overflow || expanded) {
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 40.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 6.dp, horizontal = 2.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    if (expanded) "Show less" else "Read more",
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
     }
 }
 
@@ -206,13 +303,13 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
         })
     Column(modifier.onSizeChanged { panelHeight = it.height }.offset { IntOffset(0, offset.value.roundToInt()) }.clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(Background)) {
         Column(drag) {
-            if (showHandle) Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(40.dp, 4.dp).clip(RoundedCornerShape(50)).background(Color(0xFF606060))) }
+            if (showHandle) Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) { Box(Modifier.size(40.dp, 4.dp).clip(RoundedCornerShape(50)).background(DragHandleInk)) }
             Row(Modifier.fillMaxWidth().padding(start = if (navigation == null) 16.dp else 4.dp, end = 4.dp, top = if (showHandle) 4.dp else 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 navigation?.invoke()
-                Text(title, fontSize = 20.sp, fontWeight = titleWeight)
+                Text(title, color = TextPrimary, fontSize = 20.sp, fontWeight = titleWeight)
                 subtitle?.let { Text(it, color = Muted, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp)) }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Close") }
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Close", tint = TextPrimary) }
             }
         }
         HorizontalDivider(color = PanelLine)
@@ -226,6 +323,23 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
  * Kartu komentar di bawah deskripsi. Seperti YouTube: label "Comments" + jumlah dan cuplikan komentar.
  * Dapat ditampilkan dalam carousel horizontal bersama komentar lain, live chat replay, atau daftar bab.
  */
+@Composable
+private fun CommentTeaserRow(comment: CommentsInfoItem) {
+    val preview = plainText(comment.commentText)
+    val emojis = remember(comment.commentId) { VideoRepository.commentEmojis(comment.commentId) }
+    val (annotated, usedEmojis) = remember(preview, emojis) {
+        applyCommentEmojis(AnnotatedString(preview), emojis)
+    }
+    val inlineContent = rememberInlineEmojiContent(usedEmojis, sizeSp = 17)
+    val channelUrl = comment.uploaderUrl?.takeIf { it.isNotBlank() }
+    val rawAvatar = comment.uploaderAvatars.lastOrNull()?.url ?: VideoRepository.commentAvatar(comment.commentId)
+    val avatarUrl = rememberAvatarUrl(rawAvatar, channelUrl)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Avatar(avatarUrl, comment.uploaderName, 24)
+        Text(annotated, inlineContent = inlineContent, color = TextPrimary, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
+    }
+}
+
 @Composable internal fun CommentsTeaser(
     state: CommentsState,
     onClick: () -> Unit,
@@ -245,10 +359,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
             Box(Modifier.padding(top = 12.dp)) {
                 when {
                     state.info?.isCommentsDisabled == true -> Text("Comments are turned off.", color = Muted, fontSize = 13.sp)
-                    comment != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(comment.uploaderAvatars.lastOrNull()?.url, comment.uploaderName, 24)
-                        Text(plainText(comment.commentText), fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
-                    }
+                    comment != null -> CommentTeaserRow(comment)
                     state.loading -> Box(Modifier.fillMaxWidth().height(16.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF3A3A3A)))
                     state.error != null -> Text("Failed to load comments. Tap to try again.", color = Muted, fontSize = 13.sp)
                     else -> Text("No comments yet.", color = Muted, fontSize = 13.sp)
@@ -349,11 +460,13 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
         else -> onComments
     }
 
+    val reduceMotion = rememberReduceMotion()
     Box(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Surface)
+            .border(0.5.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
             .clickable(onClick = onCurrentClick)
     ) {
         Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 14.dp)) {
@@ -364,14 +477,14 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
             ) {
                 when (currentPage) {
                     -1 -> {
-                        Text("Replay chat", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        Text("Live chat replay", color = TextPrimary, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                     }
                     -2 -> {
-                        Text("Chapters", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        Text("Chapters", color = TextPrimary, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                         Text("${chapters.size}", color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
                     }
                     else -> {
-                        Text("Comments", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                        Text("Comments", color = TextPrimary, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                         val count = comments.info?.commentsCount?.takeIf { it >= 0 }
                         count?.let { Text(formatCount(it.toLong()), color = Muted, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp)) }
                     }
@@ -384,9 +497,12 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
                         modifier = Modifier.padding(end = 4.dp)
                     ) {
                         repeat(pageCount) { i ->
-                            // Formula translasi dan scaling titik sesuai 'post_dot_page_indicator.eml' di APK YouTube:
-                            val distance = kotlin.math.abs(pagerState.currentPage + pagerState.currentPageOffsetFraction - i)
-                            val fraction = (1f - distance).coerceIn(0f, 1f)
+                            val fraction = if (reduceMotion) {
+                                if (pagerState.currentPage == i) 1f else 0f
+                            } else {
+                                val distance = kotlin.math.abs(pagerState.currentPage + pagerState.currentPageOffsetFraction - i)
+                                (1f - distance).coerceIn(0f, 1f)
+                            }
                             val width = androidx.compose.ui.unit.lerp(4.dp, 10.dp, fraction)
                             val color = androidx.compose.ui.graphics.lerp(Color(0xFF717171), Color.White, fraction)
                             Box(
@@ -402,88 +518,87 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
                         painter = painterResource(R.drawable.yt_chevron_down),
                         contentDescription = "Open panel",
                         tint = Color.LightGray,
-                        modifier = Modifier.size(16.dp).padding(end = 4.dp)
+                        modifier = Modifier.padding(end = 4.dp).size(16.dp)
                     )
                 }
             }
 
-            // Carousel Body: HANYA bagian cuplikan ini yang bergeser horizontal secara halus!
+            // Body carousel dikunci tinggi seragam 2 baris agar kartu tidak membesar ke bawah saat digeser ke Live chat replay.
+            val density = LocalDensity.current
+            val teaserBodyHeight = with(density) { 40.sp.toDp() }.coerceAtLeast(40.dp)
             androidx.compose.foundation.pager.HorizontalPager(
                 pagerState,
-                Modifier.padding(top = 10.dp).fillMaxWidth(),
+                Modifier.padding(top = 8.dp).fillMaxWidth().height(teaserBodyHeight),
                 userScrollEnabled = pageCount > 1,
                 pageSpacing = 16.dp,
                 verticalAlignment = Alignment.CenterVertically
             ) { pageIdx ->
-                when (val item = pages.getOrElse(pageIdx) { 0 }) {
-                    -1 -> {
-                        val latest = chatState.visibleMessages.lastOrNull { it.text.isNotBlank() }
-                        when {
-                            latest != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(latest.authorPhotoUrl, latest.author, 24)
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                    when (val item = pages.getOrElse(pageIdx) { 0 }) {
+                        -1 -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.yt_live_chat_replay),
+                                    contentDescription = null,
+                                    tint = TextPrimary,
+                                    modifier = Modifier.size(24.dp)
+                                )
                                 Text(
-                                    buildAnnotatedString {
-                                        append(latest.author)
-                                        append("  ")
-                                        val start = length
-                                        append(latest.text)
-                                        addStyle(SpanStyle(color = Color.White), start, length)
-                                    },
-                                    color = Muted,
+                                    text = "See what others said about this video while it was live.",
+                                    color = TextPrimary,
                                     fontSize = 13.sp,
                                     lineHeight = 18.sp,
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(start = 10.dp)
+                                    modifier = Modifier.padding(start = 12.dp)
                                 )
                             }
-                            chatState.loading -> Box(Modifier.fillMaxWidth().height(16.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF3A3A3A)))
-                            else -> Text("Top chat replay is on.", color = Muted, fontSize = 13.sp)
                         }
-                    }
-                    -2 -> {
-                        val firstChapter = chapters.firstOrNull()
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier
-                                    .size(width = 44.dp, height = 26.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(Color(0xFF272727))
-                            ) {
-                                (firstChapter?.previewUrl ?: thumbnailUrl)?.let {
-                                    AsyncImage(
-                                        model = it,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
+                        -2 -> {
+                            val firstChapter = chapters.firstOrNull()
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier
+                                        .size(width = 44.dp, height = 26.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF272727))
+                                ) {
+                                    (firstChapter?.previewUrl ?: thumbnailUrl)?.let {
+                                        AsyncImage(
+                                            model = it,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                                Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                                    Text(
+                                        firstChapter?.title?.takeIf { it.isNotBlank() } ?: "Key moments",
+                                        color = TextPrimary,
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                }
-                            }
-                            Column(Modifier.padding(start = 10.dp).weight(1f)) {
-                                Text(
-                                    firstChapter?.title?.takeIf { it.isNotBlank() } ?: "Key moments",
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                firstChapter?.startTimeSeconds?.let {
-                                    Text(formatSeconds(it), color = LinkBlue, fontSize = 12.sp)
+                                    firstChapter?.startTimeSeconds?.let {
+                                        Text(formatSeconds(it), color = LinkBlue, fontSize = 12.sp)
+                                    }
                                 }
                             }
                         }
-                    }
-                    else -> {
-                        val comment = comments.items.getOrNull(item) ?: comments.items.firstOrNull()
-                        when {
-                            comments.info?.isCommentsDisabled == true -> Text("Comments are turned off.", color = Muted, fontSize = 13.sp)
-                            comment != null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                                Avatar(comment.uploaderAvatars.lastOrNull()?.url, comment.uploaderName, 24)
-                                Text(plainText(comment.commentText), fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 10.dp))
+                        else -> {
+                            val comment = comments.items.getOrNull(item) ?: comments.items.firstOrNull()
+                            when {
+                                comments.info?.isCommentsDisabled == true -> Text("Comments are turned off.", color = Muted, fontSize = 13.sp)
+                                comment != null -> CommentTeaserRow(comment)
+                                comments.loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(24.dp).clip(CircleShape).background(Color(0xFF3A3A3A)))
+                                    Box(Modifier.padding(start = 10.dp).fillMaxWidth(0.72f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF3A3A3A)))
+                                }
+                                comments.error != null -> Text("Failed to load comments. Tap to try again.", color = Muted, fontSize = 13.sp)
+                                else -> Text("No comments yet.", color = Muted, fontSize = 13.sp)
                             }
-                            comments.loading -> Box(Modifier.fillMaxWidth().height(16.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFF3A3A3A)))
-                            comments.error != null -> Text("Failed to load comments. Tap to try again.", color = Muted, fontSize = 13.sp)
-                            else -> Text("No comments yet.", color = Muted, fontSize = 13.sp)
                         }
                     }
                 }
@@ -567,39 +682,105 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 @Composable private fun CommentRow(comment: CommentsInfoItem, info: StreamInfo, creatorAvatar: String?, avatarSize: Int, onLink: (String) -> Unit, onChannel: (String) -> Unit,
     onReplies: (() -> Unit)?, modifier: Modifier = Modifier, expandedByDefault: Boolean = false) {
     val channelUrl = comment.uploaderUrl?.takeIf { it.isNotBlank() }
-    val avatarUrl = rememberAvatarUrl(comment.uploaderAvatars.lastOrNull()?.url, channelUrl)
-    Row(modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 4.dp)) {
-        Box(Modifier.clickable(enabled = channelUrl != null) { channelUrl?.let(onChannel) }) { Avatar(avatarUrl, comment.uploaderName, avatarSize) }
+    val rawAvatar = comment.uploaderAvatars.lastOrNull()?.url ?: VideoRepository.commentAvatar(comment.commentId)
+    val avatarUrl = rememberAvatarUrl(rawAvatar, channelUrl)
+    Row(modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 6.dp)) {
+        Box(
+            Modifier
+                .clip(CircleShape)
+                .clickable(enabled = channelUrl != null) { channelUrl?.let(onChannel) }
+        ) { Avatar(avatarUrl, comment.uploaderName, avatarSize) }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             if (comment.isPinned) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
                 PinGlyph(Modifier.size(12.dp))
-                Text("Disematkan oleh ${info.uploaderName ?: "kreator"}", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
+                Text("Pinned by ${info.uploaderName ?: "creator"}", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(start = 6.dp))
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val name = comment.uploaderName.orEmpty()
-                if (comment.isChannelOwner) Text(name, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF3F3F3F)).padding(horizontal = 6.dp, vertical = 1.dp))
-                else Text(name, fontSize = 12.sp, color = Muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (comment.isUploaderVerified) Text(" ✓", fontSize = 11.sp, color = Muted)
+                if (comment.isChannelOwner) {
+                    Text(
+                        name,
+                        color = TextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(Color(0xFF3F3F3F))
+                            .clickable(enabled = channelUrl != null) { channelUrl?.let(onChannel) }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                } else {
+                    Text(
+                        name,
+                        fontSize = 12.sp,
+                        color = Muted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable(enabled = channelUrl != null) { channelUrl?.let(onChannel) }
+                            .padding(vertical = 2.dp)
+                    )
+                }
+                if (comment.isUploaderVerified) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Verified",
+                        tint = Muted,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
                 relativeTime(comment.uploadDate, comment.textualUploadDate)?.let { Text(" · $it", fontSize = 12.sp, color = Muted, maxLines = 1) }
             }
-            RichText(richHtml(comment.commentText), onLink, Modifier.padding(top = 2.dp), collapsedLines = if (expandedByDefault) Int.MAX_VALUE else 5)
-            Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = {}, enabled = false, modifier = Modifier.size(32.dp).offset(x = (-8).dp)) { Icon(Icons.Outlined.ThumbUp, "Like", Modifier.size(16.dp), tint = Color.White) }
-                val likes = comment.likeCount.takeIf { it > 0 }?.let { formatCount(it.toLong()) } ?: comment.textualLikeCount?.takeIf { it.isNotBlank() && it != "0" }
-                likes?.let { Text(it, fontSize = 12.sp, color = Muted, modifier = Modifier.offset(x = (-8).dp)) }
-                IconButton(onClick = {}, enabled = false, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ThumbUp, "Dislike", Modifier.size(16.dp).graphicsLayer { scaleY = -1f }, tint = Color.White) }
-                IconButton(onClick = { onReplies?.invoke() }, enabled = onReplies != null, modifier = Modifier.size(32.dp)) { ReplyGlyph(Modifier.size(16.dp)) }
-                if (comment.isHeartedByUploader) Box(Modifier.padding(start = 6.dp).size(20.dp)) {
-                    Avatar(creatorAvatar, info.uploaderName, 16)
-                    Icon(Icons.Default.Favorite, "Liked by creator", tint = Color(0xFFFF4E45), modifier = Modifier.size(11.dp).align(Alignment.BottomEnd))
+            val commentEmojis = remember(comment.commentId) { VideoRepository.commentEmojis(comment.commentId) }
+            RichText(richHtml(comment.commentText), onLink, Modifier.padding(top = 2.dp), collapsedLines = if (expandedByDefault) Int.MAX_VALUE else 5, emojis = commentEmojis)
+            val likes = comment.likeCount.takeIf { it > 0 }?.let { formatCount(it.toLong()) } ?: comment.textualLikeCount?.takeIf { it.isNotBlank() && it != "0" }
+            if (likes != null || onReplies != null || comment.isHeartedByUploader) {
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    likes?.let { count ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(Icons.Outlined.ThumbUp, contentDescription = "Likes", modifier = Modifier.size(14.dp), tint = Muted)
+                            Text(count, fontSize = 12.sp, color = Muted)
+                        }
+                    }
+                    if (onReplies != null) {
+                        IconButton(onClick = onReplies, modifier = Modifier.size(44.dp)) {
+                            ReplyGlyph(Modifier.size(16.dp))
+                        }
+                    }
+                    if (comment.isHeartedByUploader) Box(Modifier.size(22.dp)) {
+                        Avatar(creatorAvatar, info.uploaderName, 18)
+                        Icon(Icons.Default.Favorite, "Liked by creator", tint = Color(0xFFFF4E45), modifier = Modifier.size(11.dp).align(Alignment.BottomEnd))
+                    }
                 }
             }
             val replyCount = comment.replyCount
             if (onReplies != null && comment.replies != null && replyCount != 0) {
-                Row(Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onReplies).padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(50))
+                        .clickable(onClick = onReplies)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     if (comment.hasCreatorReply()) Avatar(creatorAvatar, info.uploaderName, 20, Modifier.padding(end = 6.dp))
-                    Text(if (replyCount > 0) "$replyCount replies" else "View replies", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 4.dp))
-                    Text(" ›", color = Color.White, fontSize = 18.sp)
+                    Text(if (replyCount > 0) "$replyCount replies" else "View replies", color = CallToActionBlue, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 2.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = CallToActionBlue,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
@@ -610,11 +791,16 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 
 @Composable internal fun DescriptionTeaser(info: StreamInfo, onClick: () -> Unit) {
     val isLive = info.isOngoingLive()
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        // Judul YouTube di layar tonton: huruf biasa (tidak tebal) 18 sp
-        Text(info.name, fontSize = 18.sp, lineHeight = 24.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        
-        // Metadata baris seperti YouTube Modern (Gambar 2): @Channel  [Likes]  [Views]  [Time]  more
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp)
+    ) {
+        Text(info.name, color = TextPrimary, fontSize = 19.sp, lineHeight = 25.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+
         val handle = info.uploaderName?.takeIf { it.isNotBlank() }?.let { if (it.startsWith("@")) it else "@$it" }
         val likes = info.likeCount.takeIf { it > 0 }?.let { "${formatCount(it)} likes" }
         val views = if (isLive) {
@@ -625,7 +811,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
         val time = if (isLive) startedStreamingText(info.uploadDate) else relativeTime(info.uploadDate, info.textualUploadDate)
         val meta = listOfNotNull(handle, likes, views, time)
 
-        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 meta.joinToString("  "),
                 color = Muted,
@@ -634,7 +820,7 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            Text("  more", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text("  more", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }
@@ -671,9 +857,8 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
             else RichText(html, onLink)
             val chapters = info.streamSegments
             if (chapters.isNotEmpty()) {
-                // YouTube: judul "Chapters" dengan tombol "View all" yang membuka panel daftar bab.
                 Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Bab", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("Chapters", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     if (onChapters != null) PanelPill("View all", onChapters)
                 }
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -696,16 +881,16 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
                 }
             }
             HorizontalDivider(color = PanelLine, modifier = Modifier.padding(vertical = 20.dp))
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(enabled = !info.uploaderUrl.isNullOrBlank(), onClick = onChannel), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(8.dp)).clickable(enabled = !info.uploaderUrl.isNullOrBlank(), onClick = onChannel), verticalAlignment = Alignment.CenterVertically) {
                 Avatar(info.uploaderAvatars.lastOrNull()?.url, info.uploaderName, 56)
                 Column(Modifier.padding(start = 12.dp)) {
                     Text(info.uploaderName ?: "Channel", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    info.uploaderSubscriberCount.takeIf { it >= 0 }?.let { Text("${formatCount(it)} subscriber", color = Muted, fontSize = 13.sp) }
+                    info.uploaderSubscriberCount.takeIf { it >= 0 }?.let { Text("${formatCount(it)} subscribers", color = Muted, fontSize = 13.sp) }
                 }
             }
             Row(Modifier.padding(top = 16.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PanelPill("Video", onChannel)
-                PanelPill("Tentang", onChannel)
+                PanelPill("Videos", onChannel)
+                PanelPill("About", onChannel)
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -717,26 +902,28 @@ internal fun fullCount(count: Long): String = java.text.NumberFormat.getIntegerI
 /** Index of the chapter playing at [positionMs], or -1 before the first one. */
 internal fun chapterIndexAt(segments: List<StreamSegment>, positionMs: Long): Int = segments.indexOfLast { it.startTimeSeconds * 1000L <= positionMs }
 
-/**
- * Panel "Bab" seperti panel Chapters YouTube (dibuka dari judul bab di player atau "View all" di deskripsi): satu baris per
- * bab dengan thumbnail, judul dan waktu mulai; bab yang sedang diputar disorot dan digulir ke tengah saat panel dibuka.
- * Ketuk baris untuk melompat ke bab itu.
- */
 @Composable internal fun ChaptersPanel(info: StreamInfo, positionMs: () -> Long, draggable: Boolean, onDismiss: () -> Unit, onSeek: (Int) -> Unit, modifier: Modifier = Modifier, showHandle: Boolean = true) {
     val chapters = info.streamSegments
     var current by remember { mutableIntStateOf(chapterIndexAt(chapters, positionMs())) }
     LaunchedEffect(chapters) { while (true) { current = chapterIndexAt(chapters, positionMs()); delay(500) } }
     val list = rememberLazyListState(initialFirstVisibleItemIndex = (current - 1).coerceAtLeast(0))
-    EngagementPanel("Bab", null, draggable, onDismiss, modifier, showHandle = showHandle) {
+    EngagementPanel("Chapters", null, draggable, onDismiss, modifier, showHandle = showHandle) {
         LazyColumn(Modifier.fillMaxWidth().weight(1f), state = list, contentPadding = PaddingValues(vertical = 8.dp)) {
             itemsIndexed(chapters) { index, chapter ->
-                Row(Modifier.fillMaxWidth().background(if (index == current) Surface else Color.Transparent).clickable { onSeek(chapter.startTimeSeconds) }
-                    .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 64.dp)
+                        .background(if (index == current) Surface else Color.Transparent)
+                        .clickable { onSeek(chapter.startTimeSeconds) }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(Modifier.width(112.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Surface)) {
                         (chapter.previewUrl ?: info.thumbnails.lastOrNull()?.url)?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                     }
                     Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                        Text(chapter.title?.takeIf { it.isNotBlank() } ?: "Bab ${index + 1}", fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(chapter.title?.takeIf { it.isNotBlank() } ?: "Chapter ${index + 1}", fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(formatSeconds(chapter.startTimeSeconds), color = LinkBlue, fontSize = 12.sp, fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(4.dp)).background(LinkBlue.copy(alpha = .15f)).padding(horizontal = 4.dp, vertical = 1.dp))
                     }
@@ -756,7 +943,24 @@ internal fun chapterIndexAt(segments: List<StreamSegment>, positionMs: Long): In
 // ---------- small pieces ----------
 
 @Composable private fun PanelPill(label: String, onClick: () -> Unit) {
-    Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.clip(RoundedCornerShape(50)).border(1.dp, Color(0xFF3F3F3F), RoundedCornerShape(50)).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp))
+    Box(
+        modifier = Modifier
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(50))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = TextPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .border(1.dp, HairlineBorder, RoundedCornerShape(50))
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+    }
 }
 
 @Composable internal fun Avatar(url: String?, name: String?, size: Int, modifier: Modifier = Modifier) {
@@ -784,7 +988,12 @@ internal fun chapterIndexAt(segments: List<StreamSegment>, positionMs: Long): In
 @Composable private fun PanelMessage(text: String) { Text(text, color = Muted, fontSize = 14.sp, modifier = Modifier.padding(16.dp)) }
 @Composable private fun PanelSpinner() { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp) } }
 @Composable private fun PanelError(message: String, onRetry: () -> Unit) {
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { Text(message, color = Muted, fontSize = 13.sp); TextButton(onClick = onRetry) { Text("Try again", color = LinkBlue) } }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(message, color = ErrorText, fontSize = 13.sp)
+        TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 44.dp)) {
+            Text("Try again", color = LinkBlue)
+        }
+    }
 }
 
 @Composable private fun ReplyGlyph(modifier: Modifier) {

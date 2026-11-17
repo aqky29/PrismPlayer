@@ -137,7 +137,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
 @Composable internal fun FloatingPlayer(
     player: ExoPlayer, title: String, zoomKey: String, locked: Boolean, onUnlock: () -> Unit, isLive: Boolean, autoplay: Boolean, hasSubtitles: Boolean, subtitlesEnabled: Boolean, previewFrames: List<org.schabi.newpipe.extractor.stream.Frameset>, segments: List<org.schabi.newpipe.extractor.stream.StreamSegment>,
     fullscreen: Boolean, minimized: Boolean, progress: Float, travelDistance: androidx.compose.ui.unit.Dp, miniState: MiniPlayerState,
-    modifier: Modifier, recovering: Boolean = false, onRetryPlayback: (() -> Unit)? = null, onChapters: (() -> Unit)? = null, chatState: LiveChatState? = null, channelName: String? = null, moreVideos: List<StreamInfoItem> = emptyList(), onMoreVideo: ((StreamInfoItem) -> Unit)? = null, onCast: (() -> Unit)? = null, actions: FullscreenActions? = null, commentsPanel: (@Composable (Modifier) -> Unit)? = null, onNext: (() -> Unit)?, onPrevious: (() -> Unit)?, onAutoplay: () -> Unit, onSubtitles: () -> Unit, onBack: () -> Unit, onSettings: () -> Unit, onFullscreen: () -> Unit,
+    modifier: Modifier, fullscreenTransitioning: Boolean = false, fullscreenChat: Boolean = true, onFullscreenChatChange: ((Boolean) -> Unit)? = null, recovering: Boolean = false, onRetryPlayback: (() -> Unit)? = null, onChapters: (() -> Unit)? = null, chatState: LiveChatState? = null, channelName: String? = null, moreVideos: List<StreamInfoItem> = emptyList(), onMoreVideo: ((StreamInfoItem) -> Unit)? = null, onCast: (() -> Unit)? = null, actions: FullscreenActions? = null, commentsPanel: (@Composable (Modifier) -> Unit)? = null, onNext: (() -> Unit)?, onPrevious: (() -> Unit)?, onAutoplay: () -> Unit, onSubtitles: () -> Unit, onBack: () -> Unit, onSettings: () -> Unit, onFullscreen: () -> Unit,
     onExpand: () -> Unit, onClose: () -> Unit, onDrag: (Float) -> Unit, onCancelDrag: () -> Unit, onRelease: (Float, Float) -> Unit
 ) {
     // Pinch-to-fill state is per player surface; the view is scaled and clipped by its host so the
@@ -179,7 +179,11 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
-    var fullscreenChat by remember { mutableStateOf(true) }
+    var internalFullscreenChat by remember(zoomKey) { mutableStateOf(true) }
+    val chatOverlayVisible = if (onFullscreenChatChange != null) fullscreenChat else internalFullscreenChat
+    val setChatOverlayVisible: (Boolean) -> Unit = { visible ->
+        if (onFullscreenChatChange != null) onFullscreenChatChange(visible) else internalFullscreenChat = visible
+    }
     val cornerOutlineProvider = remember {
         object : android.view.ViewOutlineProvider() {
             var radiusPx: Float = 0f
@@ -197,8 +201,9 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             .clip(RoundedCornerShape(corner))
             .background(Color.Black)
     ) {
-        val showDockedComments = commentsPanel != null && fullscreen && progress < .1f && !locked
-        val showDockedChat = !showDockedComments && fullscreen && hasChat && fullscreenChat && chatState != null && progress < .1f && !locked
+        val inFullscreenDock = fullscreen && !fullscreenTransitioning && progress < .1f && !locked
+        val showDockedComments = commentsPanel != null && inFullscreenDock
+        val showDockedChat = !showDockedComments && inFullscreenDock && hasChat && chatOverlayVisible && chatState != null
         val chatWidth = minOf(320.dp, (maxWidth - 440.dp).coerceAtLeast(280.dp))
         Row(Modifier.fillMaxSize()) {
             Box(
@@ -249,7 +254,16 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     var showUnlock by remember { mutableStateOf(true) }
                     LaunchedEffect(showUnlock) { if (showUnlock) { delay(3000); showUnlock = false } }
                     Box(Modifier.fillMaxSize().clickable { showUnlock = true }, contentAlignment = Alignment.Center) {
-                        if (showUnlock) TextButton(onClick = onUnlock, colors = ButtonDefaults.textButtonColors(containerColor = Color.Black.copy(alpha = .75f), contentColor = Color.White)) { Text("🔒  Screen locked • Tap to unlock") }
+                        if (showUnlock) TextButton(
+                            onClick = onUnlock,
+                            modifier = Modifier.heightIn(min = 44.dp),
+                            colors = ButtonDefaults.textButtonColors(containerColor = Color.Black.copy(alpha = .75f), contentColor = Color.White)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Text("Screen locked · Tap to unlock")
+                            }
+                        }
                     }
                 } else if (minimized && progress > .9f) {
                     MiniPlayerControls(player, playing, buffering = buffering, onClose = onClose, gestureModifier = miniGestureModifier, recovering = recovering, onRetryPlayback = onRetryPlayback)
@@ -258,8 +272,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         player, playing, buffering || recovering, fullscreen, title, isLive, autoplay, hasSubtitles, subtitlesEnabled, previewFrames, segments,
                         onBack, onSettings, onAutoplay, onSubtitles, onFullscreen, onPrevious, onNext,
                         hasChat = hasChat,
-                        showChatOverlay = fullscreenChat,
-                        onToggleChatOverlay = { fullscreenChat = !fullscreenChat },
+                        showChatOverlay = chatOverlayVisible,
+                        onToggleChatOverlay = { setChatOverlayVisible(!chatOverlayVisible) },
                         channelName = channelName, moreVideos = moreVideos, onMoreVideo = onMoreVideo,
                         onCast = onCast, actions = actions, onChapters = onChapters, onRetryPlayback = onRetryPlayback
                     )
@@ -280,7 +294,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 LiveChatPanel(
                     state = chatState,
                     draggable = false,
-                    onDismiss = { fullscreenChat = false },
+                    onDismiss = { setChatOverlayVisible(false) },
                     modifier = Modifier
                         .width(chatWidth)
                         .fillMaxHeight()

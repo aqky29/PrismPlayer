@@ -11,6 +11,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.*
@@ -57,7 +58,7 @@ internal fun Modifier.offlineMinimizeGesture(onMinimize: () -> Unit): Modifier {
 
 /** Render the same draggable/pinchable/stashable mini player used by online playback. */
 @Composable
-internal fun OfflineFloatingMini(saved: SavedDownload, player: ExoPlayer, onExpand: () -> Unit, onClose: () -> Unit, bottomBar: Dp = 78.dp) {
+internal fun OfflineFloatingMini(saved: SavedDownload, player: ExoPlayer, onExpand: () -> Unit, onClose: () -> Unit, bottomBar: Dp = 88.dp) {
     val scope = rememberCoroutineScope()
     val state = remember(player) { MiniPlayerState(scope) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -133,7 +134,7 @@ internal object OfflinePlaybackBridge {
 }
 
 @Composable
-internal fun OfflineMiniOverlay(bottomBar: Dp = 78.dp) {
+internal fun OfflineMiniOverlay(bottomBar: Dp = 88.dp) {
     val current = OfflinePlaybackBridge.session ?: return
     val context = LocalContext.current
     OfflineFloatingMini(current.saved, current.player,

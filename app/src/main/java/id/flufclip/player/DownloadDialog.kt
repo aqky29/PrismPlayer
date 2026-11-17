@@ -14,6 +14,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.net.Uri
 import android.os.Bundle
+import android.text.format.Formatter
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
@@ -24,6 +25,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -138,10 +141,25 @@ internal data class DownloadChoice(val url: String, val height: Int, val audio: 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable internal fun DownloadDialog(info: StreamInfo, onDismiss: () -> Unit, download: (Int, Boolean) -> Unit) {
-    var choice by remember(info.url) { mutableIntStateOf(0) }
-    val choices = listOf(0 to "Best quality", 1080 to "1080p", 720 to "720p", 480 to "480p", 360 to "360p", -1 to "Audio only")
+    val context = LocalContext.current
+    val options = remember(info) { buildDownloadQualityOptions(info) }
+    var choice by remember(info.url, options) { mutableIntStateOf(options.firstOrNull()?.height ?: 0) }
     val listHeight = (LocalConfiguration.current.screenHeightDp - 310).coerceIn(72, 300).dp
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF272727), contentColor = Color.White, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Surface,
+        contentColor = Color.White,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = {
+            Box(
+                Modifier
+                    .padding(vertical = 10.dp)
+                    .size(width = 40.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(DragHandleInk)
+            )
+        }
+    ) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Download video", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
@@ -152,14 +170,24 @@ internal data class DownloadChoice(val url: String, val height: Int, val audio: 
                 Text(info.name, Modifier.weight(1f).padding(start = 12.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             }
             Text("Download quality", Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp), style = MaterialTheme.typography.labelLarge, color = Color.LightGray)
-            Column(Modifier.heightIn(max = listHeight).verticalScroll(rememberScrollState())) {
-                choices.forEach { (height, label) ->
-                    val description = if (height == -1) "MP3" else if (height == 0) "MP4 · best available" else "MP4 · maksimum $label"
-                    PlayerChoiceRow(label, description, selected = choice == height, onClick = { choice = height })
+            if (options.isEmpty()) {
+                Text("No downloadable formats are available for this video.", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), color = Color.LightGray, style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Column(Modifier.heightIn(max = listHeight).verticalScroll(rememberScrollState())) {
+                    options.forEach { option ->
+                        val sizeText = option.estimatedBytes?.let { "~${Formatter.formatFileSize(context, it)}" } ?: "Size unavailable"
+                        val detail = listOfNotNull(
+                            option.containerLabel,
+                            if (option.height == 0) option.resolutionHeight?.let { "${it}p" } ?: "Best available" else null,
+                            if (option.fps > 30) "${option.fps} fps" else null,
+                            sizeText,
+                        ).joinToString(" · ")
+                        PlayerChoiceRow(option.label, detail, selected = choice == option.height, onClick = { choice = option.height })
+                    }
                 }
             }
-            Text("Saved to Download/video-yt-downloader. Quality depends on available formats.", Modifier.padding(horizontal = 20.dp, vertical = 6.dp), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
-            Button(onClick = { download(choice.coerceAtLeast(0), choice == -1) }, modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 20.dp).height(48.dp), shape = RoundedCornerShape(50), colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) {
+            Text("Saved to Download/video-yt-downloader. File sizes are estimates and depend on the final format.", Modifier.padding(horizontal = 20.dp, vertical = 6.dp), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+            Button(onClick = { download(choice.coerceAtLeast(0), choice == -1) }, enabled = options.isNotEmpty(), modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 20.dp).height(48.dp), shape = RoundedCornerShape(50), colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) {
                 Text("Download", fontWeight = FontWeight.SemiBold)
             }
         }
@@ -167,7 +195,7 @@ internal data class DownloadChoice(val url: String, val height: Int, val audio: 
 }
 
 @Composable internal fun PlayerChoiceRow(label: String, detail: String? = null, selected: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp).padding(start = 20.dp, end = 20.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton, onClick = onClick).heightIn(min = 52.dp).padding(start = 20.dp, end = 20.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge, color = Color.White)
             if (!detail.isNullOrBlank()) Text(detail, style = MaterialTheme.typography.bodySmall, color = Color.LightGray)

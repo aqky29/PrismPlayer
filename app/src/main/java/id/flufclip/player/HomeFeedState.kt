@@ -24,10 +24,12 @@ internal class HomeFeedState(
     initialLoggedIn: Boolean = YouTubeAuth.isLoggedIn,
     initialSessionRevision: Int = YouTubeAuth.sessionRevision
 ) {
+    var homeEntries by mutableStateOf<List<HomeEntry>>(emptyList())
     var homePage by mutableStateOf<SearchPage?>(null)
     var homeContinuationToken by mutableStateOf<String?>(null)
     var category by mutableStateOf("All")
     var categoryItems by mutableStateOf<List<InfoItem>>(emptyList())
+    var categoryEntries by mutableStateOf<List<HomeEntry>>(emptyList())
     var categoryPage by mutableStateOf<SearchPage?>(null)
     var liveNext by mutableStateOf<Page?>(null)
     var homeChips by mutableStateOf<List<HomeChip>>(emptyList())
@@ -41,6 +43,66 @@ internal class HomeFeedState(
     var homeLoadJob by mutableStateOf<Job?>(null)
     var lastAccountState by mutableStateOf(initialLoggedIn)
     var homeSessionRevision by mutableIntStateOf(initialSessionRevision)
+
+    private fun filterEntries(entries: List<HomeEntry>, hidden: HiddenFeedItems): List<HomeEntry> {
+        val seenVideos = HashSet<String>()
+        val seenShorts = HashSet<String>()
+        val result = ArrayList<HomeEntry>(entries.size)
+        for (entry in entries) {
+            when (entry) {
+                is HomeEntry.Video -> {
+                    val item = entry.item
+                    if (item.url !in hidden.videos &&
+                        item.uploaderUrl.orEmpty() !in hidden.channels &&
+                        seenVideos.add(item.url)
+                    ) {
+                        result.add(entry)
+                    }
+                }
+                is HomeEntry.ShortsShelf -> {
+                    val cards = entry.items.filter { card ->
+                        val shortsUrl = "https://www.youtube.com/shorts/${card.videoId}"
+                        val watchUrl = "https://www.youtube.com/watch?v=${card.videoId}"
+                        shortsUrl !in hidden.videos && watchUrl !in hidden.videos && seenShorts.add(card.videoId)
+                    }
+                    if (cards.isNotEmpty()) result.add(entry.copy(items = cards))
+                }
+            }
+        }
+        return result
+    }
+
+    private fun mergeEntries(
+        existing: List<HomeEntry>,
+        incoming: List<HomeEntry>,
+        hidden: HiddenFeedItems
+    ): List<HomeEntry> {
+        val seenVideos = existing.filterIsInstance<HomeEntry.Video>().mapTo(HashSet()) { it.item.url }
+        val seenShorts = existing.filterIsInstance<HomeEntry.ShortsShelf>().flatMap { it.items }.mapTo(HashSet()) { it.videoId }
+        val extra = ArrayList<HomeEntry>(incoming.size)
+        for (entry in incoming) {
+            when (entry) {
+                is HomeEntry.Video -> {
+                    val item = entry.item
+                    if (item.url !in hidden.videos &&
+                        item.uploaderUrl.orEmpty() !in hidden.channels &&
+                        seenVideos.add(item.url)
+                    ) {
+                        extra.add(entry)
+                    }
+                }
+                is HomeEntry.ShortsShelf -> {
+                    val cards = entry.items.filter { card ->
+                        val shortsUrl = "https://www.youtube.com/shorts/${card.videoId}"
+                        val watchUrl = "https://www.youtube.com/watch?v=${card.videoId}"
+                        shortsUrl !in hidden.videos && watchUrl !in hidden.videos && seenShorts.add(card.videoId)
+                    }
+                    if (cards.isNotEmpty()) extra.add(entry.copy(items = cards))
+                }
+            }
+        }
+        return existing + extra
+    }
 
     fun mergeHomeChips(updated: List<HomeChip>) {
         if (updated.isEmpty()) return
@@ -77,6 +139,7 @@ internal class HomeFeedState(
             }
             try {
                 var items = HomeFeedCache.read(relatedCachePrefs)
+                var accountEntries: List<HomeEntry> = emptyList()
                 var nextHomePage: SearchPage? = null
                 var nextContinuation: String? = null
 
@@ -85,8 +148,9 @@ internal class HomeFeedState(
                     try {
                         val accountHome = HomeFeed.start(revision)
                         if (revision != YouTubeAuth.sessionRevision) return@launch
-                        if (accountHome.items.isNotEmpty()) {
+                        if (accountHome.entries.isNotEmpty()) {
                             items = accountHome.items
+                            accountEntries = accountHome.entries
                             nextContinuation = accountHome.continuationToken
                         }
                         if (accountHome.chips.isNotEmpty()) {
@@ -108,7 +172,7 @@ internal class HomeFeedState(
 
                 // JALUR 2: Fallback ke Kiosk NewPipe atau Search jika akun belum login atau feed akun kosong (nudge)
                 if (revision != YouTubeAuth.sessionRevision) return@launch
-                if (items.isEmpty()) {
+                if (items.isEmpty() && accountEntries.isEmpty()) {
                     if (!refresh) {
                         try {
                             items = (items + VideoRepository.home()).distinctBy { it.url }
@@ -130,24 +194,36 @@ internal class HomeFeedState(
                 }
 
                 if (revision != YouTubeAuth.sessionRevision) return@launch
-                if (items.isEmpty()) {
+                if (items.isEmpty() && accountEntries.isEmpty()) {
                     onErrorChange(if (getHome().isEmpty()) "Feed is unavailable." else "Cannot refresh feed. Showing the latest videos.")
                 } else {
-                    val updatedHome = if (nextContinuation != null || (YouTubeAuth.isLoggedIn && nextHomePage == null)) {
-                        items.filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }
+                    val useServerOrder = accountEntries.isNotEmpty() && (nextContinuation != null || (YouTubeAuth.isLoggedIn && nextHomePage == null))
+                    val updatedEntries = if (useServerOrder) {
+                        filterEntries(accountEntries, hidden)
                     } else {
-                        HomeRecommendations.rank(items, watchHistory, emptySet(), emptySet())
+                        HomeRecommendations.rank(items, watchHistory, emptySet(), emptySet()).map { HomeEntry.Video(it) }
                     }
+                    val updatedHome = updatedEntries.filterIsInstance<HomeEntry.Video>().map { it.item }
+                    homeEntries = updatedEntries
                     onHomeChange(updatedHome)
                     homePage = nextHomePage
                     homeContinuationToken = nextContinuation
-                    HomeFeedCache.save(homeCachePrefs, updatedHome)
+                    HomeFeedCache.saveEntries(homeCachePrefs, updatedEntries)
                 }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { if (revision == YouTubeAuth.sessionRevision) onErrorChange(if (getHome().isEmpty()) "Failed to load feed: ${e.message ?: "try again"}" else "Cannot refresh feed. Showing the latest videos.") }
             finally { if (revision == YouTubeAuth.sessionRevision) onLoadingChange(false) }
             val live = liveJob.await()
-            if (revision == YouTubeAuth.sessionRevision && live.isNotEmpty()) onHomeChange(HomeRecommendations.withLive(getHome(), live, hidden.videos, hidden.channels))
+            if (revision == YouTubeAuth.sessionRevision && live.isNotEmpty()) {
+                val updated = HomeRecommendations.withLive(getHome(), live, hidden.videos, hidden.channels)
+                val existingUrls = homeEntries.filterIsInstance<HomeEntry.Video>().mapTo(HashSet()) { it.item.url }
+                val newLive = live.filter { it.url.isNotBlank() && it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels && it.url !in existingUrls }
+                    .distinctBy { it.url }.take(4)
+                if (newLive.isNotEmpty()) {
+                    homeEntries = newLive.map { HomeEntry.Video(it) } + homeEntries
+                }
+                onHomeChange(updated)
+            }
         }
     }
 
@@ -180,6 +256,7 @@ internal class HomeFeedState(
                         categoryPage = null
                         liveNext = kiosk.next
                         categoryItems = items
+                        categoryEntries = items.map { HomeEntry.Video(it) }
                         feedEnd = kiosk.next == null
                     } else onErrorChange("Cannot refresh category. Showing the latest videos.")
                 } catch (e: CancellationException) { throw e }
@@ -195,6 +272,7 @@ internal class HomeFeedState(
                 if (items.isNotEmpty() || !force) {
                     categoryPage = page
                     categoryItems = items
+                    categoryEntries = items.map { HomeEntry.Video(it) }
                     feedEnd = page.next == null
                 } else onErrorChange("Cannot refresh category. Showing the latest videos.")
             } catch (e: Exception) { onErrorChange("Failed to load category: ${e.message ?: "try again"}") }
@@ -217,10 +295,10 @@ internal class HomeFeedState(
         if (loading || feedLoading || (chip.title == category && !force)) return
         category = chip.title; selectedChip = chip; onErrorChange(null); feedError = null; feedEnd = false
         if (chip.title == homeChipTitle) {
-            categoryItems = emptyList(); categoryContinuation = null; categoryPage = null; liveNext = null
+            categoryItems = emptyList(); categoryEntries = emptyList(); categoryContinuation = null; categoryPage = null; liveNext = null
             return
         }
-        if (!force) { categoryItems = emptyList(); categoryPage = null; categoryContinuation = null; liveNext = null }
+        if (!force) { categoryItems = emptyList(); categoryEntries = emptyList(); categoryPage = null; categoryContinuation = null; liveNext = null }
         if (!chip.hasEndpoint) {
             startFallbackCategory(chip.title, force, scope, relatedCachePrefs, watchHistory, hidden, getHome, onLoadingChange, onErrorChange)
             return
@@ -231,8 +309,10 @@ internal class HomeFeedState(
             try {
                 val page = HomeFeed.chip(chip, revision)
                 if (revision != YouTubeAuth.sessionRevision || selectedChip != chip || category != chip.title) return@launch
-                val items = page.items.filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }.distinctBy { it.url }
-                if (items.isNotEmpty() || !force) {
+                val filteredEntries = filterEntries(page.entries, hidden)
+                val items = filteredEntries.filterIsInstance<HomeEntry.Video>().map { it.item }
+                if (filteredEntries.isNotEmpty() || !force) {
+                    categoryEntries = filteredEntries
                     categoryItems = items
                     categoryContinuation = page.continuationToken
                     feedEnd = page.continuationToken == null
@@ -259,10 +339,10 @@ internal class HomeFeedState(
         if (loading || feedLoading || (value == category && !force)) return
         category = value; selectedChip = null; onErrorChange(null); feedError = null; feedEnd = false
         if (value == homeChipTitle) {
-            categoryItems = emptyList(); categoryContinuation = null; categoryPage = null; liveNext = null
+            categoryItems = emptyList(); categoryEntries = emptyList(); categoryContinuation = null; categoryPage = null; liveNext = null
             return
         }
-        if (!force) { categoryItems = emptyList(); categoryPage = null; categoryContinuation = null; liveNext = null }
+        if (!force) { categoryItems = emptyList(); categoryEntries = emptyList(); categoryPage = null; categoryContinuation = null; liveNext = null }
         startFallbackCategory(value, force, scope, relatedCachePrefs, watchHistory, hidden, getHome, onLoadingChange, onErrorChange)
     }
 
@@ -313,10 +393,11 @@ internal class HomeFeedState(
                             if (revision != YouTubeAuth.sessionRevision || token != homeContinuationToken || currentCategory != category) return@launch
                             homeContinuationToken = nextPage.continuationToken
                             val currentHome = getHome()
-                            val existing = currentHome.mapTo(HashSet()) { it.url }
-                            val newItems = nextPage.items.filter { it.url !in existing && it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }
-                            feedEnd = newItems.isEmpty() && nextPage.continuationToken == null
-                            onHomeChange(currentHome + newItems)
+                            val baseEntries = if (homeEntries.isNotEmpty()) homeEntries else currentHome.map { HomeEntry.Video(it) }
+                            val merged = mergeEntries(baseEntries, nextPage.entries, hidden)
+                            homeEntries = merged
+                            feedEnd = nextPage.continuationToken == null
+                            onHomeChange(merged.filterIsInstance<HomeEntry.Video>().map { it.item })
                         } catch (e: CancellationException) { throw e }
                         catch (_: Exception) {
                             if (revision == YouTubeAuth.sessionRevision && token == homeContinuationToken) homeContinuationToken = null
@@ -336,7 +417,10 @@ internal class HomeFeedState(
                             homePage = fallback
                             newItems = fallback.items.filterIsInstance<StreamInfoItem>().filter { it.url !in existing }
                         }
-                        val updated = getHome() + HomeRecommendations.rank(newItems, watchHistory, emptySet(), emptySet())
+                        val rankedNew = HomeRecommendations.rank(newItems, watchHistory, emptySet(), emptySet())
+                        val updated = getHome() + rankedNew
+                        val baseEntries = if (homeEntries.isNotEmpty()) homeEntries else getHome().map { HomeEntry.Video(it) }
+                        homeEntries = baseEntries + rankedNew.map { HomeEntry.Video(it) }
                         feedEnd = newItems.isEmpty()
                         onHomeChange(updated)
                     }
@@ -346,10 +430,11 @@ internal class HomeFeedState(
                         val page = HomeFeed.more(token, revision)
                         if (revision != YouTubeAuth.sessionRevision || currentChip != selectedChip || currentCategory != category || token != categoryContinuation) return@launch
                         categoryContinuation = page.continuationToken
-                        val updated = (categoryItems + page.items.filter {
-                            it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels
-                        }).distinctBy { it.url }
-                        feedEnd = page.continuationToken == null || updated.size == categoryItems.size
+                        val baseEntries = if (categoryEntries.isNotEmpty()) categoryEntries else categoryItems.filterIsInstance<StreamInfoItem>().map { HomeEntry.Video(it) }
+                        val merged = mergeEntries(baseEntries, page.entries, hidden)
+                        val updated = merged.filterIsInstance<HomeEntry.Video>().map { it.item }
+                        feedEnd = page.continuationToken == null || merged.size == baseEntries.size
+                        categoryEntries = merged
                         categoryItems = updated
                         mergeHomeChips(page.chips)
                     }
@@ -363,6 +448,7 @@ internal class HomeFeedState(
                             .filter { it.url !in hidden.videos && it.uploaderUrl.orEmpty() !in hidden.channels }).distinctBy { it.url }
                         feedEnd = page.next == null || updated.size == categoryItems.size
                         categoryItems = updated
+                        categoryEntries = updated.filterIsInstance<StreamInfoItem>().map { HomeEntry.Video(it) }
                     }
                 } else {
                     val current = categoryPage
@@ -373,6 +459,7 @@ internal class HomeFeedState(
                         val updated = (categoryItems + page.items.filterIsInstance<StreamInfoItem>()).distinctBy { it.url }
                         feedEnd = page.next == null || updated.size == categoryItems.size
                         categoryItems = updated
+                        categoryEntries = updated.filterIsInstance<StreamInfoItem>().map { HomeEntry.Video(it) }
                     }
                 }
             } catch (e: CancellationException) { throw e }

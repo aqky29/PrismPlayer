@@ -75,7 +75,12 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -93,6 +98,10 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -144,7 +153,11 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     val homeCachePrefs = remember(YouTubeAuth.sessionScopeId) { context.getSharedPreferences("home_feed_cache_v2_${YouTubeAuth.sessionScopeId}", Context.MODE_PRIVATE) }
     val relatedCachePrefs = remember(YouTubeAuth.sessionScopeId) { context.getSharedPreferences("home_related_cache_v2_${YouTubeAuth.sessionScopeId}", Context.MODE_PRIVATE) }
     var home by remember(YouTubeAuth.sessionScopeId) { mutableStateOf(HomeFeedCache.read(homeCachePrefs)) }
-    val feedState = remember { HomeFeedState() }
+    val feedState = remember(YouTubeAuth.sessionScopeId) {
+        HomeFeedState().apply {
+            homeEntries = HomeFeedCache.readEntries(homeCachePrefs)
+        }
+    }
     var showLoginDialog by remember { mutableStateOf(false) }
     var addLoginAccount by remember { mutableStateOf(false) }
     var showAccountDialog by remember { mutableStateOf(false) }
@@ -163,22 +176,33 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         )
     }
     LaunchedEffect(searchState.active, searchState.query) {
-        searchState.suggestions = emptyList()
         val term = searchState.query.trim()
-        if (searchState.active && term.isNotBlank()) {
-            delay(350)
-            try { searchState.suggestions = VideoRepository.suggestions(term).distinct().take(10) }
-            catch (e: CancellationException) { throw e }
-            catch (_: Exception) { searchState.suggestions = emptyList() }
+        if (!searchState.active || term.isBlank()) {
+            searchState.suggestions = emptyList()
+            return@LaunchedEffect
+        }
+        delay(SEARCH_SUGGESTION_DEBOUNCE_MS)
+        try {
+            searchState.suggestions = VideoRepository.suggestions(term).distinct().take(SEARCH_SUGGESTION_LIMIT)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            searchState.suggestions = emptyList()
         }
     }
     val browse = remember { BrowseState() }
     var accountPlaylist by remember(YouTubeAuth.sessionRevision) { mutableStateOf<AccountPlaylist?>(null) }
     var savePlaylistVideoId by remember(YouTubeAuth.sessionRevision) { mutableStateOf<String?>(null) }
     savePlaylistVideoId?.let { id -> SavePlaylistDialog(id, onDismiss = { savePlaylistVideoId = null }, onSelectedPlaylists = { Engagement.setPlaylists(id, it) }) }
+    var channelDownloadTarget by remember { mutableStateOf<StreamInfo?>(null) }
     var selected by remember { mutableStateOf<StreamInfo?>(null) }
     var pendingVideo by remember { mutableStateOf<PendingVideo?>(null) }
     var openJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var inlineCandidate by remember { mutableStateOf<StreamInfoItem?>(null) }
+    var inlineInfo by remember { mutableStateOf<StreamInfo?>(null) }
+    var inlineJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var inlineMuted by remember { mutableStateOf(true) }
+    var inlineCcEnabled by remember { mutableStateOf(false) }
     val watchPrefs = remember { context.getSharedPreferences("watch_history", Context.MODE_PRIVATE) }
     var watchHistory by remember { mutableStateOf(WatchHistory.read(watchPrefs)) }
     val accountHistorySession = YouTubeAuth.sessionRevision
@@ -275,18 +299,30 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     var showDownloads by remember { mutableStateOf(false) }
     var requestedDownload by remember { mutableStateOf<String?>(null) }
     var pendingDownload by remember { mutableStateOf<DownloadChoice?>(null) }
+    var pendingNotificationDownload by remember { mutableStateOf<DownloadChoice?>(null) }
+    var askedNotificationPermission by remember { mutableStateOf(false) }
     val downloadState by DownloadStatus.state.collectAsState()
     val launchDownload: (DownloadChoice) -> Unit = { choice ->
-        try {
-            val intent = Intent(context, DownloadService::class.java)
-                .putExtra("url", choice.url).putExtra("title", choice.video.title).putExtra("video", choice.video.json().toString())
-                .putExtra("height", choice.height).putExtra("audio", choice.audio)
-            ContextCompat.startForegroundService(context, intent)
-            (context as? MainActivity)?.pipPlayer?.pause()
-            SavedDownloads.open(context)
-        } catch (e: Exception) {
-            DownloadStatus.state.value = DownloadState(message = "Cannot start download: ${e.message}")
+        if (DownloadStatus.state.value.running || downloadState.running) {
+            android.widget.Toast.makeText(context, "A download is already in progress", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            try {
+                val intent = Intent(context, DownloadService::class.java)
+                    .putExtra("url", choice.url).putExtra("title", choice.video.title).putExtra("video", choice.video.json().toString())
+                    .putExtra("height", choice.height).putExtra("audio", choice.audio)
+                ContextCompat.startForegroundService(context, intent)
+                android.widget.Toast.makeText(context, "Downloading in background", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                val message = "Cannot start download: ${e.message ?: e.javaClass.simpleName}"
+                DownloadStatus.state.value = DownloadState(video = choice.video, message = message, phase = DownloadPhase.FAILED)
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+            }
         }
+    }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
+        val choice = pendingNotificationDownload
+        pendingNotificationDownload = null
+        if (choice != null) launchDownload(choice)
     }
     val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val choice = pendingDownload
@@ -385,10 +421,18 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             android.widget.Toast.makeText(context, "Wait for the current download to finish", android.widget.Toast.LENGTH_SHORT).show()
         } else {
             val choice = DownloadChoice(target.url, height, audio, DownloadVideo(target.url, target.name, target.uploaderName.orEmpty(), target.uploaderUrl.orEmpty(), target.thumbnails.lastOrNull()?.url.orEmpty(), target.uploaderAvatars.lastOrNull()?.url.orEmpty(), target.duration.coerceAtLeast(0) * 1000, target.viewCount, target.likeCount, target.uploaderSubscriberCount, target.description?.content.orEmpty()))
-            if (android.os.Build.VERSION.SDK_INT <= 28 && ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                pendingDownload = choice
-                storagePermission.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            } else launchDownload(choice)
+            when {
+                android.os.Build.VERSION.SDK_INT <= 28 && ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED -> {
+                    pendingDownload = choice
+                    storagePermission.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                }
+                android.os.Build.VERSION.SDK_INT >= 33 && !askedNotificationPermission && ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED -> {
+                    askedNotificationPermission = true
+                    pendingNotificationDownload = choice
+                    notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+                else -> launchDownload(choice)
+            }
         }
     }
     var showQuality by remember { mutableStateOf(false) }
@@ -398,7 +442,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     /** Panel "Bab" terbuka: di halaman tonton sebagai panel bawah, di layar penuh menempel di samping seperti komentar. */
     var chaptersOpen by remember { mutableStateOf(false) }
     val player = remember {
-        ExoPlayer.Builder(context).build().apply {
+        ExoPlayer.Builder(context)
+            .setLoadControl(playbackLoadControl())
+            .setLivePlaybackSpeedControl(playbackLiveSpeedControl())
+            .build().apply {
             addAnalyticsListener(object : AnalyticsListener {
                 override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
                     android.util.Log.d("FlufPlayback", "state=$state pos=$currentPosition buffer=$bufferedPosition total=$totalBufferedDuration loading=$isLoading live=$isCurrentMediaItemLive")
@@ -566,6 +613,80 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
         }
     }
+    fun stopInlinePlayback(clearCandidate: Boolean = true) {
+        inlineJob?.cancel()
+        inlineJob = null
+        inlineInfo = null
+        if (clearCandidate) inlineCandidate = null
+        if (selected == null && pendingVideo == null && !shortsMode) {
+            player.stop()
+            player.clearMediaItems()
+            player.volume = 1f
+            player.setAudioAttributes(AudioAttributes.DEFAULT, true)
+        }
+    }
+    val inlineEligible = selected == null &&
+        pendingVideo == null &&
+        !shortsMode &&
+        !inPip &&
+        !showHistory &&
+        (mainTab == "home" || mainTab == "subscriptions") &&
+        !searchState.active &&
+        (!searchState.mode || isInlineSearchFilter(searchState.filter)) &&
+        browse.channel == null &&
+        browse.playlist == null
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, inlineEligible) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && selected == null && pendingVideo == null && !shortsMode && inlineInfo != null) {
+                player.playWhenReady = false
+            } else if (event == Lifecycle.Event.ON_START && inlineEligible && inlineInfo != null && player.playbackState != Player.STATE_IDLE) {
+                player.playWhenReady = true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(inlineEligible, inlineCandidate?.url) {
+        if (!inlineEligible) {
+            stopInlinePlayback()
+            return@LaunchedEffect
+        }
+        val target = inlineCandidate ?: run {
+            stopInlinePlayback(clearCandidate = false)
+            return@LaunchedEffect
+        }
+        val targetKey = videoKey(target.url)
+        if (targetKey.isBlank()) return@LaunchedEffect
+        val currentKey = inlineInfo?.let { videoKey(it.url) }
+        if (currentKey == targetKey && player.playbackState != Player.STATE_IDLE) return@LaunchedEffect
+        inlineJob?.cancel()
+        inlineInfo = null
+        inlineJob = scope.launch {
+            try {
+                val resolved = withTimeoutOrNull(20_000) { VideoRepository.resolve(target.url, context) } ?: return@launch
+                if (!inlineEligible || videoKey(inlineCandidate?.url.orEmpty()) != targetKey) return@launch
+                val inlineMaxHeight = maxVideoHeight.coerceAtMost(720)
+                trackState.selectedSubtitle = if (inlineCcEnabled) firstSupportedSubtitle(resolved) else null
+                trackState.qualityMode = "auto"
+                trackState.manualAudioOverride = false
+                trackState.attemptedAudioFallback = null
+                configurePreferredAudio(player, resolved, PlayerSettings.audioPreference)
+                player.pauseAtEndOfMediaItems = false
+                player.setPlaybackSpeed(1f)
+                player.volume = if (inlineMuted) 0f else 1f
+                player.setAudioAttributes(AudioAttributes.DEFAULT, !inlineMuted)
+                val (initial, audio) = pickStreams(resolved, inlineMaxHeight)
+                trackState.playQuality(player, context, inlineMaxHeight, resolved, initial, audio, 0L, true)
+                trackState.selectedAudio = audio
+                inlineInfo = resolved
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Keep static card thumbnail if inline prefetch/resolve fails.
+            }
+        }
+    }
     fun closePlayer() {
         openJob?.cancel(); openJob = null; playlistQueueJob?.cancel(); playlistQueueJob = null; pendingVideo = null; dragProgress = null
         PlaybackTracker.stop(player.currentPosition / 1000L)
@@ -594,8 +715,11 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             selected != null && !minimized -> minimized = true
             accountPlaylist != null -> accountPlaylist = null
             browse.playlist != null -> browse.playlist = null
-            browse.channel != null -> { browse.channel = null; if (mainTab == "shorts" && shorts.tabQueue && queue.isNotEmpty()) shortsMode = true }
-            searchState.mode -> { searchState.mode = false; searchState.query = "" }
+            browse.channel != null && (browse.channelSearchActive || browse.channelSearchSubmitted.isNotBlank()) -> {
+                browse.closeChannelSearch()
+            }
+            browse.channel != null -> { browse.closeChannelSearch(); browse.channel = null; if (mainTab == "shorts" && shorts.tabQueue && queue.isNotEmpty()) shortsMode = true }
+            searchState.mode -> { searchState.mode = false; searchState.setQueryText("") }
             mainTab != "home" -> mainTab = "home"
         }
         error = null
@@ -607,6 +731,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             feedState.homeLoadJob?.cancel()
             loading = false
             home = emptyList()
+            feedState.homeEntries = emptyList()
             subs.reset()
             feedState.homeContinuationToken = null
             feedState.feedLoading = false
@@ -617,6 +742,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         feedState.homeChipTitle = "All"
         feedState.category = "All"
         feedState.categoryItems = emptyList()
+        feedState.categoryEntries = emptyList()
         feedState.categoryContinuation = null
         feedState.lastAccountState = loggedIn
         feedState.loadHome(false, scope, topics, homeCachePrefs, relatedCachePrefs, watchHistory, searchHistory, hidden, loading, { home }, { home = it }, { loading = it }, { error = it })
@@ -634,16 +760,12 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         VideoRepository.channelTabPage(page, ChannelTabs.LIVESTREAMS).items.filterIsInstance<StreamInfoItem>().firstOrNull { it.isOngoingLive() }
                     }.getOrNull()
                 } else null
-                val firstDeferred = async { VideoRepository.channelTabPage(page, ChannelTabs.VIDEOS) }
+                val hasHomeShelves = page.uiData?.homeShelves?.isNotEmpty() == true
+                val firstDeferred = if (!hasHomeShelves) async { VideoRepository.channelTabPage(page, ChannelTabs.VIDEOS) } else null
 
                 val ongoingLive = liveDeferred?.await()
-                val first = firstDeferred.await()
-                val items = if (ongoingLive != null && first.items.none { (it as? StreamInfoItem)?.url == ongoingLive.url }) {
-                    listOf(ongoingLive) + first.items
-                } else {
-                    first.items
-                }
-                browse.next = first.next; browse.error = null; showHistory = false
+                val first = firstDeferred?.await()
+                browse.error = null; showHistory = false
                 // Seperti YouTube: membuka channel tidak mematikan pemutaran. Dari layar tonton videonya
                 // berubah menjadi mini player, dan mini player yang sudah melayang tetap berjalan di atas
                 // halaman channel.
@@ -654,7 +776,18 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 } else {
                     savePosition(); player.stop(); shortsMode = false; selected = null; trackState.quality = null; trackState.selectedAudio = null
                 }
-                browse.channel = page; browse.channelTab = ChannelTabs.VIDEOS; browse.channelItems = items; browse.playlist = null
+                browse.openChannelPage(page)
+                if (first != null) {
+                    val items = if (ongoingLive != null && first.items.none { (it as? StreamInfoItem)?.url == ongoingLive.url }) {
+                        listOf(ongoingLive) + first.items
+                    } else {
+                        first.items
+                    }
+                    browse.channelItems = items
+                    browse.next = first.next
+                } else if (ongoingLive != null && browse.channelItems.none { (it as? StreamInfoItem)?.url == ongoingLive.url }) {
+                    browse.channelItems = listOf(ongoingLive) + browse.channelItems
+                }
             } catch (e: Exception) { error = "Cannot open channel: ${e.message ?: "try again"}" }
             finally { loading = false }
         }
@@ -689,14 +822,47 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 }
             }
         }
-        mainTab = "home"; searchState.query = term; searchState.lastSearch = term; searchState.filter = filter; searchState.active = false; keyboard?.hide()
+        mainTab = "home"; searchState.setQueryText(term); searchState.lastSearch = term; searchState.filter = filter; searchState.active = false; keyboard?.hide()
         searchHistory.add(term)
         searchState.generation++; searchState.moreLoading = false
-        loading = true; error = null; searchState.mode = true; browse.channel = null; browse.playlist = null; searchState.results = emptyList(); searchState.page = null; searchState.moreError = null
+        val searchGen = searchState.generation
+        loading = true; error = null; searchState.mode = true; browse.closeChannelSearch(); browse.channel = null; browse.playlist = null
+        searchState.results = emptyList(); searchState.page = null; searchState.moreError = null
+        searchState.searchSuggestion = null; searchState.isCorrectedSearch = false
         scope.launch {
-            try { val page = VideoRepository.searchPage(term, filter); searchState.page = page; searchState.results = page.items; if (searchState.results.isEmpty()) error = "No results found." }
-            catch (e: Exception) { error = "Search failed: ${e.message ?: "try again"}" }
-            finally { loading = false }
+            try {
+                val page = VideoRepository.searchPage(term, filter)
+                if (searchGen != searchState.generation) return@launch
+                searchState.page = page
+                searchState.results = page.items
+                searchState.searchSuggestion = page.searchSuggestion
+                searchState.isCorrectedSearch = page.isCorrectedSearch
+                val firstChannel = page.items.filterIsInstance<ChannelInfoItem>().firstOrNull()
+                val firstStream = page.items.filterIsInstance<StreamInfoItem>().firstOrNull { !it.isShortFormContent }
+                    ?: page.items.filterIsInstance<StreamInfoItem>().firstOrNull()
+                if (firstChannel != null) {
+                    val handleMatch = Regex("/@([\\w\\.-]+)").find(firstChannel.url)?.groupValues?.get(1)
+                    val subtitle = if (!handleMatch.isNullOrBlank()) "@$handleMatch" else null
+                    val hasRecentStream = firstStream?.textualUploadDate?.let(::isTodayText) == true
+                    searchHistory.updatePreview(
+                        term = term,
+                        avatarUrl = firstChannel.thumbnails.lastOrNull()?.url,
+                        thumbnailUrl = firstStream?.thumbnails?.lastOrNull()?.url,
+                        subtitle = if (hasRecentStream) "New video" else subtitle,
+                        hasNewVideo = hasRecentStream,
+                    )
+                } else if (firstStream != null) {
+                    searchHistory.updatePreview(
+                        term = term,
+                        thumbnailUrl = firstStream.thumbnails.lastOrNull()?.url,
+                    )
+                }
+                if (searchState.results.isEmpty()) error = "No results found."
+            } catch (e: Exception) {
+                if (searchGen == searchState.generation) error = "Search failed: ${e.message ?: "try again"}"
+            } finally {
+                if (searchGen == searchState.generation) loading = false
+            }
         }
     }
     fun openPlaylist(url: String) {
@@ -735,8 +901,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         trackState.manualAudioOverride = false
         trackState.attemptedAudioFallback = null
         configurePreferredAudio(player, info, PlayerSettings.audioPreference)
-        // Saved positions are relative to an older moving DVR window, not the current live edge.
-        if (info.isOngoingLive()) player.setPlaybackSpeed(1f)
+        // Reset playback speed so new videos and autoplay don't retain 2.0x boost
+        player.setPlaybackSpeed(1f)
         trackState.playQuality(player, context, maxVideoHeight, info, initial, audio, if (info.isOngoingLive()) 0L else resume, true)
         trackState.selectedAudio = audio
         selected = info
@@ -897,10 +1063,12 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 }
                 startInfo(info, resumePosition, startMinimized)
                 pendingVideo = null
-                val index = queue.indexOfFirst { videoKey(it.url) == videoKey(info.url) }
-                val nextUrl = (if (index >= 0) queue.getOrNull(index + 1) else null)?.url
-                    ?: info.relatedItems.filterIsInstance<StreamInfoItem>().firstOrNull { it.url != info.url }?.url
-                nextUrl?.let { VideoRepository.prefetch(it, context) }
+                if (!info.isOngoingLive()) {
+                    val index = queue.indexOfFirst { videoKey(it.url) == videoKey(info.url) }
+                    val nextUrl = (if (index >= 0) queue.getOrNull(index + 1) else null)?.url
+                        ?: info.relatedItems.filterIsInstance<StreamInfoItem>().firstOrNull { it.url != info.url }?.url
+                    nextUrl?.let { VideoRepository.prefetch(it, context) }
+                }
                 scope.launch {
                     withContext(Dispatchers.Default) {
                         runCatching {
@@ -908,7 +1076,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                             if (related.isNotEmpty()) {
                                 val candidates = (related + HomeFeedCache.read(relatedCachePrefs)).distinctBy { it.url }
                                 HomeFeedCache.save(relatedCachePrefs, candidates)
-                                home = HomeRecommendations.rank((related + home).distinctBy { it.url }, watchHistory, emptySet(), emptySet())
+                                if (feedState.homeContinuationToken == null && feedState.homeEntries.none { it is HomeEntry.ShortsShelf }) {
+                                    val ranked = HomeRecommendations.rank((related + home).distinctBy { it.url }, watchHistory, emptySet(), emptySet())
+                                    withContext(Dispatchers.Main) {
+                                        home = ranked
+                                        feedState.homeEntries = ranked.map { HomeEntry.Video(it) }
+                                    }
+                                }
                             }
                         }
                     }
@@ -998,7 +1172,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 uploaderName = entry.uploader
                 if (entry.thumbnail.isNotBlank()) thumbnails = listOf(org.schabi.newpipe.extractor.Image(entry.thumbnail, 720, 1280, org.schabi.newpipe.extractor.Image.ResolutionLevel.HIGH))
             }
-            queue = listOf(item); shorts.index = 0; shorts.generation++; shorts.tabQueue = false; shorts.moreError = null; minimized = false; shortsMode = true
+            queue = listOf(item); shorts.index = 0; shorts.generation++; shorts.tabQueue = false; shorts.infiniteQueue = false; shorts.pendingSequenceParams = null; shorts.moreError = null; minimized = false; shortsMode = true
         } else if (!entry.playlistId.isNullOrBlank()) {
             playPlaylistContext(
                 playlistId = entry.playlistId,
@@ -1111,6 +1285,74 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             catch (_: Exception) { android.widget.Toast.makeText(context, "Cast is unavailable on this device", android.widget.Toast.LENGTH_SHORT).show() }
         },
     )
+    fun StreamInfoItem.toWatchedVideo() = WatchedVideo(
+        url = url,
+        title = name,
+        uploader = uploaderName.orEmpty(),
+        thumbnail = thumbnails.lastOrNull()?.url.orEmpty(),
+        position = 0L
+    )
+    val channelVideoActions = ChannelVideoActions(
+        onCast = historyActions.castScreen,
+        onPlayNextInQueue = { stream -> historyActions.queue(stream.toWatchedVideo(), true) },
+        onPlayLastInQueue = { stream -> historyActions.queue(stream.toWatchedVideo(), false) },
+        onSaveToWatchLater = { stream -> historyActions.watchLater(stream.toWatchedVideo()) },
+        onSaveToPlaylist = { stream -> historyActions.save(stream.toWatchedVideo()) },
+        onDownload = { stream ->
+            scope.launch {
+                android.widget.Toast.makeText(context, "Preparing download options...", android.widget.Toast.LENGTH_SHORT).show()
+                try {
+                    val resolved = withTimeoutOrNull(20_000) { VideoRepository.resolve(stream.url, context) }
+                    if (resolved != null) {
+                        channelDownloadTarget = resolved
+                    } else {
+                        android.widget.Toast.makeText(context, "Could not load download formats", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    android.widget.Toast.makeText(context, "Could not load download formats", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        },
+        onShare = { stream -> historyActions.share(stream.toWatchedVideo()) }
+    )
+    val channelPlaylistActions = ChannelPlaylistActions(
+        onPlayNextInQueue = { playlistItem ->
+            val current = selected
+            if (current == null && !shortsMode) {
+                openPlaylist(playlistItem.url)
+            } else if (current == null || shortsMode) {
+                android.widget.Toast.makeText(context, "Queue is available while watching a video", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                scope.launch {
+                    try {
+                        val pl = VideoRepository.playlist(playlistItem.url)
+                        val streams = pl.relatedItems.filterIsInstance<StreamInfoItem>()
+                        if (streams.isNotEmpty()) {
+                            val currentIdx = queue.indexOfFirst { videoKey(it.url) == videoKey(current.url) }.coerceAtLeast(0)
+                            val updated = queue.toMutableList()
+                            val insertAt = (currentIdx + 1).coerceAtMost(updated.size)
+                            updated.addAll(insertAt, streams)
+                            queue = updated.distinctBy { videoKey(it.url) }
+                            android.widget.Toast.makeText(context, "Added ${streams.size} videos to play next", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.widget.Toast.makeText(context, "Playlist is empty", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        android.widget.Toast.makeText(context, "Could not load playlist", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        },
+        onShare = { playlistItem ->
+            val shareIntent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, playlistItem.url)
+            runCatching { context.startActivity(Intent.createChooser(shareIntent, "Share playlist")) }
+                .onFailure { android.widget.Toast.makeText(context, "No app available to share", android.widget.Toast.LENGTH_SHORT).show() }
+        }
+    )
     fun open(item: StreamInfoItem) {
         val meta = HomeFeed.metaOf(item.url)
         val listParam = runCatching { Uri.parse(item.url).getQueryParameter("list") }.getOrNull()?.takeIf { it.isNotBlank() }
@@ -1153,6 +1395,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             shorts.index = index.coerceAtLeast(0)
             shorts.generation++
             shorts.tabQueue = false
+            shorts.infiniteQueue = false
+            shorts.pendingSequenceParams = null
             shorts.moreError = null
             minimized = false
             shortsMode = true
@@ -1168,6 +1412,20 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
             queue = list
             shortsMode = false
+            val activeInline = inlineInfo
+            if (activeInline != null && videoKey(activeInline.url) == videoKey(item.url) && player.playbackState != Player.STATE_IDLE) {
+                inlineJob?.cancel(); inlineJob = null
+                inlineCandidate = null
+                inlineInfo = null
+                player.volume = 1f
+                player.setAudioAttributes(AudioAttributes.DEFAULT, true)
+                player.playWhenReady = true
+                selected = activeInline
+                minimized = false
+                pendingVideo = null
+                return
+            }
+            stopInlinePlayback()
             val meta = HomeFeed.metaOf(item.url)
             val initialResume = meta?.resumePositionMs?.takeIf { it > 0L }
                 ?: if (meta != null && meta.progressPercent in 1..98 && item.duration > 0) {
@@ -1193,10 +1451,18 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
         if (items.isEmpty()) return
         if (pendingVideo != null) closePlayer()
+        val seedSeq = cards.getOrNull(index)?.sequenceParams?.takeIf { it.isNotBlank() }
+            ?: cards.firstOrNull { it.sequenceParams.isNotBlank() }?.sequenceParams
         queue = items
         shorts.index = index.coerceIn(0, items.size - 1)
         shorts.generation++
         shorts.tabQueue = false
+        shorts.infiniteQueue = true
+        shorts.fromFeed = true
+        shorts.seqNext = null
+        shorts.pendingSequenceParams = seedSeq
+        shorts.page = null
+        shorts.topicIndex = 0
         shorts.moreError = null
         minimized = false
         shortsMode = true
@@ -1205,7 +1471,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     LaunchedEffect(mainTab, shorts.request, YouTubeAuth.sessionRevision) {
         if (mainTab != "shorts") return@LaunchedEffect
         minimized = false
-        shortsMode = true; shorts.tabQueue = true
+        shortsMode = true; shorts.tabQueue = true; shorts.infiniteQueue = false; shorts.pendingSequenceParams = null
         queue = emptyList(); shorts.index = 0; shorts.generation++
         shorts.loading = true
         shorts.error = null
@@ -1275,8 +1541,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         if (!shortsMode) return@LaunchedEffect
         for (offset in intArrayOf(0, 1, 2, -1)) queue.getOrNull(shorts.index + offset)?.let { shortsResolver.prefetch(it.url) }
     }
-    // Isi ulang antrean tab Shorts saat sisa halaman tinggal sedikit.
-    val shortsNeedMore = shortsMode && shorts.tabQueue && queue.isNotEmpty() && queue.size - shorts.index <= 4
+    // Isi ulang antrean Shorts (tab Shorts maupun Shorts yang dibuka dari Home/Subs) saat sisa halaman tinggal sedikit.
+    val shortsNeedMore = shortsMode && (shorts.tabQueue || shorts.infiniteQueue) && queue.isNotEmpty() && queue.size - shorts.index <= 4
     LaunchedEffect(shortsNeedMore, queue.size, shorts.moreRequest, YouTubeAuth.sessionRevision) {
         if (!shortsNeedMore) return@LaunchedEffect
         shorts.moreLoading = true
@@ -1288,6 +1554,18 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             if (shorts.fromFeed) {
                 var feedAttempts = 0
                 try {
+                    val seqParams = shorts.pendingSequenceParams
+                    if (shorts.seqNext == null && !seqParams.isNullOrBlank()) {
+                        shorts.pendingSequenceParams = null
+                        val seeded = ShortsFeed.fromSequenceParams(seqParams)
+                        shorts.seqNext = seeded.next
+                        found += seeded.items.filter { it.url !in hidden.videos && existing.add(videoKey(it.url)) }
+                    } else if (shorts.seqNext == null && !shorts.tabQueue) {
+                        shorts.pendingSequenceParams = null
+                        val started = ShortsFeed.start()
+                        shorts.seqNext = started.next
+                        found += started.items.filter { it.url !in hidden.videos && existing.add(videoKey(it.url)) }
+                    }
                     while (found.isEmpty() && feedAttempts < 3) {
                         val token = shorts.seqNext ?: break
                         val feed = ShortsFeed.more(token)
@@ -1297,7 +1575,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     }
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) { /* jatuh ke pencarian untuk putaran ini; token feed tetap disimpan untuk dicoba lagi */ }
-                if (found.isNotEmpty()) fromFeed = true else if (shorts.seqNext == null) shorts.fromFeed = false
+                if (found.isNotEmpty()) fromFeed = true else if (shorts.seqNext == null && shorts.pendingSequenceParams == null) shorts.fromFeed = false
             }
             var page = shorts.page
             var attempts = 0
@@ -1325,6 +1603,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     }
     val currentOpen = rememberUpdatedState<(String) -> Unit> { openUrl(it) }
     val currentSelected = rememberUpdatedState(selected)
+    val currentInlineInfo = rememberUpdatedState(inlineInfo)
     val currentAutoplay = rememberUpdatedState(autoplay)
     val currentShortsMode = rememberUpdatedState(shortsMode)
     val currentPending = rememberUpdatedState(pendingVideo)
@@ -1387,6 +1666,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             override fun onPlayerError(error: PlaybackException) {
                 if (currentPending.value != null) return
                 val info = currentSelected.value
+                val liveInfo = info ?: currentInlineInfo.value
                 val forbidden = generateSequence<Throwable>(error) { it.cause }.take(8).any {
                     (it as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode == 403
                 }
@@ -1396,8 +1676,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 }
                 // Window DVR HLS bergeser. Jika posisi jatuh di belakang window, ExoPlayer melempar
                 // BehindLiveWindowException; pulihkan ke live edge, jangan biarkan pemutar mati.
-                if (info != null && (player.isCurrentMediaItemLive || info.isOngoingLive()) && error.causedByBehindLiveWindow()) {
-                    val key = videoKey(info.url)
+                if (liveInfo != null && (player.isCurrentMediaItemLive || liveInfo.isOngoingLive()) && error.causedByBehindLiveWindow()) {
+                    val key = videoKey(liveInfo.url)
                     val now = android.os.SystemClock.elapsedRealtime()
                     if (lastLiveRecoveryKey != key || now - lastLiveRecoveryAt > 30_000L) {
                         lastLiveRecoveryKey = key
@@ -1410,7 +1690,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     }
                 }
                 // URL stream di cache bisa ditolak server; buang agar percobaan berikutnya resolve ulang.
-                info?.let { VideoRepository.evict(it.url) }
+                liveInfo?.let { VideoRepository.evict(it.url) }
                 if (currentShortsMode.value) info?.let { currentRecover.value(it) }
             }
             override fun onPlaybackStateChanged(state: Int) {
@@ -1422,7 +1702,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     val list = currentQueue.value
                     val index = list.indexOfFirst { videoKey(it.url) == videoKey(info.url) }
                     val next = if (index >= 0) list.getOrNull(index + 1) else if (currentAutoplay.value) info.relatedItems.filterIsInstance<StreamInfoItem>().firstOrNull { it.url != info.url } else null
-                    if (next != null) currentOpen.value(next.url)
+                    if (next != null) {
+                        player.setPlaybackSpeed(1f)
+                        currentOpen.value(next.url)
+                    }
                 }
             }
         }
@@ -1493,7 +1776,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 minimized = false; shortsMode = true; shorts.tabQueue = true
                 queue = emptyList(); shorts.index = 0; shorts.error = null; shorts.loading = true
             }
-            mainTab = tab; showHistory = false; accountPlaylist = null; searchState.mode = false; searchState.active = false; browse.channel = null; browse.playlist = null; feedState.category = feedState.homeChipTitle; feedState.selectedChip = null; feedState.categoryItems = emptyList(); feedState.categoryContinuation = null; error = null
+            mainTab = tab; showHistory = false; accountPlaylist = null; searchState.mode = false; searchState.active = false; browse.closeChannelSearch(); browse.channel = null; browse.playlist = null; feedState.category = feedState.homeChipTitle; feedState.selectedChip = null; feedState.categoryItems = emptyList(); feedState.categoryEntries = emptyList(); feedState.categoryContinuation = null; error = null
         }
     }
     val offlineMini = OfflinePlaybackBridge.session
@@ -1540,46 +1823,129 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         val wideWatch = isWideWatchLayout(maxWidth, maxHeight)
         val screenWidth = maxWidth
         val screenHeight = maxHeight
-        val bottomNavAutoHide = rememberBottomNavAutoHideState(
-            mainTab,
-            searchState.active,
-            searchState.mode,
-            browse.channel?.info?.url,
-            browse.playlist?.url,
-            feedState.category,
-            feedState.selectedChip,
-            minimized,
-        )
-        val bottomNavVisible = if (screenWidth < 600.dp) bottomNavAutoHide.visible else true
-        FrostedGlassBackdropHost(Modifier.fillMaxSize()) {
-          val glassBackdrop = LocalFrostedGlassBackdrop.current
-          Box(
-              (if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding())
-                  .bottomNavAutoHide(bottomNavAutoHide)
-          ) {
-            Column(Modifier.fillMaxSize().frostedGlassSource(glassBackdrop)) {
-            if (showFeed) FeedTopBar(
-                searchActive = searchState.active, query = searchState.query, onQueryChange = { searchState.query = it }, onSearch = { search() },
-                onCloseSearch = { searchState.active = false; keyboard?.hide() },
-                showBack = browse.playlist != null || browse.channel != null || searchState.mode, onBack = { back() },
-                searchTitle = searchState.lastSearch.takeIf { searchState.mode && browse.playlist == null && browse.channel == null },
-                onEditSearch = { searchState.query = searchState.lastSearch; searchState.active = true },
-                channelShareUrl = browse.channel?.info?.url,
-            )
-            val showTopTabs = showFeed && !searchState.active && browse.playlist == null && browse.channel == null && !searchState.mode && (mainTab == "home" || mainTab == "subscriptions")
+        val showTopTabs = showFeed && !searchState.active && browse.playlist == null && browse.channel == null && !searchState.mode && (mainTab == "home" || mainTab == "subscriptions")
+        val allowTopBarCollapse = showTopTabs && screenWidth < 600.dp
+        val density = LocalDensity.current
+        val topBarHeightDp = 52.dp
+        val topBarHeightPx = with(density) { topBarHeightDp.toPx() }
+        var topBarOffsetPx by remember { mutableFloatStateOf(0f) }
+        LaunchedEffect(allowTopBarCollapse, mainTab, feedState.category) {
+            topBarOffsetPx = 0f
+        }
+        val topBarCollapseConnection = remember(topBarHeightPx, allowTopBarCollapse) {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (!allowTopBarCollapse || available.y <= 0f || topBarOffsetPx >= 0f) return Offset.Zero
+                    val prev = topBarOffsetPx
+                    val next = (prev + available.y).coerceIn(-topBarHeightPx, 0f)
+                    topBarOffsetPx = next
+                    return Offset(0f, next - prev)
+                }
+
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource
+                ): Offset {
+                    if (!allowTopBarCollapse || consumed.y >= 0f) return Offset.Zero
+                    val next = (topBarOffsetPx + consumed.y).coerceIn(-topBarHeightPx, 0f)
+                    topBarOffsetPx = next
+                    return Offset.Zero
+                }
+            }
+        }
+        Box(
+            (if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding())
+                .nestedScroll(topBarCollapseConnection)
+        ) {
+            Column(Modifier.fillMaxSize()) {
+            if (showFeed) {
+                val channelTitleVisible by remember(browse.channel, browse.playlist, browse.channelSearchActive, browse.channelSearchSubmitted, gridState) {
+                    derivedStateOf {
+                        browse.channel == null ||
+                            browse.playlist != null ||
+                            browse.channelSearchActive ||
+                            browse.channelSearchSubmitted.isNotBlank() ||
+                            gridState.firstVisibleItemIndex > 0 ||
+                            gridState.firstVisibleItemScrollOffset > 360
+                    }
+                }
+                val renderTopBar: @Composable () -> Unit = {
+                    FeedTopBar(
+                        searchActive = searchState.active,
+                        query = searchState.queryField,
+                        onQueryChange = { searchState.queryField = it },
+                        onSearch = { search() },
+                        onCloseSearch = { searchState.active = false; keyboard?.hide() },
+                        showBack = browse.playlist != null || browse.channel != null || searchState.mode,
+                        onBack = { back() },
+                        searchTitle = searchState.lastSearch.takeIf { searchState.mode && browse.playlist == null && browse.channel == null },
+                        onEditSearch = { searchState.setQueryText(searchState.lastSearch); searchState.active = true },
+                        onClearSearch = { searchState.setQueryText("", cursorAtEnd = false); searchState.active = true },
+                        onVoiceSearchResult = { spoken -> search(spoken) },
+                        activeSearchFilter = searchState.filter,
+                        onSelectSearchFilter = { newFilter ->
+                            if (searchState.lastSearch.isNotBlank()) {
+                                search(searchState.lastSearch, newFilter)
+                            } else {
+                                searchState.filter = newFilter
+                            }
+                        },
+                        channelShareUrl = if (browse.playlist == null) browse.channel?.info?.url else null,
+                        channelName = if (browse.playlist == null) browse.channel?.info?.name else browse.playlist?.name,
+                        channelTitleVisible = channelTitleVisible,
+                        channelSearchActive = browse.channelSearchActive,
+                        channelSearchQuery = browse.channelSearchQuery,
+                        onChannelSearchQueryChange = { browse.channelSearchQuery = it },
+                        onToggleChannelSearch = { active ->
+                            if (active) {
+                                browse.channelSearchActive = true
+                            } else {
+                                browse.closeChannelSearch()
+                            }
+                        },
+                        onSubmitChannelSearch = {
+                            browse.channelSearchActive = false
+                            browse.submitChannelSearch(browse.channelSearchQuery, scope)
+                        },
+                        onStartSearch = { searchState.active = true },
+                    )
+                }
+                if (allowTopBarCollapse) {
+                    val visibleHeightDp = with(density) { (topBarHeightPx + topBarOffsetPx).coerceAtLeast(0f).toDp() }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(visibleHeightDp)
+                            .clipToBounds()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .requiredHeight(topBarHeightDp)
+                                .offset { IntOffset(0, topBarOffsetPx.roundToInt()) }
+                        ) {
+                            renderTopBar()
+                        }
+                    }
+                } else {
+                    renderTopBar()
+                }
+            }
             if (showTopTabs) HomeTopTabs(
                 mainTab, feedState.category, feedState.homeChipTitle, visibleChips, selectTab,
                 { feedState.selectCategory(it, false, scope, relatedCachePrefs, watchHistory, hidden, loading, { home }, { loading = it }, { error = it }) },
                 { feedState.selectChip(it, false, scope, relatedCachePrefs, watchHistory, hidden, loading, { home }, { loading = it }, { error = it }) }
             )
-            if (downloadState.message.isNotBlank() && showFeed) DownloadStatusBanner(downloadState, onOpen = { saved -> player.pause(); SavedDownloads.open(context, saved) })
-            if (loading && showFeed && (searchState.mode || browse.channel != null || browse.playlist != null || searchState.active)) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (loading && showFeed && (browse.channel != null || browse.playlist != null || searchState.active)) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (showFeed && searchState.active) {
                 SearchSuggestionList(
-                    query = searchState.query, history = searchHistory.terms, suggestions = searchState.suggestions,
+                    query = searchState.query,
+                    historyEntries = searchHistory.entries,
+                    suggestions = searchState.suggestions,
                     onSearch = { search(it) },
                     onRemoveHistory = { searchHistory.remove(it) },
-                    onPickSuggestion = { searchState.query = it },
+                    onPickSuggestion = { searchState.fillQueryFromSuggestion(it) },
                     modifier = Modifier.weight(1f),
                 )
             } else if (showFeed && mainTab != "home" && browse.channel == null && browse.playlist == null && !searchState.mode) {
@@ -1641,16 +2007,60 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     onOpenChannel = { url -> openChannel(url) },
                     onOpenPlaylist = { url -> openPlaylist(url) },
                     onOpenVideo = { item -> open(item) },
+                    onOpenShorts = { cards, index -> openShortsShelf(cards, index) },
+                    onSaveShort = if (YouTubeAuth.isLoggedIn) {
+                        { card ->
+                            val rev = YouTubeAuth.sessionRevision
+                            scope.launch {
+                                val saveError = ShortsFeed.saveToWatchLater(card.videoId, rev)
+                                android.widget.Toast.makeText(context, saveError ?: "Saved to Watch later", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } else null,
+                    subscribedChannels = subs.channels,
+                    channelVideoActions = channelVideoActions,
+                    channelPlaylistActions = channelPlaylistActions,
+                    onClearChannelSearch = { browse.closeChannelSearch() },
+                    onInlineCandidateChanged = { candidate -> inlineCandidate = candidate },
+                    inlineOverlayFor = { cardItem ->
+                        val activeInline = inlineInfo
+                        val activeKey = activeInline?.let { videoKey(it.url) }
+                        if (activeKey != null && activeKey == videoKey(cardItem.url) && selected == null && pendingVideo == null && !shortsMode) {
+                            {
+                                InlinePlayerOverlay(
+                                    player = player,
+                                    isReady = activePlaybackState == Player.STATE_READY || activePlaybackState == Player.STATE_BUFFERING,
+                                    isLive = activeInline.isOngoingLive(),
+                                    muted = inlineMuted,
+                                    hasCaptions = firstSupportedSubtitle(activeInline) != null,
+                                    captionsEnabled = trackState.selectedSubtitle != null,
+                                    previewFrames = activeInline.previewFrames,
+                                    onToggleMute = {
+                                        inlineMuted = !inlineMuted
+                                        player.volume = if (inlineMuted) 0f else 1f
+                                        player.setAudioAttributes(AudioAttributes.DEFAULT, !inlineMuted)
+                                    },
+                                    onToggleCaptions = {
+                                        val info = inlineInfo
+                                        if (info != null) {
+                                            val nextSub = if (trackState.selectedSubtitle != null) null else firstSupportedSubtitle(info)
+                                            inlineCcEnabled = nextSub != null
+                                            trackState.changeSubtitle(player, context, maxVideoHeight.coerceAtMost(720), info, nextSub)
+                                        }
+                                    },
+                                    onSeekTo = { posMs -> player.seekTo(posMs) },
+                                    onSeekToLiveEdge = { player.seekToDefaultPosition() }
+                                )
+                            }
+                        } else null
+                    },
                 )
             }
-            }
             val currentNavTab = if (searchState.active || (searchState.mode && !shortsMode)) "search" else if (mainTab == "subscriptions") "home" else mainTab
-            if (showFeed) {
-                Box(Modifier.align(Alignment.BottomCenter)) {
-                    HomeNavigation(selected = currentNavTab, onSelect = selectTab, visible = bottomNavVisible)
-                }
+            if (showFeed && !searchState.active) {
+                HomeNavigation(selected = currentNavTab, onSelect = selectTab, docked = true)
             }
-          }
+            }
         }
         if (showHistory && (selected == null || minimized)) {
             if (accountHistoryLoggedIn && !accountHistory.deviceHistory) AccountHistoryScreen(
@@ -1675,8 +2085,9 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 streamType == org.schabi.newpipe.extractor.stream.StreamType.AUDIO_LIVE_STREAM
             val postLive = streamType == org.schabi.newpipe.extractor.stream.StreamType.POST_LIVE_STREAM ||
                 streamType == org.schabi.newpipe.extractor.stream.StreamType.POST_LIVE_AUDIO_STREAM
-            rememberLiveChat(current.url, liveStream || playerLive, postLive, player)
+            rememberLiveChat(current.url, liveStream || (!postLive && playerLive), postLive, player)
         }
+        var fullscreenChat by remember(selected?.url) { mutableStateOf(true) }
         // Move the opaque watch page down with the player before fading it out.
         if (info != null && !shortsMode) {
             WatchPageHost(
@@ -1690,6 +2101,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 fullscreen = fullscreen,
                 verticalProgress = verticalProgress,
                 exitDragging = exitDragging,
+                keepChatOpenOnFullscreenExit = fullscreenChat,
                 wideWatch = wideWatch,
                 error = error,
                 queue = queue,
@@ -1773,6 +2185,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     shortsResolver.evict(url); shortsResolver.retry(url); shorts.retry++
                 },
                 onRate = { info, direction -> rateWatch(info, direction) },
+                onSubscribe = { info, sub -> subscribeWatch(info, sub) },
                 onNeedLogin = { showLoginDialog = true },
                 onNotInterested = { item -> hidden.hideVideo(item.url) },
                 onLink = { info, link -> openLink(info, link) }, onChannel = { openChannel(it) },
@@ -1790,14 +2203,20 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 }
             }
         }
+        channelDownloadTarget?.let { target ->
+            DownloadDialog(target, onDismiss = { channelDownloadTarget = null }) { height, audio ->
+                channelDownloadTarget = null
+                startDownload(target, height, audio)
+            }
+        }
         selected?.takeIf { pendingVideo == null && (!shortsMode || minimized) }?.let { playing ->
-            val isPlayingLive = playing.isOngoingLive() || playerLive
             val playingPostLive = playing.streamType == org.schabi.newpipe.extractor.stream.StreamType.POST_LIVE_STREAM ||
                 playing.streamType == org.schabi.newpipe.extractor.stream.StreamType.POST_LIVE_AUDIO_STREAM
+            val isPlayingLive = playing.isOngoingLive() || (!playingPostLive && playerLive)
             val playingChatState = activeChatState ?: rememberLiveChat(playing.url, isPlayingLive, playingPostLive, player)
             val insets = if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             BoxWithConstraints(insets) {
-                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active || fullscreen || (minimized && !bottomNavVisible)) 0.dp else 78.dp)
+                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active || fullscreen) 0.dp else 57.dp)
                 miniState.limits = limits
                 LaunchedEffect(limits) { miniState.settle(animate = minimized) }
                 val miniWidth = miniState.width.value.dp
@@ -1829,7 +2248,11 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     chaptersOpen = false
                 }
                 FloatingPlayer(player = player, title = playing.name, zoomKey = playing.url, locked = playerLocked, onUnlock = { playerLocked = false }, isLive = isPlayingLive, autoplay = autoplay, hasSubtitles = playing.subtitles.any { it.isUrl && it.format?.suffix?.lowercase() in listOf("vtt", "ttml", "srt") }, subtitlesEnabled = trackState.selectedSubtitle != null, previewFrames = playing.previewFrames, segments = playing.streamSegments.orEmpty(), fullscreen = fullscreen, minimized = minimized, progress = collapse, travelDistance = dragTravel.coerceAtLeast(180.dp),
-                    miniState = miniState, modifier = Modifier.offset { IntOffset(x.roundToPx(), y.roundToPx()) }.size(width, height), chatState = playingChatState,
+                    miniState = miniState, modifier = Modifier.offset { IntOffset(x.roundToPx(), y.roundToPx()) }.size(width, height),
+                    fullscreenTransitioning = exitDragging || (fullscreen && exitProgress.value > 0.01f),
+                    fullscreenChat = fullscreenChat,
+                    onFullscreenChatChange = { fullscreenChat = it },
+                    chatState = playingChatState,
                     recovering = refreshingPlaybackKey == videoKey(playing.url),
                     onRetryPlayback = { refreshPlayback(playing, player.currentPosition.coerceAtLeast(0L), true) },
                     channelName = playing.uploaderName, moreVideos = playing.relatedItems.filterIsInstance<StreamInfoItem>().filter { it.url != playing.url }.distinctBy { it.url }.take(12), onMoreVideo = { open(it) },
@@ -1884,7 +2307,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             BackHandler(enabled = !minimized) { dragProgress = null; minimized = true }
             if (watchFade < 1f) PendingWatchScreen(pending, watchAlpha = 1f - watchFade, watchOffset = verticalProgress)
             BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active || (minimized && !bottomNavVisible)) 0.dp else 78.dp)
+                val limits = MiniLimits.of(maxWidth, maxHeight, if (searchState.active) 0.dp else 57.dp)
                 miniState.limits = limits
                 LaunchedEffect(limits) { miniState.settle(animate = minimized) }
                 val miniWidth = (miniState.width.value.takeIf { it > 0f } ?: limits.default).dp
@@ -1919,7 +2342,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
         }
         Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-            OfflineMiniOverlay(bottomBar = if (searchState.active || !bottomNavVisible) 0.dp else 78.dp)
+            OfflineMiniOverlay(bottomBar = if (searchState.active) 0.dp else 57.dp)
         }
       }
     }

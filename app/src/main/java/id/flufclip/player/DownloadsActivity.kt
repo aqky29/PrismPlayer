@@ -73,7 +73,7 @@ class DownloadsActivity : ComponentActivity() {
         getSharedPreferences("download_positions", MODE_PRIVATE).edit()
             .putLong(record.uri, downloadResumePosition(player.currentPosition, duration))
             .putLong("duration:${record.uri}", duration).apply()
-        SavedDownloads.revision.update { it + 1 }
+        SavedDownloads.playbackRevision.update { it + 1 }
     }
     override fun onStop() {
         if (!handingOff) { savePosition(); localPlayer?.pause() }
@@ -85,6 +85,7 @@ class DownloadsActivity : ComponentActivity() {
 private fun DownloadsScreen(activity: DownloadsActivity, requestedUri: String?, requestGeneration: Int) {
     val state by DownloadStatus.state.collectAsState()
     val revision by SavedDownloads.revision.collectAsState()
+    val playbackRevision by SavedDownloads.playbackRevision.collectAsState()
     val downloads = remember(revision, state.completed) { SavedDownloads.list(activity) }
     var selectedUri by rememberSaveable { mutableStateOf(requestedUri) }
     var minimized by rememberSaveable { mutableStateOf(activity.startMinimized) }
@@ -170,7 +171,7 @@ private fun DownloadsScreen(activity: DownloadsActivity, requestedUri: String?, 
     BackHandler(selectedUri != null) { if (fullscreen) fullscreen = false else if (!minimized) minimized = true else selectedUri = null }
     val root = if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxSize().systemBarsPadding()
     Box(root) {
-        if (selected == null || minimized) DownloadsHome(downloads, state, revision, onBack = { activity.finish() }, onPlay = { selectedUri = it.uri; minimized = false })
+        if (selected == null || minimized) DownloadsHome(downloads, state, playbackRevision, onBack = { activity.finish() }, onPlay = { selectedUri = it.uri; minimized = false })
         else DownloadedWatch(
             selected, downloads, player, playing, buffering, hasSubtitles, fullscreen, autoplay, error,
             onBack = { if (fullscreen) fullscreen = false else minimized = true },

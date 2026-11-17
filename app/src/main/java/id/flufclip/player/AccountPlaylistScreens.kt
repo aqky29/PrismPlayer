@@ -319,7 +319,7 @@ private fun SavedShortCard(video: WatchedVideo, onClick: () -> Unit, onSave: () 
 private fun CollectionVideoMenu(onSave: () -> Unit, onShare: () -> Unit, onRemove: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreVert, "Video options", tint = Color.White) }
+        IconButton(onClick = { open = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Default.MoreHoriz, "Video options", tint = Color.White) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("Save to playlist") }, onClick = { open = false; onSave() })
             DropdownMenuItem(text = { Text("Share") }, onClick = { open = false; onShare() })

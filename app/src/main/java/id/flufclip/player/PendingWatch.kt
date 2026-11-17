@@ -141,27 +141,86 @@ internal data class PendingVideo(val url: String, val title: String = "", val up
 @Composable internal fun PendingWatchScreen(pending: PendingVideo, watchAlpha: Float, watchOffset: Float) {
     BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
         .graphicsLayer { alpha = watchAlpha; translationY = size.height * watchOffset }
-        .background(Background).pointerInput(Unit) { detectTapGestures { } }) {
+        .background(Background)
+        .semantics { if (pending.error == null) contentDescription = "Loading video" }
+        .pointerInput(Unit) { detectTapGestures { } }) {
         val wide = isWideWatchLayout(maxWidth, maxHeight)
-        Column(Modifier.width(if (wide) wideWatchPlayerWidth(maxWidth) else maxWidth)) {
-            Spacer(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (pending.title.isNotBlank()) Text(pending.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                else Box(Modifier.fillMaxWidth(.8f).height(20.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (pending.uploader.isNotBlank()) {
-                        Avatar(pending.avatar, pending.uploader, 32)
-                        Text(pending.uploader, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    } else {
-                        Box(Modifier.size(32.dp).clip(CircleShape).background(Surface))
-                        Box(Modifier.width(120.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
+        val playerWidth = wideWatchPlayerWidth(maxWidth)
+        if (wide) {
+            Row(Modifier.fillMaxSize().padding(end = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                PendingWatchMainColumn(pending = pending, wide = true, modifier = Modifier.width(playerWidth))
+                Column(Modifier.weight(1f).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    repeat(3) {
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(Surface))
+                            Box(Modifier.fillMaxWidth(0.78f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
+                            Box(Modifier.fillMaxWidth(0.45f).height(12.dp).clip(RoundedCornerShape(4.dp)).background(SurfaceElevated))
+                        }
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(96, 72, 88, 80).forEach { Box(Modifier.width(it.dp).height(36.dp).clip(RoundedCornerShape(18.dp)).background(Surface)) }
+            }
+        } else {
+            PendingWatchMainColumn(pending = pending, wide = false, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable private fun PendingWatchMainColumn(pending: PendingVideo, wide: Boolean, modifier: Modifier) {
+    Column(modifier) {
+        Spacer(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (pending.title.isNotBlank()) Text(pending.title, color = TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            else {
+                Box(Modifier.fillMaxWidth(.85f).height(18.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
+                Box(Modifier.fillMaxWidth(.55f).height(18.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
+            }
+            Box(Modifier.fillMaxWidth(.52f).height(12.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (pending.uploader.isNotBlank()) {
+                        Avatar(pending.avatar, pending.uploader, 40)
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(pending.uploader, color = TextPrimary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Box(Modifier.width(84.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
+                        }
+                    } else {
+                        Box(Modifier.size(40.dp).clip(CircleShape).background(Surface))
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Box(Modifier.width(116.dp).height(13.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
+                            Box(Modifier.width(76.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
+                        }
+                    }
                 }
-                if (!wide) repeat(2) {
-                    Box(Modifier.padding(top = 8.dp).fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp)).background(Surface))
+                Box(Modifier.width(88.dp).height(34.dp).clip(RoundedCornerShape(50)).background(Surface))
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(104, 78, 96, 86).forEach { Box(Modifier.width(it.dp).height(36.dp).clip(RoundedCornerShape(18.dp)).background(Surface)) }
+            }
+            if (!wide) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Surface)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(Modifier.width(96.dp).height(12.dp).clip(RoundedCornerShape(4.dp)).background(SurfaceElevated))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.size(24.dp).clip(CircleShape).background(SurfaceElevated))
+                        Box(Modifier.fillMaxWidth(.72f).height(12.dp).clip(RoundedCornerShape(4.dp)).background(SurfaceElevated))
+                    }
+                }
+            }
+        }
+        if (!wide) {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(Surface))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.size(36.dp).clip(CircleShape).background(Surface))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.fillMaxWidth(.88f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Surface))
+                    Box(Modifier.fillMaxWidth(.52f).height(12.dp).clip(RoundedCornerShape(4.dp)).background(SurfaceElevated))
                 }
             }
         }
@@ -191,8 +250,17 @@ internal data class PendingVideo(val url: String, val title: String = "", val up
         else if (!minimized) Column(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .75f)).padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text(pending.error, color = Color.White, style = MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Text("Try again", color = Color.Black, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(18.dp)).background(Color.White).clickable(onClick = onRetry).padding(horizontal = 16.dp, vertical = 8.dp))
+            Box(
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable(onClick = onRetry),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Try again", color = Color.Black, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(Color.White).padding(horizontal = 16.dp, vertical = 8.dp))
+            }
         }
         if (minimized && progress > .9f) {
             Box(Modifier.fillMaxSize().then(miniGesture)) {
@@ -207,7 +275,7 @@ internal data class PendingVideo(val url: String, val title: String = "", val up
             }
         } else if (progress < .1f) {
             Box(Modifier.align(Alignment.TopStart).padding(4.dp).size(48.dp).clip(CircleShape).clickable(onClick = onMinimize), contentAlignment = Alignment.Center) {
-                Image(painterResource(R.drawable.yt_chevron_down), "Minimalkan video", Modifier.size(24.dp), colorFilter = ColorFilter.tint(Color.White))
+                Image(painterResource(R.drawable.yt_chevron_down), "Minimize video", Modifier.size(24.dp), colorFilter = ColorFilter.tint(Color.White))
             }
         }
     }

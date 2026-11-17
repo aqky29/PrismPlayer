@@ -1,0 +1,29 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Back overlapping bubble (top-right) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M9,6.5V5C9,4.17 9.67,3.5 10.5,3.5H19.5C20.33,3.5 21,4.17 21,5V13.5L18.5,11.5H17" />
+    <!-- Front speech bubble (bottom-left) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M4.5,7.5H15.5C16.33,7.5 17,8.17 17,9V16C17,16.83 16.33,17.5 15.5,17.5H7.5L3,21V9C3,8.17 3.67,7.5 4.5,7.5Z" />
+    <!-- Message lines inside front bubble -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M6.5,11H13.5M6.5,14H11" />
+</vector>

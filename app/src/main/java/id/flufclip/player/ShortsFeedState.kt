@@ -24,6 +24,8 @@ internal class ShortsFeedState {
     var retry by mutableIntStateOf(0)
     var generation by mutableIntStateOf(0)
     var tabQueue by mutableStateOf(false)
+    var infiniteQueue by mutableStateOf(false)
+    var pendingSequenceParams by mutableStateOf<String?>(null)
     var seqNext by mutableStateOf<String?>(null)
     var fromFeed by mutableStateOf(false)
     var downloadInfo by mutableStateOf<StreamInfo?>(null)

@@ -119,35 +119,105 @@ internal fun DownloadsHome(downloads: List<SavedDownload>, state: DownloadState,
         dismissButton = { TextButton(onClick = { remove = null }) { Text("Cancel") } }) }
 }
 
+internal data class DownloadRowDisplay(
+    val statusText: String,
+    val progressPercent: Int?,
+    val isError: Boolean = false,
+    val isCancelled: Boolean = false,
+)
+
+/** Maps internal download phases into a simpler user-facing status and progress state. */
+internal fun downloadRowDisplay(state: DownloadState): DownloadRowDisplay = when (state.phase) {
+    DownloadPhase.PREPARING -> DownloadRowDisplay(
+        statusText = "Preparing…",
+        progressPercent = null,
+    )
+    DownloadPhase.TRANSFERRING -> {
+        val base = state.message.ifBlank { "Downloading…" }
+        val text = if (state.running && state.etaSeconds != null) "$base · ${state.etaSeconds}s left" else base
+        DownloadRowDisplay(
+            statusText = text,
+            progressPercent = state.progress,
+        )
+    }
+    DownloadPhase.PROCESSING, DownloadPhase.COPYING, DownloadPhase.VERIFYING -> DownloadRowDisplay(
+        statusText = "Finalizing…",
+        progressPercent = null,
+    )
+    DownloadPhase.FAILED -> DownloadRowDisplay(
+        statusText = state.message.ifBlank { "Download failed." },
+        progressPercent = null,
+        isError = true,
+    )
+    DownloadPhase.CANCELLED -> DownloadRowDisplay(
+        statusText = state.message.ifBlank { "Download canceled." },
+        progressPercent = null,
+        isCancelled = true,
+    )
+    DownloadPhase.COMPLETED -> DownloadRowDisplay(
+        statusText = state.message.ifBlank { "Downloaded" },
+        progressPercent = 100,
+    )
+}
+
 @Composable
 private fun DownloadingRow(state: DownloadState, onCancel: () -> Unit) {
     val video = state.video ?: return
-    val label = buildString {
-        append(state.phase.label)
-        state.progress?.let { append(" · $it%") }
-        state.etaSeconds?.let { append(" · ${it}s tersisa") }
-    }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        Row(verticalAlignment = Alignment.Top) {
-            Box(Modifier.width(downloadRowWidth()).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Surface), contentAlignment = Alignment.Center) {
-                AsyncImage(video.thumbnail, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .45f)))
-                if (state.running) {
-                    val progress = state.progress
-                    if (progress == null) CircularProgressIndicator(Modifier.size(32.dp), color = LinkBlue, strokeWidth = 2.dp)
-                    else CircularProgressIndicator(progress = { progress / 100f }, modifier = Modifier.size(32.dp), color = LinkBlue, strokeWidth = 2.dp)
-                    Icon(painterResource(R.drawable.yt_w_download), null, Modifier.size(18.dp), tint = Color.White)
-                } else Icon(Icons.Default.Close, null, tint = Color.White)
+    val display = downloadRowDisplay(state)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            Modifier.width(downloadRowWidth()).aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(Surface),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(video.thumbnail, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = if (state.running) .28f else .55f)))
+            if (!state.running) {
+                Icon(
+                    imageVector = if (display.isError) Icons.Default.ErrorOutline else Icons.Default.Close,
+                    contentDescription = null,
+                    tint = if (display.isError) ErrorText else Color.White,
+                )
             }
-            Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                Text(video.title.ifBlank { "Video" }, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
-                if (video.uploader.isNotBlank()) Text(video.uploader, Modifier.padding(top = 4.dp), color = Muted, fontSize = 12.sp)
-                Text(label, Modifier.padding(top = 4.dp), color = if (state.running) LinkBlue else Muted, fontSize = 12.sp)
-            }
-            if (state.running) IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Cancel download") }
-            else IconButton(onClick = { DownloadStatus.state.value = DownloadState() }) { Icon(Icons.Default.Close, "Close status") }
         }
-        if (!state.running && state.message.isNotBlank()) Text(state.message, Modifier.padding(top = 8.dp), fontSize = 12.sp, color = Muted)
+        Column(Modifier.weight(1f).padding(start = 10.dp)) {
+            Text(video.title.ifBlank { "Video" }, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, color = TextPrimary)
+            if (video.uploader.isNotBlank()) {
+                Text(video.uploader, Modifier.padding(top = 4.dp), color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (display.isError) {
+                    Icon(Icons.Default.ErrorOutline, null, Modifier.padding(end = 4.dp).size(14.dp), tint = ErrorText)
+                }
+                Text(
+                    text = display.statusText,
+                    color = when {
+                        display.isError -> ErrorText
+                        state.running -> LinkBlue
+                        else -> Muted
+                    },
+                    fontSize = 12.sp,
+                    maxLines = if (state.running) 1 else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (state.running) {
+                val barModifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(3.dp).clip(RoundedCornerShape(2.dp))
+                val progress = display.progressPercent
+                if (progress == null) {
+                    LinearProgressIndicator(modifier = barModifier, color = LinkBlue, trackColor = HairlineBorder)
+                } else {
+                    LinearProgressIndicator(progress = { progress / 100f }, modifier = barModifier, color = LinkBlue, trackColor = HairlineBorder)
+                }
+            }
+        }
+        if (state.running) {
+            IconButton(onClick = onCancel) { Icon(Icons.Default.Close, "Cancel download") }
+        } else {
+            IconButton(onClick = { DownloadStatus.state.value = DownloadState() }) { Icon(Icons.Default.Close, "Dismiss status") }
+        }
     }
 }
 
@@ -205,7 +275,10 @@ internal fun DownloadThumbnail(saved: SavedDownload) {
                 val retriever = MediaMetadataRetriever()
                 try {
                     retriever.setDataSource(context, Uri.parse(saved.uri))
-                    if (android.os.Build.VERSION.SDK_INT >= 27) retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 384, 216) else null
+                    val frame = if (android.os.Build.VERSION.SDK_INT >= 27) {
+                        retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 384, 216)
+                    } else null
+                    frame ?: retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                 } finally { retriever.release() }
             }.getOrNull()?.also { thumbnailCache.put(saved.uri, it) }
         } }

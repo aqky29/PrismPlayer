@@ -23,6 +23,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.calculateZoom
@@ -57,6 +59,7 @@ import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
@@ -211,336 +214,145 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
     selected: String,
     onSelect: (String) -> Unit,
     visible: Boolean = true,
+    docked: Boolean = false,
 ) {
-    // Google / iOS Liquid Glass Floating Navigation Bar:
-    // - Latar luar sepenuhnya transparan tanpa blok penghalang.
-    // - Kapsul utama memakai Liquid Glass jernih berwarna (AGSL meniscus refraction di sekeliling bibir kapsul + vibrancy tinggi).
-    // - Pill indikator tab aktif memakai bantalan kaca smoked gelap tanpa garis putih (borderless) yang kontras & bersih,
-    //   lengkap dengan fisika cair (stretch, squish, swell) saat berpindah atau digeser jari + ikon aktif biru muda (#C2E7FF).
-    // - Di mobile (screenWidthDp < 600), auto-hide saat scroll ke bawah dan muncul kembali saat scroll ke atas.
     val isMobile = LocalConfiguration.current.screenWidthDp < 600
-    val effectiveVisible = if (isMobile) visible else true
+    val effectiveVisible = if (docked || !isMobile) true else visible
     val hideProgressState = animateFloatAsState(
         targetValue = if (effectiveVisible) 0f else 1f,
         animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
         label = "bottomNavAutoHide"
     )
-    val hideProgress = hideProgressState.value
-    if (hideProgress >= 0.999f) return
-
-    val isDark = isSystemInDarkTheme() || true
 
     val tabs = remember { listOf("home", "shorts", "search", "you") }
     val activeIndex = remember(selected) {
         val idx = tabs.indexOf(selected)
         if (idx >= 0) idx else 0
     }
-
-    val scope = rememberCoroutineScope()
-    val pillProgress = remember { Animatable(activeIndex.toFloat()) }
-    var isDraggingPill by remember { mutableStateOf(false) }
-    var isTouchingActivePill by remember { mutableStateOf(false) }
-
-    LaunchedEffect(activeIndex) {
-        if (!isDraggingPill) {
-            pillProgress.animateTo(
-                targetValue = activeIndex.toFloat(),
-                animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = 0.76f,
-                    stiffness = 360f
-                )
-            )
-        }
-    }
-
-    // State pembengkakan fisik kapsul (swell) saat disentuh / di-drag
-    val swellTarget = when {
-        isDraggingPill -> 1f
-        isTouchingActivePill -> 0.38f
-        pillProgress.isRunning -> 0.14f
-        else -> 0f
-    }
-    val swellState = animateFloatAsState(
-        targetValue = swellTarget,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = 0.66f,
-            stiffness = 400f
-        ),
-        label = "liquidPillSwell"
-    )
-
-    // Kilau taktil tipis yang hanya muncul saat pill aktif di-drag jari (0f / tanpa border saat diam)
-    val dragGlowTarget = if (isDraggingPill) 1f else 0f
-    val dragGlowState = animateFloatAsState(
-        targetValue = dragGlowTarget,
-        animationSpec = tween(durationMillis = if (isDraggingPill) 120 else 220, easing = FastOutSlowInEasing),
-        label = "liquidPillDragGlow"
-    )
-
-    // Pelacak kecepatan cairan (aktif hanya saat pill bergerak; saat diam = 0 callback / 0 fps)
-    var fluidVelocity by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(pillProgress.isRunning, isDraggingPill) {
-        if (!pillProgress.isRunning && !isDraggingPill && kotlin.math.abs(fluidVelocity) < 0.01f) {
-            fluidVelocity = 0f
-            return@LaunchedEffect
-        }
-        var lastNanos = 0L
-        var lastPos = pillProgress.value
-        while (pillProgress.isRunning || isDraggingPill || kotlin.math.abs(fluidVelocity) >= 0.01f) {
-            withFrameNanos { now ->
-                if (lastNanos != 0L) {
-                    val dt = ((now - lastNanos) * 1e-9f).coerceIn(0.001f, 0.05f)
-                    val rawVel = if (pillProgress.isRunning && !isDraggingPill) {
-                        pillProgress.velocity
-                    } else {
-                        (pillProgress.value - lastPos) / dt
-                    }
-                    val smoothing = (dt * 18f).coerceIn(0.12f, 0.65f)
-                    fluidVelocity += (rawVel - fluidVelocity) * smoothing
-                }
-                lastNanos = now
-                lastPos = pillProgress.value
-            }
-        }
-        fluidVelocity = 0f
-    }
-
-    val visualIndex by remember {
-        derivedStateOf { pillProgress.value.let { kotlin.math.round(it).toInt().coerceIn(0, 3) } }
-    }
-
     val density = LocalDensity.current
-    val slideDistancePx = with(density) { 96.dp.toPx() }
-    var restingDockOriginInRoot by remember { mutableStateOf(Offset.Zero) }
+    val slideDistancePx = with(density) { 72.dp.toPx() }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 28.dp, vertical = 10.dp)
+            .then(if (!docked) Modifier.navigationBarsPadding() else Modifier)
             .offset { IntOffset(0, (hideProgressState.value * slideDistancePx).roundToInt()) }
-            .graphicsLayer { alpha = (1f - hideProgressState.value).coerceIn(0f, 1f) },
-        contentAlignment = Alignment.Center
+            .graphicsLayer { alpha = (1f - hideProgressState.value).coerceIn(0f, 1f) }
+            .background(Background)
     ) {
-        // KAPSUL UTAMA GOOGLE LIQUID GLASS (Jernih membiaskan latar di tepi, tinggi 60.dp / R = 30.dp)
-        BoxWithConstraints(
+        HorizontalDivider(thickness = 1.dp, color = Color(0xFF272727))
+        Row(
             modifier = Modifier
-                .widthIn(max = 344.dp)
                 .fillMaxWidth()
-                .height(60.dp)
-                .onGloballyPositioned { coords ->
-                    val currentHideY = (hideProgressState.value * slideDistancePx).roundToInt().toFloat()
-                    restingDockOriginInRoot = coords.positionInRoot() - Offset(0f, currentHideY)
-                }
-                .shadow(
-                    elevation = 14.dp,
-                    shape = RoundedCornerShape(50),
-                    ambientColor = Color.Black.copy(alpha = 0.36f),
-                    spotColor = Color.Black.copy(alpha = 0.46f)
-                )
-                .clip(RoundedCornerShape(50))
-                .liquidGlassBar(
-                    isDark = isDark,
-                    borderStrokeWidth = 1.dp,
-                    rootPositionProvider = {
-                        val currentHideY = (hideProgressState.value * slideDistancePx).roundToInt().toFloat()
-                        Offset(
-                            x = restingDockOriginInRoot.x,
-                            y = restingDockOriginInRoot.y + currentHideY
-                        )
-                    }
-                )
-                .padding(horizontal = 5.dp),
-            contentAlignment = Alignment.CenterStart
+                .height(56.dp)
+                .selectableGroup(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val totalWidthPx = with(density) { maxWidth.toPx() }
-            val slotWidthPx = totalWidthPx / 4f
-            // Geometri konsentris presisi (R_dock = 30.dp, inset = 5.dp -> R_pill = 25.dp / tinggi 50.dp)
-            val pillWidth = (maxWidth / 4f).coerceIn(56.dp, 88.dp)
-            val pillHeight = 50.dp
-            // Kanvas sedikit lebih lebar agar regangan cair (stretch) & swell tidak memicu relayout
-            val canvasWidth = pillWidth + 44.dp
-            val canvasHeight = 60.dp
-            val canvasWidthPx = with(density) { canvasWidth.toPx() }
-
-            // Layer 1: Bantalan Pill Aktif Smoked Fluid (tanpa border putih saat diam, kontras bersih seperti Google App)
-            Box(
-                Modifier
-                    .offset {
-                        val exactCenterX = (pillProgress.value + 0.5f) * slotWidthPx
-                        val exactLeftX = exactCenterX - canvasWidthPx * 0.5f
-                        IntOffset(exactLeftX.roundToInt(), 0)
-                    }
-                    .size(width = canvasWidth, height = canvasHeight)
-                    .smokedFluidPill(
-                        baseWidth = pillWidth,
-                        baseHeight = pillHeight,
-                        isDark = isDark,
-                        subPixelOffsetX = {
-                            val exactCenterX = (pillProgress.value + 0.5f) * slotWidthPx
-                            val exactLeftX = exactCenterX - canvasWidthPx * 0.5f
-                            exactLeftX - exactLeftX.roundToInt().toFloat()
+            tabs.forEachIndexed { index, tabKey ->
+                val isSelected = (index == activeIndex)
+                val tabLabel = when (tabKey) {
+                    "home" -> "Home"
+                    "shorts" -> "Shorts"
+                    "search" -> "Search"
+                    else -> "You"
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .selectable(
+                            selected = isSelected,
+                            role = Role.Tab,
+                            onClick = { onSelect(tabKey) }
+                        )
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = tabLabel
                         },
-                        swellProvider = { swellState.value },
-                        dragGlowProvider = { dragGlowState.value },
-                        stretchProvider = {
-                            (kotlin.math.abs(fluidVelocity) / 8.5f).coerceIn(0f, 1f) * 0.20f
-                        }
+                    contentAlignment = Alignment.Center
+                ) {
+                    HomeNavTabIcon(
+                        tabKey = tabKey,
+                        isSelected = isSelected,
+                        iconTint = if (isSelected) Color.White else Color.White.copy(alpha = 0.85f),
+                        avatarRingColor = if (isSelected) Color.White else Color(0xFF4C8DF6)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeNavTabIcon(
+    tabKey: String,
+    isSelected: Boolean,
+    iconTint: Color,
+    avatarRingColor: Color,
+) {
+    when (tabKey) {
+        "home" -> {
+            Icon(
+                painter = painterResource(if (isSelected) R.drawable.yt_nav_home_active else R.drawable.yt_nav_home),
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(24.dp)
             )
-
-            // Layer 2: Baris 4 Tab Ikon (Home, Shorts, Search, You) + gestur tap & fluid slide
-            val currentOnSelect by rememberUpdatedState(onSelect)
-            val activeIconColor = Color(0xFFC2E7FF)
-            val inactiveIconColor = Color.White.copy(alpha = 0.92f)
-
-            Row(
-                Modifier
-                    .fillMaxSize()
-                    .pointerInput(totalWidthPx, effectiveVisible) {
-                        if (totalWidthPx <= 0f || !effectiveVisible) return@pointerInput
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            var dragged = false
-                            val startX = down.position.x
-                            val downSlot = (startX / slotWidthPx).toInt().coerceIn(0, 3)
-                            if (downSlot == kotlin.math.round(pillProgress.value).toInt().coerceIn(0, 3)) {
-                                isTouchingActivePill = true
-                            }
-
-                            try {
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                    if (!change.pressed) {
-                                        if (dragged) {
-                                            val targetIdx = kotlin.math.round(pillProgress.value).toInt().coerceIn(0, 3)
-                                            isDraggingPill = false
-                                            isTouchingActivePill = false
-                                            scope.launch {
-                                                pillProgress.animateTo(
-                                                    targetValue = targetIdx.toFloat(),
-                                                    animationSpec = androidx.compose.animation.core.spring(
-                                                        dampingRatio = 0.76f,
-                                                        stiffness = 360f
-                                                    )
-                                                )
-                                            }
-                                            currentOnSelect(tabs[targetIdx])
-                                        } else {
-                                            isTouchingActivePill = false
-                                            val tappedIdx = (change.position.x / slotWidthPx).toInt().coerceIn(0, 3)
-                                            currentOnSelect(tabs[tappedIdx])
-                                        }
-                                        break
-                                    }
-                                    val dx = kotlin.math.abs(change.position.x - startX)
-                                    if (!dragged && dx > viewConfiguration.touchSlop * 0.55f) {
-                                        dragged = true
-                                        isDraggingPill = true
-                                    }
-                                    if (dragged) {
-                                        change.consume()
-                                        val frac = ((change.position.x - slotWidthPx / 2f) / slotWidthPx).coerceIn(0f, 3f)
-                                        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                                            pillProgress.snapTo(frac)
-                                        }
-                                    }
-                                }
-                            } finally {
-                                isDraggingPill = false
-                                isTouchingActivePill = false
-                            }
-                        }
-                    },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                tabs.forEachIndexed { index, tabKey ->
-                    val isSelected = (index == visualIndex)
-                    val iconTint = if (isSelected) activeIconColor else inactiveIconColor
-
+        }
+        "shorts" -> {
+            Icon(
+                painter = painterResource(if (isSelected) R.drawable.yt_nav_shorts_active else R.drawable.yt_nav_shorts),
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        "search" -> {
+            Icon(
+                painter = painterResource(R.drawable.yt_reel_search),
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        "you" -> {
+            val loggedIn = YouTubeAuth.isLoggedIn
+            val avatarUrl = if (loggedIn) YouTubeAuth.profile.avatarUrl?.takeIf { it.isNotBlank() } else null
+            val profileName = if (loggedIn) YouTubeAuth.profile.name.trim() else ""
+            when {
+                avatarUrl != null -> {
+                    Avatar(
+                        avatarUrl,
+                        profileName,
+                        26,
+                        Modifier
+                            .border(1.75.dp, avatarRingColor, CircleShape)
+                            .padding(1.75.dp)
+                    )
+                }
+                profileName.isNotEmpty() -> {
                     Box(
                         Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .graphicsLayer {
-                                val proximity = (1f - kotlin.math.abs(pillProgress.value - index.toFloat())).coerceIn(0f, 1f)
-                                val buoyScale = 1f + (0.06f * proximity * (0.30f + 0.70f * swellState.value))
-                                scaleX = buoyScale
-                                scaleY = buoyScale
-                            },
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF283142))
+                            .border(1.5.dp, avatarRingColor, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        when (tabKey) {
-                            "home" -> {
-                                Icon(
-                                    painter = painterResource(if (isSelected) R.drawable.yt_nav_home_active else R.drawable.yt_nav_home),
-                                    contentDescription = "Home",
-                                    tint = iconTint,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            "shorts" -> {
-                                Icon(
-                                    painter = painterResource(if (isSelected) R.drawable.yt_nav_shorts_active else R.drawable.yt_nav_shorts),
-                                    contentDescription = "Shorts",
-                                    tint = iconTint,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            "search" -> {
-                                Icon(
-                                    painter = painterResource(R.drawable.yt_reel_search),
-                                    contentDescription = "Search",
-                                    tint = iconTint,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            "you" -> {
-                                val loggedIn = YouTubeAuth.isLoggedIn
-                                val avatarUrl = if (loggedIn) YouTubeAuth.profile.avatarUrl?.takeIf { it.isNotBlank() } else null
-                                val profileName = if (loggedIn) YouTubeAuth.profile.name.trim() else ""
-                                val avatarRingColor = if (isSelected) activeIconColor else Color(0xFF4C8DF6)
-                                when {
-                                    avatarUrl != null -> {
-                                        Avatar(
-                                            avatarUrl,
-                                            profileName,
-                                            26,
-                                            Modifier
-                                                .border(1.75.dp, avatarRingColor, CircleShape)
-                                                .padding(1.75.dp)
-                                        )
-                                    }
-                                    profileName.isNotEmpty() -> {
-                                        Box(
-                                            Modifier
-                                                .size(26.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFF283142))
-                                                .border(1.5.dp, avatarRingColor, CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = profileName.first().uppercaseChar().toString(),
-                                                color = Color.White,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-                                    }
-                                    else -> {
-                                        Icon(
-                                            imageVector = Icons.Default.AccountCircle,
-                                            contentDescription = "You",
-                                            tint = iconTint,
-                                            modifier = Modifier.size(26.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        Text(
+                            text = profileName.first().uppercaseChar().toString(),
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
+                }
+                else -> {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        tint = iconTint,
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
             }
         }
@@ -558,44 +370,56 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
     var showMoreSheet by remember { mutableStateOf(false) }
     val tabs = remember { listOf("Home", "Subs", "Music", "Live", "More") }
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        tabs.forEach { tabName ->
-            val isActive = (tabName == activeTab)
-            Column(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .clickable {
-                        if (tabName == "More") {
-                            showMoreSheet = true
-                        } else {
-                            onSelectTab(tabName)
-                        }
-                    }
-                    .padding(horizontal = 6.dp, vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = tabName,
-                    color = if (isActive) Color.White else Color(0xFFAAAAAA),
-                    fontSize = 15.sp,
-                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal
-                )
-                Spacer(Modifier.height(5.dp))
-                Box(
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp)
+                .horizontalScroll(rememberScrollState())
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            tabs.forEach { tabName ->
+                val isActive = (tabName == activeTab)
+                Column(
                     modifier = Modifier
-                        .height(2.5.dp)
-                        .width(if (isActive) (tabName.length * 9).dp else 0.dp)
-                        .background(if (isActive) Color(0xFFFF0000) else Color.Transparent, RoundedCornerShape(1.dp))
-                )
+                        .width(IntrinsicSize.Max)
+                        .heightIn(min = 44.dp)
+                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                        .selectable(
+                            selected = isActive,
+                            role = Role.Tab,
+                            onClick = {
+                                if (tabName == "More") {
+                                    showMoreSheet = true
+                                } else {
+                                    onSelectTab(tabName)
+                                }
+                            }
+                        )
+                        .padding(horizontal = 4.dp)
+                        .padding(top = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = tabName,
+                        color = if (isActive) Color.White else Color(0xFFAAAAAA),
+                        fontSize = 15.sp,
+                        fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal,
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(if (isActive) Color(0xFFFF0000) else Color.Transparent)
+                    )
+                }
             }
         }
+        HorizontalDivider(thickness = 1.dp, color = Color(0xFF272727))
     }
 
     if (showMoreSheet) {
@@ -632,8 +456,9 @@ internal fun Modifier.bottomNavAutoHide(state: BottomNavAutoHideState): Modifier
                     Row(
                         Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable {
+                            .clickable(role = Role.Button) {
                                 showMoreSheet = false
                                 onSelectMoreChip(chip)
                             }

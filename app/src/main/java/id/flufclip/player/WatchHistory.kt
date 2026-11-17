@@ -13,7 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -352,7 +352,7 @@ private fun historyDateLabel(date: LocalDate?, today: LocalDate): String = when 
                 Text("History", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 IconButton(onClick = { searching = true }) { Icon(Icons.Default.Search, "Search history") }
                 Box {
-                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "History options") }
+                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreHoriz, "History options") }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(text = { Text("Clear all watch history") }, enabled = videos.isNotEmpty(), onClick = { menuOpen = false; confirmClear = true })
                         if (onResetRecommendations != null) DropdownMenuItem(text = { Text("Reset hidden videos and channels") }, onClick = { menuOpen = false; onResetRecommendations() })
@@ -472,7 +472,7 @@ private fun historyDateLabel(date: LocalDate?, today: LocalDate): String = when 
                     if (collapsed) Text("History", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge) else Spacer(Modifier.weight(1f))
                     IconButton(onClick = { searching = true }) { Icon(Icons.Default.Search, "Search history") }
                     Box {
-                        IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "History options") }
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreHoriz, "History options") }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(text = { Text("Refresh") }, enabled = !loading, onClick = { menu = false; onRefresh() })
                             DropdownMenuItem(text = { Text("Device history") }, onClick = { menu = false; onDeviceHistory() })

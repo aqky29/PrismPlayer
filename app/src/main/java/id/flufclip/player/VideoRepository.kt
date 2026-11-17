@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
@@ -43,6 +45,8 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 object VideoRepository {
+    const val TAB_HOME = "home"
+    const val TAB_POSTS = "posts"
     const val TAB_MEMBERSHIP = "membership"
     private val avatarCache = ConcurrentHashMap<String, String>()
     private val avatarRequests = Semaphore(3)
@@ -64,6 +68,13 @@ object VideoRepository {
     private data class LiveInfo(val liveNow: Boolean, val wasLive: Boolean)
     private val liveInfoCache = object : LinkedHashMap<String, LiveInfo>(8, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LiveInfo>): Boolean = size > 32
+    }
+    private const val COMMENT_EMOJI_MAX = 2000
+    private val commentEmojiCache = object : LinkedHashMap<String, Map<String, String>>(64, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Map<String, String>>): Boolean = size > COMMENT_EMOJI_MAX
+    }
+    private val commentAvatarCache = object : LinkedHashMap<String, String>(64, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>): Boolean = size > COMMENT_EMOJI_MAX
     }
     /** Retry publik tanpa cookie saat NewPipe gagal mendapatkan visitorData pada sesi login. */
     private val authDisabled = ThreadLocal.withInitial { false }
@@ -97,6 +108,9 @@ object VideoRepository {
                     if (body != null && reqUrl.contains("/youtubei/v1/player") &&
                         (body.contains("\"isLiveContent\"") || body.contains("\"liveBroadcastDetails\""))
                     ) rememberLiveInfo(body)
+                    if (body != null && reqUrl.contains("/youtubei/v1/next") &&
+                        (body.contains("\"commentEntityPayload\"") || body.contains("\"commentRenderer\""))
+                    ) rememberCommentEmojis(body)
                     return Response(response.code, response.message, response.headers.toMultimap(), body, response.request.url.toString())
                 }
             }
@@ -138,6 +152,34 @@ object VideoRepository {
         return synchronized(liveInfoCache) { liveInfoCache[id] }
     }
 
+    private fun rememberCommentEmojis(body: String) {
+        val parsed = CommentEmojiParser.parseMetadataFromNext(body)
+        if (parsed.emojis.isNotEmpty()) {
+            synchronized(commentEmojiCache) {
+                parsed.emojis.forEach { (commentId, emojis) ->
+                    if (emojis.isNotEmpty()) commentEmojiCache[commentId] = emojis
+                }
+            }
+        }
+        if (parsed.avatars.isNotEmpty()) {
+            synchronized(commentAvatarCache) {
+                parsed.avatars.forEach { (commentId, avatarUrl) ->
+                    if (avatarUrl.isNotBlank()) commentAvatarCache[commentId] = avatarUrl
+                }
+            }
+        }
+    }
+
+    internal fun commentEmojis(commentId: String?): Map<String, String> {
+        val id = commentId?.takeIf { it.isNotBlank() } ?: return emptyMap()
+        return synchronized(commentEmojiCache) { commentEmojiCache[id] }.orEmpty()
+    }
+
+    internal fun commentAvatar(commentId: String?): String? {
+        val id = commentId?.takeIf { it.isNotBlank() } ?: return null
+        return synchronized(commentAvatarCache) { commentAvatarCache[id] }
+    }
+
     suspend fun search(query: String): List<InfoItem> = withContext(Dispatchers.IO) {
         val extractor = NewPipe.getService("YouTube").getSearchExtractor(query)
         extractor.fetchPage()
@@ -172,7 +214,16 @@ object VideoRepository {
         extractor.fetchPage()
         val info = SearchInfo.getInfo(extractor)
         if (info.relatedItems.isEmpty() && info.errors.isNotEmpty()) error("Failed to read results: ${info.errors.first().message}")
-        SearchPage(info.relatedItems, extractor, info.nextPage)
+        val correctedSuggestion = info.searchSuggestion?.takeIf {
+            it.isNotBlank() && !it.equals(query.trim(), ignoreCase = true)
+        }
+        SearchPage(
+            items = info.relatedItems,
+            extractor = extractor,
+            next = info.nextPage,
+            searchSuggestion = correctedSuggestion,
+            isCorrectedSearch = info.isCorrectedSearch && correctedSuggestion != null,
+        )
     }
     suspend fun moreSearch(page: SearchPage): SearchPage = withContext(Dispatchers.IO) {
         val next = page.next ?: return@withContext page.copy(items = emptyList())
@@ -261,25 +312,52 @@ object VideoRepository {
     suspend fun channel(url: String): ChannelPage = withContext(Dispatchers.IO) {
         val service = NewPipe.getService("YouTube")
         val info = ChannelInfo.getInfo(service, url)
-        val tab = info.tabs.firstOrNull { ChannelTabs.VIDEOS in it.contentFilters }
-        val videos = if (tab == null) emptyList() else {
-            val result = ChannelTabInfo.getInfo(service, tab)
-            if (result.relatedItems.isEmpty() && result.errors.isNotEmpty()) error("Failed to read channel videos: ${result.errors.first().message}")
-            result.relatedItems.filterIsInstance<StreamInfoItem>()
-        }
         val uumo = membershipPlaylistUrl(info.id)
-        var hasMembership = false
-        if (uumo != null) {
-            try {
-                val pl = PlaylistInfo.getInfo(uumo)
-                if (pl.relatedItems.isNotEmpty()) {
-                    hasMembership = true
+        coroutineScope {
+            val videosDeferred = async {
+                val tab = info.tabs.firstOrNull { ChannelTabs.VIDEOS in it.contentFilters }
+                if (tab == null) emptyList() else {
+                    val result = ChannelTabInfo.getInfo(service, tab)
+                    if (result.relatedItems.isEmpty() && result.errors.isNotEmpty()) error("Failed to read channel videos: ${result.errors.first().message}")
+                    result.relatedItems.filterIsInstance<StreamInfoItem>()
                 }
-            } catch (_: Exception) {
-                // Not all channels have active membership playlists
             }
+            val uumoDeferred = async {
+                if (uumo == null) null
+                else runCatching { PlaylistInfo.getInfo(uumo) }.getOrNull()
+            }
+            val channelBundleDeferred = async {
+                runCatching { HomeFeed.fetchChannelBundle(info.id) }.getOrNull()
+            }
+
+            val videos = videosDeferred.await()
+            val pl = uumoDeferred.await()
+            val channelBundle = channelBundleDeferred.await()
+            val membershipUi = channelBundle?.membershipUi
+            val uiData = channelBundle?.uiData
+
+            var hasMembership = (pl?.relatedItems?.isNotEmpty() == true) || (membershipUi?.hasMembershipSurface == true)
+            val memberIds = LinkedHashSet<String>()
+            pl?.relatedItems?.forEach { item ->
+                item.url.takeIf { it.isNotBlank() }?.let { memberIds.add(InnerTubePlayer.videoIdOf(it) ?: it) }
+            }
+            membershipUi?.highlighted?.forEach { item ->
+                memberIds.add(InnerTubePlayer.videoIdOf(item.url) ?: item.url)
+            }
+            membershipUi?.recentVideos?.forEach { item ->
+                memberIds.add(InnerTubePlayer.videoIdOf(item.url) ?: item.url)
+            }
+
+            ChannelPage(
+                info = info,
+                videos = videos,
+                hasMembership = hasMembership,
+                membershipUrl = if (hasMembership) uumo else null,
+                membershipVideoIds = memberIds,
+                membershipUi = membershipUi,
+                uiData = uiData
+            )
         }
-        ChannelPage(info, videos, hasMembership = hasMembership, membershipUrl = if (hasMembership) uumo else null)
     }
     /** Video dari tab Video channel untuk bagian "From this channel"; hasil yang berhasil disimpan di memori selama aplikasi berjalan. */
     suspend fun channelUploads(url: String): List<StreamInfoItem> = withContext(Dispatchers.IO) {
@@ -308,6 +386,9 @@ object VideoRepository {
         result.relatedItems
     }
     suspend fun channelTabPage(page: ChannelPage, filter: String): BrowsePage = withContext(Dispatchers.IO) {
+        if (filter == TAB_HOME || filter == TAB_POSTS) {
+            return@withContext BrowsePage(emptyList(), null)
+        }
         if (filter == TAB_MEMBERSHIP) {
             val uumo = page.membershipUrl ?: membershipPlaylistUrl(page.info.id)
             if (uumo != null) {
@@ -321,6 +402,29 @@ object VideoRepository {
         if (info.relatedItems.isEmpty() && info.errors.isNotEmpty()) error(info.errors.first().message ?: "Failed to load tab")
         BrowsePage(info.relatedItems, info.nextPage)
     }
+    suspend fun channelPostsPage(page: ChannelPage, continuation: String? = null): ChannelPostsPage = withContext(Dispatchers.IO) {
+        HomeFeed.fetchChannelPosts(
+            channelId = page.info.id,
+            postsTabParams = page.uiData?.postsTabParams,
+            continuation = continuation,
+            fallbackAuthor = page.info.name,
+            fallbackAvatar = page.info.avatars.lastOrNull()?.url
+        )
+    }
+
+    suspend fun searchChannel(page: ChannelPage, query: String): List<InfoItem> = withContext(Dispatchers.IO) {
+        val q = query.trim()
+        if (q.isBlank()) return@withContext emptyList()
+        val remote = runCatching {
+            HomeFeed.searchInChannel(page.info.id, q, page.uiData?.searchTabParams)
+        }.getOrDefault(emptyList())
+        if (remote.isNotEmpty()) return@withContext remote
+        page.videos.filter {
+            it.name.contains(q, ignoreCase = true) ||
+                it.uploaderName.orEmpty().contains(q, ignoreCase = true)
+        }
+    }
+
     suspend fun moreChannelTab(page: ChannelPage, filter: String, next: Page): BrowsePage = withContext(Dispatchers.IO) {
         if (filter == TAB_MEMBERSHIP) {
             val uumo = page.membershipUrl ?: membershipPlaylistUrl(page.info.id)
@@ -396,11 +500,15 @@ object VideoRepository {
                 check(revision == YouTubeAuth.sessionRevision) { "Account changed" }
                 val info = resolveUncached(url, context)
                 check(revision == YouTubeAuth.sessionRevision) { "Account changed" }
-                inspectLiveManifests(info, revision)
-                check(revision == YouTubeAuth.sessionRevision) { "Account changed" }
                 if (!pending.isCancelled) {
                     storeResolve(key, info)
                     pending.complete(info)
+                    // Probe live DVR asynchronously so initial playback does not wait on extra manifest roundtrips.
+                    if (info.isOngoingLive()) {
+                        resolveScope.launch {
+                            runCatching { inspectLiveManifests(info, revision) }
+                        }
+                    }
                 }
             } catch (e: CancellationException) {
                 pending.cancel(e)
@@ -577,13 +685,6 @@ object VideoRepository {
             val uploaderId = field(videoInfo, "uploader_id").orEmpty()
             if (uploaderId.startsWith("UC")) streamInfo.uploaderUrl = "https://www.youtube.com/channel/$uploaderId"
             else if (uploaderId.startsWith("@")) streamInfo.uploaderUrl = "https://www.youtube.com/$uploaderId"
-            if (id.length == 11) {
-                streamInfo.relatedItems = try {
-                    InnerTubePlayer.related(id, 20)
-                } catch (_: Exception) {
-                    emptyList<StreamInfoItem>()
-                }
-            }
             val hasVideo = streamInfo.videoStreams.isNotEmpty() || streamInfo.videoOnlyStreams.isNotEmpty() || !streamInfo.hlsUrl.isNullOrBlank() || !streamInfo.dashMpdUrl.isNullOrBlank()
             android.util.Log.d("FlufResolve", "ytdlp type=${streamInfo.streamType} hls=${streamInfo.hlsUrl?.length ?: -1} dash=${streamInfo.dashMpdUrl?.length ?: -1}")
             if (hasVideo) streamInfo else null
@@ -608,14 +709,106 @@ object VideoRepository {
         if (video == null) null else embeddedAudio(info).firstOrNull { it.video.content == video.content }?.metadata
 }
 
+data class ChannelPerkItem(
+    val title: String,
+    val kind: String = "videos"
+)
+
+data class ChannelMembershipUiData(
+    val isJoinedMember: Boolean = false,
+    val headerButtonLabel: String = "Join",
+    val memberTierTitle: String? = null,
+    val memberStatusLabel: String? = null,
+    val memberTenureLabel: String? = null,
+    val memberAvatarUrl: String? = null,
+    val badgeUrl: String? = null,
+    val ourMembersTitle: String? = null,
+    val ourMembersSubtitle: String? = null,
+    val ourMembersAvatars: List<String> = emptyList(),
+    val perks: List<ChannelPerkItem> = emptyList(),
+    val highlighted: List<StreamInfoItem> = emptyList(),
+    val recentVideos: List<StreamInfoItem> = emptyList()
+) {
+    val hasMembershipSurface: Boolean
+        get() = isJoinedMember || headerButtonLabel.equals("See perks", ignoreCase = true) ||
+            highlighted.isNotEmpty() || recentVideos.isNotEmpty() || ourMembersAvatars.isNotEmpty()
+}
+
+data class ChannelLink(
+    val title: String,
+    val url: String
+)
+
+data class ChannelHomeShelf(
+    val title: String,
+    val videos: List<StreamInfoItem> = emptyList(),
+    val shorts: List<ShortsCard> = emptyList(),
+    val playlists: List<org.schabi.newpipe.extractor.playlist.PlaylistInfoItem> = emptyList(),
+    val targetTab: String? = null
+)
+
+data class ChannelPost(
+    val postId: String,
+    val author: String,
+    val authorAvatarUrl: String?,
+    val publishedText: String,
+    val text: String,
+    val images: List<String> = emptyList(),
+    val attachedVideo: StreamInfoItem? = null,
+    val pollChoices: List<String> = emptyList(),
+    val voteCountText: String? = null,
+    val replyCountText: String? = null
+)
+
+data class ChannelPostsPage(
+    val posts: List<ChannelPost>,
+    val nextToken: String? = null
+)
+
+data class ChannelUiData(
+    val handle: String? = null,
+    val subscriberCountText: String? = null,
+    val videoCountText: String? = null,
+    val description: String? = null,
+    val linksSummary: String? = null,
+    val links: List<ChannelLink> = emptyList(),
+    val homeTabParams: String? = null,
+    val postsTabParams: String? = null,
+    val searchTabParams: String? = null,
+    val hasHomeTab: Boolean = false,
+    val hasPostsTab: Boolean = false,
+    val isSubscribed: Boolean? = null,
+    val homeShelves: List<ChannelHomeShelf> = emptyList()
+)
+
+data class ChannelFetchBundle(
+    val uiData: ChannelUiData? = null,
+    val membershipUi: ChannelMembershipUiData? = null
+)
+
 data class ChannelPage(
     val info: ChannelInfo,
     val videos: List<StreamInfoItem>,
     val hasMembership: Boolean = false,
-    val membershipUrl: String? = null
-)
+    val membershipUrl: String? = null,
+    val membershipVideoIds: Set<String> = emptySet(),
+    val membershipUi: ChannelMembershipUiData? = null,
+    val uiData: ChannelUiData? = null
+) {
+    fun isMemberVideo(item: StreamInfoItem): Boolean {
+        if (HomeFeed.metaOf(item.url)?.membersOnly == true) return true
+        val key = InnerTubePlayer.videoIdOf(item.url) ?: item.url
+        return key in membershipVideoIds
+    }
+}
 
-data class SearchPage(val items: List<InfoItem>, val extractor: SearchExtractor, val next: Page?)
+data class SearchPage(
+    val items: List<InfoItem>,
+    val extractor: SearchExtractor,
+    val next: Page?,
+    val searchSuggestion: String? = null,
+    val isCorrectedSearch: Boolean = false,
+)
 
 data class CommentsPage(val items: List<CommentsInfoItem>, val next: Page?)
 

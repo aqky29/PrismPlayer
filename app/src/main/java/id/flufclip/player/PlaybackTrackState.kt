@@ -66,8 +66,7 @@ internal class PlaybackTrackState {
         fun media(url: String, manifestMime: String? = null): MediaItem {
             val builder = MediaItem.Builder().setUri(url).setMediaId(mediaKey)
             if (manifestMime != null) builder.setMimeType(manifestMime)
-            if (isLive) builder.setLiveConfiguration(MediaItem.LiveConfiguration.Builder()
-                .setTargetOffsetMs(5_000L).setMinPlaybackSpeed(.97f).setMaxPlaybackSpeed(1.03f).build())
+            if (isLive) builder.setLiveConfiguration(liveMediaConfiguration())
             selectedSubtitle?.takeIf { it.isUrl && it.content.isNotBlank() }?.let { sub ->
                 val mime = when (sub.format?.suffix?.lowercase()) { "vtt" -> MimeTypes.TEXT_VTT; "ttml" -> MimeTypes.APPLICATION_TTML; "srt" -> MimeTypes.APPLICATION_SUBRIP; else -> null }
                 if (mime != null) builder.setSubtitleConfigurations(listOf(MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub.content)).setMimeType(mime).setLanguage(sub.languageTag).setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT).build()))
@@ -75,13 +74,15 @@ internal class PlaybackTrackState {
             return builder.build()
         }
         fun plain(url: String): MediaItem = MediaItem.Builder().setUri(url).setMediaId(mediaKey).build()
+        val effectiveAudio = audio ?: audioTracks(info).firstOrNull()
         val source = when {
             manifest == PlaybackManifest.HLS -> factory.createMediaSource(media(hlsUrl!!, MimeTypes.APPLICATION_M3U8))
             manifest == PlaybackManifest.DASH -> factory.createMediaSource(media(dashUrl!!, MimeTypes.APPLICATION_MPD))
             stream != null && stream.deliveryMethod == DeliveryMethod.HLS -> factory.createMediaSource(media(stream.content, MimeTypes.APPLICATION_M3U8))
-            stream != null && stream.isVideoOnly && audio != null -> MergingMediaSource(factory.createMediaSource(media(stream.content)), factory.createMediaSource(plain(audio.content)))
-            stream != null && !stream.isVideoOnly -> factory.createMediaSource(media(stream.content))
+            stream != null && stream.isVideoOnly && effectiveAudio != null -> MergingMediaSource(factory.createMediaSource(media(stream.content)), factory.createMediaSource(plain(effectiveAudio.content)))
+            stream != null -> factory.createMediaSource(media(stream.content))
             stream == null && hlsUrl != null -> factory.createMediaSource(media(hlsUrl, MimeTypes.APPLICATION_M3U8))
+            dashUrl != null -> factory.createMediaSource(media(dashUrl, MimeTypes.APPLICATION_MPD))
             else -> error("No playable video format is available.")
         }
         if (position > 0) player.setMediaSource(source, position) else player.setMediaSource(source)
@@ -184,9 +185,13 @@ internal class PlaybackTrackState {
         if (stream != quality) {
             val position = player.currentPosition.coerceAtLeast(0L)
             val playing = player.playWhenReady
-            val audio = selectedAudio ?: selectAudioTrack(audioTracks(info), PlayerSettings.audioPreference, java.util.Locale.getDefault())
-            try { playQuality(player, context, maxVideoHeight, info, stream, audio, position, playing, forceDirectPlayback && stream?.isVideoOnly == true) }
-            catch (e: Exception) { android.widget.Toast.makeText(context, "Failed to change quality: ${e.message}", android.widget.Toast.LENGTH_LONG).show() }
+            val audio = selectedAudio ?: selectAudioTrack(audioTracks(info), PlayerSettings.audioPreference, java.util.Locale.getDefault()) ?: audioTracks(info).firstOrNull()
+            try {
+                playQuality(player, context, maxVideoHeight, info, stream, audio, position, playing, forceDirect = stream != null)
+                if (selectedAudio == null && stream?.isVideoOnly == true) selectedAudio = audio
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, "Failed to change quality: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            }
         }
     }
     fun selectAudio(player: ExoPlayer, context: Context, maxVideoHeight: Int, info: StreamInfo, audio: AudioStream?) {

@@ -182,9 +182,9 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         OfflinePlaybackBridge.pause()
         super.onStop()
-        // Jendela PiP ditutup dengan X: Activity berhenti padahal masih bermode PiP. Aplikasi belum punya pemutaran latar
-        // belakang, jadi tanpa jeda ini suara terus berjalan tanpa ada kontrol untuk menghentikannya.
-        if (isInPictureInPictureMode) pipPlayer?.pause()
+        // Aplikasi belum punya pemutaran latar belakang. Jika Activity berhenti (baik keluar ke Home
+        // tanpa PiP maupun saat jendela PiP ditutup), jeda pemutar supaya suara tidak bocor di background.
+        pipPlayer?.pause()
     }
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
@@ -204,7 +204,21 @@ class MainActivity : ComponentActivity() {
         incomingVideo = intent.getStringExtra("open_video")
         YouTubeAuth.init(applicationContext)
         PlayerSettings.load(applicationContext)
-        setContent { MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Background, surface = Surface)) { App() } }
+        setContent {
+            MaterialTheme(
+                colorScheme = darkColorScheme(
+                    primary = Accent,
+                    secondary = CallToActionBlue,
+                    background = Background,
+                    surface = Surface,
+                    surfaceVariant = SurfaceElevated,
+                    onBackground = TextPrimary,
+                    onSurface = TextPrimary,
+                    onSurfaceVariant = TextSecondary
+                ),
+                typography = FlufPlayTypography
+            ) { App() }
+        }
     }
 }
 

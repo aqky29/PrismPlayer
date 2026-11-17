@@ -1,6 +1,8 @@
 package id.flufclip.player
 
 import androidx.compose.runtime.mutableStateMapOf
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -115,10 +117,10 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
     private val ratings = mutableStateMapOf<String, RatingState>()
     private val subscriptions = mutableStateMapOf<String, SubscriptionState>()
     private val saves = mutableStateMapOf<String, SaveState>()
-    private val ratingOperations = HashMap<String, Long>()
-    private val subscriptionOperations = HashMap<String, Long>()
-    private val saveVersions = HashMap<String, Long>()
-    private var sequence = 0L
+    private val ratingOperations = ConcurrentHashMap<String, Long>()
+    private val subscriptionOperations = ConcurrentHashMap<String, Long>()
+    private val saveVersions = ConcurrentHashMap<String, Long>()
+    private val sequence = AtomicLong(0L)
 
     private fun key(revision: Int, id: String) = "$revision/$id"
 
@@ -142,7 +144,7 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
         val saveKey = key(session, videoId)
         val currentSave = saves[saveKey]
         if (snapshot.saved != null && currentSave?.saved == null) {
-            saves[saveKey] = SaveState(saved = snapshot.saved)
+            putSave(saveKey, SaveState(saved = snapshot.saved))
         }
         val channelId = snapshot.channelId ?: channelIdHint
         if (snapshot.subscribed != null && !channelId.isNullOrBlank()) {
@@ -153,12 +155,12 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
                 currentSub?.notificationParams.orEmpty() + snapshot.notificationParams
             } else currentSub?.notificationParams.orEmpty()
             if (currentSub == null || (!currentSub.pending && currentSub.subscribed == null)) {
-                subscriptions[subKey] = SubscriptionState(subscribed = snapshot.subscribed, confirmed = snapshot.subscribed, notificationPreference = notifPref, notificationParams = mergedParams)
+                putSubscription(subKey, SubscriptionState(subscribed = snapshot.subscribed, confirmed = snapshot.subscribed, notificationPreference = notifPref, notificationParams = mergedParams))
             } else if (currentSub.pending != true) {
-                subscriptions[subKey] = currentSub.copy(
+                putSubscription(subKey, currentSub.copy(
                     notificationPreference = snapshot.notificationPreference ?: currentSub.notificationPreference,
                     notificationParams = mergedParams
-                )
+                ))
             }
         }
     }
@@ -190,7 +192,7 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
         val saveKey = key(session, videoId)
         if (snapshot.saved != null && (saveVersions[saveKey] ?: 0) == generation.save) {
             val current = saves[saveKey] ?: SaveState()
-            saves[saveKey] = current.copy(saved = snapshot.saved)
+            putSave(saveKey, current.copy(saved = snapshot.saved))
         }
         val channelId = snapshot.channelId ?: channelIdHint
         if (snapshot.subscribed != null && !channelId.isNullOrBlank()) {
@@ -201,7 +203,7 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
                 currentSub?.notificationParams.orEmpty() + snapshot.notificationParams
             } else currentSub?.notificationParams.orEmpty()
             if (currentSub?.pending != true && (subscriptionOperations[subKey] ?: 0) == generation.subscription) {
-                subscriptions[subKey] = SubscriptionState(subscribed = snapshot.subscribed, confirmed = snapshot.subscribed, notificationPreference = notifPref, notificationParams = mergedParams)
+                putSubscription(subKey, SubscriptionState(subscribed = snapshot.subscribed, confirmed = snapshot.subscribed, notificationPreference = notifPref, notificationParams = mergedParams))
             }
         }
     }
@@ -209,24 +211,24 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
     /** Status simpan dari dialog Save (server) bersifat otoritatif, termasuk setelah mutasi yang terkonfirmasi. */
     fun setSaved(videoId: String, saved: Boolean?) {
         val key = key(revision(), videoId)
-        saveVersions[key] = ++sequence
-        saves[key] = SaveState(saved = saved)
+        putOperation(saveVersions, key, sequence.incrementAndGet())
+        putSave(key, SaveState(saved = saved))
     }
 
     /** Membership playlist dari dialog Save; Watch later dibedakan dari daftar lain. */
     fun setPlaylists(videoId: String, playlistIds: Set<String>) {
         val key = key(revision(), videoId)
-        saveVersions[key] = ++sequence
-        saves[key] = SaveState(saved = playlistIds.isNotEmpty(), playlistIds = playlistIds, watchLater = "WL" in playlistIds)
+        putOperation(saveVersions, key, sequence.incrementAndGet())
+        putSave(key, SaveState(saved = playlistIds.isNotEmpty(), playlistIds = playlistIds, watchLater = "WL" in playlistIds))
     }
 
     /** Simpan ke Watch later dari jalur yang tidak membuka dialog playlist. */
     fun setWatchLater(videoId: String, watchLater: Boolean = true) {
         val key = key(revision(), videoId)
-        saveVersions[key] = ++sequence
+        putOperation(saveVersions, key, sequence.incrementAndGet())
         val current = saves[key] ?: SaveState()
         val ids = (current.playlistIds ?: emptySet()).toMutableSet().apply { if (watchLater) add("WL") else remove("WL") }
-        saves[key] = current.copy(saved = ids.isNotEmpty(), playlistIds = ids, watchLater = watchLater)
+        putSave(key, current.copy(saved = ids.isNotEmpty(), playlistIds = ids, watchLater = watchLater))
     }
 
     /**
@@ -247,7 +249,7 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
         val key = key(request.revision, request.channelId)
         if (subscriptionOperations[key] != request.operation) return
         val current = subscriptions[key] ?: return
-        subscriptions[key] = current.copy(subscribed = current.confirmed, pending = false, uncertain = true)
+        putSubscription(key, current.copy(subscribed = current.confirmed, pending = false, uncertain = true))
     }
 
     /**
@@ -273,8 +275,8 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
             putRating(ratingKey, optimistic)
             return null
         }
-        val operation = ++sequence
-        ratingOperations[ratingKey] = operation
+        val operation = sequence.incrementAndGet()
+        putOperation(ratingOperations, ratingKey, operation)
         putRating(ratingKey, optimistic.copy(pending = true))
         return RatingRequest(videoId, operation, revision, target, before)
     }
@@ -302,8 +304,8 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
         if (current.pending) return null
         val desired = current.value ?: return null
         if (desired == current.confirmed) return null
-        val operation = ++sequence
-        ratingOperations[ratingKey] = operation
+        val operation = sequence.incrementAndGet()
+        putOperation(ratingOperations, ratingKey, operation)
         putRating(ratingKey, current.copy(pending = true))
         return RatingRequest(videoId, operation, revision, desired, current)
     }
@@ -315,12 +317,12 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
         if (before.subscribed == subscribe) return null
         val optimistic = before.copy(subscribed = subscribe, uncertain = false)
         if (before.pending) {
-            subscriptions[subKey] = optimistic
+            putSubscription(subKey, optimistic)
             return null
         }
-        val operation = ++sequence
-        subscriptionOperations[subKey] = operation
-        subscriptions[subKey] = optimistic.copy(pending = true)
+        val operation = sequence.incrementAndGet()
+        putOperation(subscriptionOperations, subKey, operation)
+        putSubscription(subKey, optimistic.copy(pending = true))
         return SubscriptionRequest(channelId, operation, revision, subscribe, before)
     }
 
@@ -334,7 +336,7 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
             is MutationResult.Rejected -> current.copy(subscribed = current.confirmed, pending = false, uncertain = false)
             is MutationResult.Uncertain -> current.copy(subscribed = current.confirmed, pending = false, uncertain = true)
         }
-        subscriptions[subKey] = applied
+        putSubscription(subKey, applied)
         return applied
     }
 
@@ -345,9 +347,9 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
         if (current.pending) return null
         val desired = current.subscribed ?: return null
         if (desired == current.confirmed) return null
-        val operation = ++sequence
-        subscriptionOperations[subKey] = operation
-        subscriptions[subKey] = current.copy(pending = true)
+        val operation = sequence.incrementAndGet()
+        putOperation(subscriptionOperations, subKey, operation)
+        putSubscription(subKey, current.copy(pending = true))
         return SubscriptionRequest(channelId, operation, revision, desired, current)
     }
 
@@ -358,9 +360,9 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
         if (current.notificationPreference == preference) return null
         val params = current.notificationParams[preference]
         val optimistic = current.copy(notificationPreference = preference)
-        subscriptions[subKey] = optimistic
-        val operation = ++sequence
-        subscriptionOperations[subKey] = operation
+        putSubscription(subKey, optimistic)
+        val operation = sequence.incrementAndGet()
+        putOperation(subscriptionOperations, subKey, operation)
         return NotificationPreferenceRequest(channelId, operation, revision, preference, current.notificationPreference, params)
     }
 
@@ -369,7 +371,7 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
         val subKey = key(request.revision, request.channelId)
         val current = subscriptions[subKey] ?: return
         if (result is MutationResult.Rejected) {
-            subscriptions[subKey] = current.copy(notificationPreference = request.previous)
+            putSubscription(subKey, current.copy(notificationPreference = request.previous))
         }
     }
 
@@ -379,9 +381,35 @@ internal class EngagementRepository(private val revision: () -> Int = { YouTubeA
         if (ratings.size > MAX_ENTRIES) prune(ratings, revision())
     }
 
+    private fun putSubscription(key: String, state: SubscriptionState) {
+        if (state == SubscriptionState()) subscriptions.remove(key) else subscriptions[key] = state
+        if (subscriptions.size > MAX_ENTRIES) prune(subscriptions, revision())
+    }
+
+    private fun putSave(key: String, state: SaveState) {
+        if (state == SaveState()) saves.remove(key) else saves[key] = state
+        if (saves.size > MAX_ENTRIES) prune(saves, revision())
+    }
+
+    private fun putOperation(map: ConcurrentHashMap<String, Long>, key: String, op: Long) {
+        map[key] = op
+        if (map.size > MAX_ENTRIES) {
+            val prefix = "${revision()}/"
+            map.keys.filterNot { it.startsWith(prefix) }.forEach { map.remove(it) }
+            if (map.size > MAX_ENTRIES) {
+                val toRemove = map.keys.take(map.size - (MAX_ENTRIES * 3 / 4))
+                toRemove.forEach { map.remove(it) }
+            }
+        }
+    }
+
     private fun prune(map: MutableMap<String, *>, revision: Int) {
         val prefix = "$revision/"
         map.keys.filterNot { it.startsWith(prefix) }.forEach(map::remove)
+        if (map.size > MAX_ENTRIES) {
+            val toRemove = map.keys.take(map.size - (MAX_ENTRIES * 3 / 4))
+            toRemove.forEach(map::remove)
+        }
     }
 
     private companion object { const val MAX_ENTRIES = 256 }

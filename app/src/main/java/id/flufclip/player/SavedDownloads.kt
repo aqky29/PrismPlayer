@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 data class SavedDownload(val uri: String, val name: String, val mime: String, val bytes: Long, val video: DownloadVideo = DownloadVideo()) {
     val title: String get() = video.title.ifBlank { name }
@@ -24,6 +25,7 @@ internal fun downloadVideo(json: JSONObject?): DownloadVideo = if (json == null)
 
 internal object SavedDownloads {
     val revision = MutableStateFlow(0L)
+    val playbackRevision = MutableStateFlow(0L)
     private fun preferences(context: Context) = context.getSharedPreferences("saved_downloads", Context.MODE_PRIVATE)
     fun list(context: Context): List<SavedDownload> = runCatching {
         val entries = JSONArray(preferences(context).getString("entries", "[]"))
@@ -42,12 +44,28 @@ internal object SavedDownloads {
         revision.update { it + 1 }
     }
 
+    private fun deleteArtworkFile(uriString: String) {
+        if (uriString.isNotBlank() && isLocalDownloadUri(uriString)) {
+            runCatching {
+                val path = Uri.parse(uriString).path
+                if (!path.isNullOrBlank()) {
+                    val file = File(path)
+                    if (file.exists() && file.isFile) {
+                        file.delete()
+                    }
+                }
+            }
+        }
+    }
+
     @Synchronized fun forget(context: Context, saved: SavedDownload) {
         val entries = JSONArray()
         list(context).filterNot { it.uri == saved.uri }.forEach { item ->
             entries.put(JSONObject().put("uri", item.uri).put("name", item.name).put("mime", item.mime).put("bytes", item.bytes).put("video", item.video.json()))
         }
         preferences(context).edit().putString("entries", entries.toString()).apply()
+        deleteArtworkFile(saved.video.thumbnail)
+        deleteArtworkFile(saved.video.avatar)
         revision.update { it + 1 }
     }
 

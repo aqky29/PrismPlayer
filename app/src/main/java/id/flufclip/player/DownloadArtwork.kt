@@ -25,11 +25,16 @@ internal suspend fun cacheDownloadArtwork(context: Context, video: DownloadVideo
                 val folder = File(context.filesDir, "download-artwork")
                 if (!folder.isDirectory && !folder.mkdirs()) return@withTimeoutOrNull null
                 val file = File(folder, "${UUID.randomUUID()}.jpg")
-                file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.JPEG, 80, it)) }
-                Uri.fromFile(file).toString()
+                try {
+                    file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.JPEG, 80, it)) }
+                    Uri.fromFile(file).toString()
+                } catch (e: Exception) {
+                    file.delete()
+                    throw e
+                }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { null }
-        } ?: ""
+        } ?: url
     }
     video.copy(thumbnail = save(video.thumbnail, 512, 288), avatar = save(video.avatar, 96, 96))
 }

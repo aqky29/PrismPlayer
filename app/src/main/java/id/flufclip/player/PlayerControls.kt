@@ -174,6 +174,18 @@ internal class FullscreenActions(
     var normalSpeed by remember { mutableFloatStateOf(1f) }
     var resumeAfterRewind by remember { mutableStateOf(false) }
     var rewindJob by remember { mutableStateOf<Job?>(null) }
+    DisposableEffect(player) {
+        onDispose {
+            rewindJob?.cancel()
+            rewindJob = null
+            if (speedHold == 1) {
+                player.setPlaybackSpeed(normalSpeed)
+            } else if (speedHold == -1 && resumeAfterRewind) {
+                player.play()
+            }
+            speedHold = 0
+        }
+    }
     // Live hanya boleh di-seek bila window DVR benar-benar tersedia. player.duration pada HLS live
     // kadang hanya durasi segmen (mis. 3000 ms) sementara currentLiveOffset lebih besar; timeline window dipakai lebih dulu.
     val liveBase = if (isLive) windowDuration.takeIf { it > 0L } ?: duration else duration
@@ -195,8 +207,10 @@ internal class FullscreenActions(
             liveOffset = player.currentLiveOffset
             ended = player.playbackState == Player.STATE_ENDED
             val timeline = player.currentTimeline
-            val liveConfig = if (timeline.isEmpty) null else timeline.getWindow(player.currentMediaItemIndex, liveWindow).liveConfiguration
-            val winMs = if (timeline.isEmpty) 0L else liveWindow.durationMs.takeIf { it > 0L && it != C.TIME_UNSET } ?: 0L
+            val index = player.currentMediaItemIndex
+            val hasWindow = !timeline.isEmpty && index in 0 until timeline.windowCount
+            val liveConfig = if (hasWindow) timeline.getWindow(index, liveWindow).liveConfiguration else null
+            val winMs = if (hasWindow) liveWindow.durationMs.takeIf { it > 0L && it != C.TIME_UNSET } ?: 0L else 0L
             windowDuration = winMs
             val base = if (isLive) winMs.takeIf { it > 0L } ?: duration else duration
             val target = liveConfig?.targetOffsetMs ?: C.TIME_UNSET
@@ -208,7 +222,7 @@ internal class FullscreenActions(
             if (isLive && base > 0L) {
                 // Live speed-control offsets are not DVR bounds. Use the timeline's safe LIVE position.
                 liveSeekStart = 0L
-                liveSeekEnd = if (!timeline.isEmpty) liveWindow.defaultPositionMs
+                liveSeekEnd = if (hasWindow) liveWindow.defaultPositionMs
                     .takeIf { it != C.TIME_UNSET && it > 0L }?.coerceAtMost(base) ?: base else base
             } else {
                 liveSeekStart = 0L
@@ -278,20 +292,32 @@ internal class FullscreenActions(
                                 delay(100)
                             }
                         }
-                    } else if (playing) { normalSpeed = player.playbackParameters.speed; player.setPlaybackSpeed(2f); speedHold = 1; controlsVisible = false }
+                    } else if (playing && !isLive && !ended) {
+                        normalSpeed = player.playbackParameters.speed
+                        player.setPlaybackSpeed(2f)
+                        speedHold = 1
+                        controlsVisible = false
+                    }
                 },
                 onPress = {
-                    tryAwaitRelease()
-                    when (speedHold) {
-                        1 -> player.setPlaybackSpeed(normalSpeed)
-                        -1 -> { rewindJob?.cancel(); rewindJob = null; if (resumeAfterRewind) player.play() }
+                    try {
+                        tryAwaitRelease()
+                    } finally {
+                        when (speedHold) {
+                            1 -> player.setPlaybackSpeed(normalSpeed)
+                            -1 -> {
+                                rewindJob?.cancel()
+                                rewindJob = null
+                                if (resumeAfterRewind) player.play()
+                            }
+                        }
+                        speedHold = 0
                     }
-                    speedHold = 0
                 }
             )
         })
         if (seekSide != 0) SeekRipple(seekSide, seekSeconds, seekTap, seekSequence)
-        if (speedHold != 0) Row(Modifier.align(Alignment.TopCenter).padding(top = 12.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = .6f)).padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (speedHold != 0) Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = .6f)).padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             if (speedHold < 0) { PlayerGlyph("forward", Modifier.size(14.dp).graphicsLayer { scaleX = -1f }); Spacer(Modifier.width(4.dp)) }
             Text("2x", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             if (speedHold > 0) { Spacer(Modifier.width(4.dp)); PlayerGlyph("forward", Modifier.size(14.dp)) }
@@ -456,8 +482,12 @@ internal class FullscreenActions(
     }
 }
 
+/** Selects a compact storyboard frameset suitable for scrub previews. */
+internal fun selectScrubFrameset(framesets: List<Frameset>): Frameset? =
+    framesets.filter { it.frameWidth <= 320 }.maxByOrNull { it.frameWidth } ?: framesets.minByOrNull { it.frameWidth }
+
 /** Loads storyboard sprite sheets once and keeps them for the frames drawn while scrubbing. */
-@Composable private fun rememberStoryboardSheets(urls: List<String>): Map<String, ImageBitmap> {
+@Composable internal fun rememberStoryboardSheets(urls: List<String>): Map<String, ImageBitmap> {
     val context = LocalContext.current
     val sheets = remember { mutableStateMapOf<String, ImageBitmap>() }
     LaunchedEffect(urls) {
@@ -470,7 +500,7 @@ internal class FullscreenActions(
     return sheets
 }
 
-@Composable private fun StoryboardFrame(frameset: Frameset, position: Long, sheets: Map<String, ImageBitmap>, modifier: Modifier) {
+@Composable internal fun StoryboardFrame(frameset: Frameset, position: Long, sheets: Map<String, ImageBitmap>, modifier: Modifier) {
     val bounds = remember(frameset, position) { runCatching { frameset.getFrameBoundsAt(position) }.getOrNull() }
     val image = bounds?.let { frameset.urls.getOrNull(it[0]) }?.let { sheets[it] }
     Box(modifier.background(Color(0xFF202020))) {
@@ -487,7 +517,7 @@ internal class FullscreenActions(
  */
 @Composable private fun BoxScope.ScrubPreview(framesets: List<Frameset>, position: Long, duration: Long, chapter: String?, fine: Boolean, maxWidth: Dp, maxHeight: Dp, fullscreen: Boolean, lift: Dp = 0.dp,
     rangeStart: Long = 0L, rangeEnd: Long = duration, liveEdge: Long? = null) {
-    val frameset = remember(framesets) { framesets.filter { it.frameWidth <= 320 }.maxByOrNull { it.frameWidth } ?: framesets.minByOrNull { it.frameWidth } }
+    val frameset = remember(framesets) { selectScrubFrameset(framesets) }
     val step = frameset?.durationPerFrame?.toLong()?.takeIf { it > 0 } ?: 2_000L
     val stripCount = if (maxWidth >= 600.dp) 7 else 5
     val stripTimes = if (fine) (-(stripCount / 2)..(stripCount / 2)).map { (position + it * step).coerceIn(0L, duration.coerceAtLeast(0L)) } else listOf(position)

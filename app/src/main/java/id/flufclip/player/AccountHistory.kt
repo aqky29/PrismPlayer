@@ -101,7 +101,7 @@ internal object AccountHistory {
                         }
                         return
                     }
-                    if (node.has("sectionListRenderer") || node.has("richGridRenderer")) recognized = true
+                    if (node.has("sectionListRenderer") || node.has("richGridRenderer") || node.has("itemSectionRenderer")) recognized = true
                     // messageRenderer may be a signed-out prompt; do not claim it is an empty history.
                     for (key in node.keys()) {
                         if (key !in setOf("navigationEndpoint", "trackingParams", "header", "menu", "frameworkUpdates")) visit(node.opt(key), shelfId)
@@ -113,7 +113,7 @@ internal object AccountHistory {
             ?: json.optJSONArray("onResponseReceivedEndpoints") ?: json.optJSONObject("continuationContents")
             ?: throw IllegalStateException("Respons History tidak dikenali")
         visit(roots)
-        if (!recognized || (entries.isEmpty() && next == null)) throw IllegalStateException("History kosong atau sesi tidak dapat diverifikasi. Buka YouTube untuk memeriksa akun.")
+        if (!recognized) throw IllegalStateException("Respons History tidak dikenali atau sesi tidak dapat diverifikasi. Buka YouTube untuk memeriksa akun.")
         return AccountHistoryPage(entries, next)
     }
 

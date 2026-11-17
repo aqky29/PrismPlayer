@@ -231,7 +231,7 @@ internal fun SubsChannelAvatarRow(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(52.dp)
                         .clip(CircleShape)
                         .background(if (isAll) Color.White else Surface),
                     contentAlignment = Alignment.Center
@@ -247,7 +247,7 @@ internal fun SubsChannelAvatarRow(
                 Text(
                     "Semua",
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = if (isAll) Color.White else Color.LightGray,
+                    color = if (isAll) Color.White else TextSecondary,
                     maxLines = 1
                 )
             }
@@ -259,23 +259,23 @@ internal fun SubsChannelAvatarRow(
             val hasFresh = channel.key in freshKeys || channel.name in freshKeys
             Column(
                 modifier = Modifier
-                    .width(58.dp)
+                    .width(62.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { onSelect(channel) }
                     .padding(vertical = 4.dp, horizontal = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(52.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(52.dp)
                             .then(
                                 if (isSelected) Modifier.border(2.dp, Color.White, CircleShape)
-                                else if (isLive) Modifier.border(2.dp, Color(0xFFFF0000), CircleShape)
-                                else if (hasFresh) Modifier.border(2.dp, Color(0xFF3EA6FF), CircleShape)
+                                else if (isLive) Modifier.border(2.dp, Accent, CircleShape)
+                                else if (hasFresh) Modifier.border(2.dp, CallToActionBlue, CircleShape)
                                 else Modifier
                             )
                             .padding(if (isSelected || isLive || hasFresh) 3.dp else 0.dp)
@@ -300,7 +300,7 @@ internal fun SubsChannelAvatarRow(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .background(Color(0xFFFF0000), RoundedCornerShape(2.dp))
+                                .background(Accent, RoundedCornerShape(2.dp))
                                 .padding(horizontal = 3.dp, vertical = 0.5.dp)
                         ) {
                             Text(
@@ -313,9 +313,10 @@ internal fun SubsChannelAvatarRow(
                     } else if (hasFresh && !isSelected) {
                         Box(
                             modifier = Modifier
-                                .size(8.dp)
+                                .size(9.dp)
                                 .align(Alignment.BottomEnd)
-                                .background(Color(0xFF3EA6FF), CircleShape)
+                                .background(CallToActionBlue, CircleShape)
+                                .border(1.5.dp, Background, CircleShape)
                         )
                     }
                 }
@@ -323,7 +324,7 @@ internal fun SubsChannelAvatarRow(
                 Text(
                     channel.name,
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                    color = if (isSelected) Color.White else Color.LightGray,
+                    color = if (isSelected) Color.White else TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

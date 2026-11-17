@@ -200,7 +200,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             if (kind == "chapters") ChaptersPanel(info, { player.currentPosition }, draggable, dismissActivePanel, onSeek, modifier, showHandle = showHandle)
             else if (kind == "description") DescriptionPanel(info, draggable, dismissActivePanel, onLink, onSeek, onChannel, modifier, showHandle = showHandle, onChapters = onChapters)
             else if (kind == "ask" && ask != null) AskPanel(ask, draggable, dismissActivePanel, onSeek, modifier)
-            else if (kind == "chat") LiveChatPanel(chatState, draggable, dismissActivePanel, modifier, watchingCount = info.viewCount)
+            else if (kind == "chat") LiveChatPanel(chatState, draggable, dismissActivePanel, modifier, watchingCount = if (isLive) info.viewCount else 0L, subscribed = engagement.subscribed, onSubscribe = engagement.onSubscribe)
             else if (kind == "playlist") PlaylistQueuePanel(
                 info = info,
                 queue = queue,
@@ -251,8 +251,33 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)
                                 )
                             }
-                            LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)) {
-                                items(related, key = { it.url }) { item -> VideoCard(item, resolveAvatar = false, onChannel = onOpenChannel) { onVideo(item) } }
+                            LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)) {
+                                if (recommendations.isEmpty()) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(SurfaceElevated)
+                                                .padding(horizontal = 16.dp, vertical = 18.dp)
+                                        ) {
+                                            Text(
+                                                "Related videos are unavailable.",
+                                                color = TextSecondary,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                    }
+                                }
+                                items(related, key = { it.url }) { item ->
+                                    VideoCard(
+                                        item = item,
+                                        resolveAvatar = false,
+                                        roundedThumbnail = true,
+                                        bottomPadding = 0.dp,
+                                        onChannel = onOpenChannel
+                                    ) { onVideo(item) }
+                                }
                             }
                         }
                     } else {
@@ -261,6 +286,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 }
             }
         } else {
+            val reduceMotion = rememberReduceMotion()
             LazyColumn(Modifier.fillMaxSize()) {
                 item { Spacer(Modifier.fillMaxWidth().aspectRatio(effectiveAspect)) }
                 if (hasPlaylist) {
@@ -283,14 +309,35 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         wide = false, chatOpen = panel == "chat"
                     )
                 }
-                if (recommendations.isEmpty()) item { Text("Related videos are unavailable.", color = Color.LightGray, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
-                items(related) { item -> VideoCard(item, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), onChannel = onOpenChannel) { onVideo(item) } }
+                if (recommendations.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(SurfaceElevated)
+                                .padding(horizontal = 16.dp, vertical = 16.dp)
+                        ) {
+                            Text(
+                                "Related videos are unavailable.",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+                items(related, key = { it.url }) { item -> VideoCard(item, onChannel = onOpenChannel) { onVideo(item) } }
             }
             // Like YouTube, the panel slides up from the bottom and covers everything below the player, which keeps playing.
             androidx.compose.animation.AnimatedContent(targetState = panel, modifier = Modifier.fillMaxSize(), label = "watch panel", transitionSpec = {
-                val enter = if (targetState != null) androidx.compose.animation.slideInVertically(tween(250, easing = FastOutSlowInEasing)) { it } else androidx.compose.animation.EnterTransition.None
-                val exit = if (targetState == null) androidx.compose.animation.slideOutVertically(tween(200)) { it } else androidx.compose.animation.fadeOut(tween(120))
-                enter togetherWith exit
+                if (reduceMotion) {
+                    androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
+                } else {
+                    val enter = if (targetState != null) androidx.compose.animation.slideInVertically(tween(250, easing = FastOutSlowInEasing)) { it } else androidx.compose.animation.EnterTransition.None
+                    val exit = if (targetState == null) androidx.compose.animation.slideOutVertically(tween(200)) { it } else androidx.compose.animation.fadeOut(tween(120))
+                    enter togetherWith exit
+                }
             }) { kind ->
                 if (kind != null) Column(Modifier.fillMaxSize()) {
                     Spacer(Modifier.fillMaxWidth().aspectRatio(effectiveAspect))
@@ -321,8 +368,9 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     }
     Row(
         modifier = modifier
+            .heightIn(min = 52.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Surface)
+            .background(SurfaceElevated)
             .border(0.5.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
             .clickable(enabled = queue.isNotEmpty(), onClick = onToggle)
             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -332,13 +380,13 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         Icon(
             painter = painterResource(R.drawable.yt_w_save),
             contentDescription = null,
-            tint = Color.White,
+            tint = TextPrimary,
             modifier = Modifier.size(20.dp)
         )
         Column(Modifier.weight(1f)) {
             Text(
                 text = if (nextItem != null && !expanded) "Next: ${nextItem.name}" else titleText,
-                color = Color.White,
+                color = TextPrimary,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -346,7 +394,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             )
             Text(
                 text = "$titleText · $positionText",
-                color = Color(0xFFAAAAAA),
+                color = TextSecondary,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -354,23 +402,30 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             )
         }
         if (onOpenFullPlaylist != null) {
-            Text(
-                text = "Playlist",
-                color = Color.White,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
+            Box(
                 modifier = Modifier
+                    .heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = 0.12f))
-                    .clickable(onClick = onOpenFullPlaylist)
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
-            )
+                    .clickable(onClick = onOpenFullPlaylist),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Playlist",
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
         }
         if (queue.isNotEmpty()) {
             Icon(
                 imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 contentDescription = if (expanded) "Collapse playlist" else "Expand playlist",
-                tint = Color.White,
+                tint = TextPrimary,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -414,29 +469,36 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = info.uploaderName?.takeIf { it.isNotBlank() } ?: "Playlist queue",
-                    color = Color(0xFFAAAAAA),
+                    color = TextSecondary,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = "View full playlist",
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                Box(
                     modifier = Modifier
+                        .heightIn(min = 44.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Surface)
-                        .clickable(onClick = onOpenFullPlaylist)
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                )
+                        .clickable(onClick = onOpenFullPlaylist),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "View full playlist",
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Surface)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
         }
@@ -452,20 +514,30 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(min = 56.dp)
                         .background(if (isCurrent) Surface else Color.Transparent)
                         .clickable { onSelectQueueItem(item) }
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = if (isCurrent) "▶" else "${idx + 1}",
-                        color = if (isCurrent) Color.White else Color(0xFFAAAAAA),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.width(24.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+                    Box(modifier = Modifier.width(24.dp), contentAlignment = Alignment.Center) {
+                        if (isCurrent) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Now playing",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        } else {
+                            Text(
+                                text = "${idx + 1}",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
                     Box(
                         modifier = Modifier
                             .width(112.dp)
@@ -486,7 +558,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     Column(Modifier.weight(1f)) {
                         Text(
                             text = item.name,
-                            color = Color.White,
+                            color = TextPrimary,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 2,
@@ -495,7 +567,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         item.uploaderName?.takeIf { it.isNotBlank() }?.let { uploader ->
                             Text(
                                 text = uploader,
-                                color = Color(0xFFAAAAAA),
+                                color = TextSecondary,
                                 style = MaterialTheme.typography.bodySmall,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,

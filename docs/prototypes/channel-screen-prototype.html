@@ -1,0 +1,4353 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark" data-mode="proposed">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>PrismPlayer Channel Screen Prototype: YouTube 21.45.83 Reference</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --surface-elevated: #1c1c1c;
+      --surface: #272727;
+      --surface-hover: #363636;
+      --text-primary: #f1f1f1;
+      --text-secondary: #aaaaaa;
+      --accent: #ff0033;
+      --live-red: #cc0000;
+      --member-green: #6dd58c;
+      --member-tab-active: #34c77b;
+      --member-badge-bg: #053319;
+      --member-badge-fg: #b9f6ca;
+      --member-badge-border: #1e8e3e;
+      --cta-blue: #3ea6ff;
+      --cta-blue-ink: #0f0f0f;
+      --error-text: #ff5c77;
+      --border: #303030;
+      --border-strong: #6b6b6b;
+      --focus-ring: #3ea6ff;
+      --pill-bg: #f1f1f1;
+      --pill-fg: #0f0f0f;
+      --glass-bg: rgba(24, 24, 24, 0.86);
+      --glass-border: rgba(255, 255, 255, 0.16);
+      --bezel-bg: #18181b;
+      --bezel-border: #4a4a52;
+      --banner-a: #1a2433;
+      --banner-b: #28364a;
+      --poll-bar-bg: rgba(255, 255, 255, 0.08);
+      --poll-bar-fill: rgba(62, 166, 255, 0.28);
+      --shadow-elevated: 0 12px 32px rgba(0, 0, 0, 0.52);
+    }
+
+    html[data-theme="light"] {
+      --bg: #ffffff;
+      --surface-elevated: #f8f8f8;
+      --surface: #f2f2f2;
+      --surface-hover: #e5e5e5;
+      --text-primary: #0f0f0f;
+      --text-secondary: #606060;
+      --accent: #cc0000;
+      --live-red: #c00024;
+      --member-green: #0b5726;
+      --member-tab-active: #0b5726;
+      --member-badge-bg: #e6f4ea;
+      --member-badge-fg: #0d652d;
+      --member-badge-border: #1e8e3e;
+      --cta-blue: #065fd4;
+      --cta-blue-ink: #ffffff;
+      --error-text: #c00024;
+      --border: #e0e0e0;
+      --border-strong: #737373;
+      --focus-ring: #065fd4;
+      --pill-bg: #0f0f0f;
+      --pill-fg: #ffffff;
+      --glass-bg: rgba(248, 248, 248, 0.90);
+      --glass-border: rgba(15, 15, 15, 0.14);
+      --bezel-bg: #e4e4e7;
+      --bezel-border: #8c8c96;
+      --banner-a: #dce4f0;
+      --banner-b: #c8d4e6;
+      --poll-bar-bg: rgba(15, 15, 15, 0.06);
+      --poll-bar-fill: rgba(6, 95, 212, 0.16);
+      --shadow-elevated: 0 12px 28px rgba(0, 0, 0, 0.16);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg);
+      color: var(--text-primary);
+      font-family: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, a[href], select, [role="tab"] {
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    button:disabled, select:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* Workbench Header */
+    .wb-header {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-elevated);
+      padding: 14px 20px;
+    }
+
+    .wb-header-inner {
+      max-width: 1480px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .wb-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 20px;
+    }
+
+    .wb-title-row h1 {
+      margin: 0;
+      font-size: clamp(1.125rem, 2vw, 1.375rem);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .wb-subtitle {
+      margin: 2px 0 0;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .wb-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+    }
+
+    .ctrl-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+    }
+
+    .ctrl-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      padding: 0 8px;
+    }
+
+    .seg-btn {
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      transition: background-color 140ms ease, color 140ms ease;
+    }
+
+    .seg-btn:hover {
+      background: var(--surface);
+      color: var(--text-primary);
+    }
+
+    .seg-btn[aria-pressed="true"] {
+      background: var(--pill-bg);
+      color: var(--pill-fg);
+      font-weight: 600;
+    }
+
+    /* Main Workspace */
+    .wb-main {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 18px 16px 44px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .spec-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+    }
+
+    .spec-item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .spec-key {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .spec-val {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* Canvas Grid: Clean vertical/adaptive layout so Tablet NEVER gets cropped */
+    .canvas-grid {
+      display: grid;
+      grid-template-columns: 396px minmax(0, 1fr);
+      align-items: start;
+      gap: 24px;
+    }
+
+    .canvas-grid.single-view {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    @media (max-width: 1320px) {
+      .canvas-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .device-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .device-section.mobile-section {
+      width: min(100%, 396px);
+      justify-self: start;
+    }
+
+    .device-section.tablet-section {
+      width: 100%;
+    }
+
+    .device-section[hidden] {
+      display: none;
+    }
+
+    .device-heading-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px 12px;
+    }
+
+    .device-heading-bar h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .device-meta-tag {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .tablet-scroll-stage {
+      width: 100%;
+      overflow-x: auto;
+      padding-bottom: 6px;
+    }
+
+    /* Device Frames */
+    .device-frame {
+      background: var(--bg);
+      border: 7px solid var(--bezel-bg);
+      outline: 1px solid var(--bezel-border);
+      border-radius: 24px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      color: var(--text-primary);
+    }
+
+    .device-frame.mobile-frame {
+      width: 100%;
+      max-width: 390px;
+      height: 780px;
+    }
+
+    .device-frame.tablet-frame {
+      width: 100%;
+      min-width: 780px;
+      max-width: 1060px;
+      height: 690px;
+    }
+
+    .app-shell {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      position: relative;
+      background: var(--bg);
+    }
+
+    /* Tablet Navigation Rail (YouTube APK sw600dp Proposed) */
+    .tablet-nav-rail {
+      width: 74px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 4px;
+      gap: 6px;
+    }
+
+    .rail-item {
+      width: 64px;
+      min-height: 54px;
+      padding: 6px 2px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      font-size: 0.6875rem;
+      font-weight: 500;
+    }
+
+    .rail-item:hover {
+      background: var(--surface);
+      color: var(--text-primary);
+    }
+
+    .rail-item[aria-current="page"] {
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+
+    .rail-pill {
+      width: 52px;
+      height: 30px;
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rail-item[aria-current="page"] .rail-pill {
+      background: var(--surface);
+    }
+
+    .app-viewport {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background: var(--bg);
+    }
+
+    /* Top App Bar (48-52dp APK style) */
+    .top-bar {
+      height: 50px;
+      padding: 0 6px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      position: relative;
+      z-index: 4;
+      transition: transform 180ms ease, margin-top 180ms ease;
+    }
+
+    .top-bar.collapsed {
+      margin-top: -50px;
+      transform: translateY(-50px);
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--text-primary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .icon-btn:hover {
+      background: var(--surface);
+    }
+
+    .top-bar-title {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-left: 4px;
+    }
+
+    .search-inline-form {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .search-inline-form[hidden] {
+      display: none;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 0;
+      height: 38px;
+      border-radius: 19px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text-primary);
+      padding: 0 14px;
+      font-size: 0.875rem;
+    }
+
+    .dropdown-anchor {
+      position: relative;
+    }
+
+    .menu-popover {
+      position: absolute;
+      top: 46px;
+      right: 4px;
+      width: 210px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      box-shadow: var(--shadow-elevated);
+      padding: 6px;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .menu-popover[hidden] {
+      display: none;
+    }
+
+    .menu-item {
+      width: 100%;
+      min-height: 44px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-primary);
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .menu-item:hover {
+      background: var(--surface);
+    }
+
+    /* Scroll Body inside Viewport */
+    .scroll-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding-bottom: 18px;
+    }
+
+    /* Extra padding only when Prism floating glass dock sits over viewport */
+    .has-floating-dock .scroll-body {
+      padding-bottom: 84px;
+    }
+
+    /* Docked Solid Bottom Bar (YouTube Mobile Ref) */
+    .yt-bottom-bar {
+      height: 52px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 4px;
+      flex-shrink: 0;
+      z-index: 5;
+    }
+
+    .yt-nav-btn {
+      min-width: 60px;
+      min-height: 44px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      font-size: 0.6875rem;
+      font-weight: 500;
+    }
+
+    .yt-nav-btn[aria-current="page"] {
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+
+    /* Floating Glass Dock (ONLY in Current PrismPlayer mode!) */
+    .floating-dock-wrap {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 10px;
+      display: flex;
+      justify-content: center;
+      padding: 0 18px;
+      pointer-events: none;
+      z-index: 6;
+    }
+
+    .floating-dock-wrap[hidden] {
+      display: none;
+    }
+
+    .floating-dock {
+      pointer-events: auto;
+      width: 100%;
+      max-width: 344px;
+      height: 56px;
+      border-radius: 28px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--shadow-elevated);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 0 8px;
+    }
+
+    .dock-btn {
+      min-width: 56px;
+      min-height: 44px;
+      border: 0;
+      border-radius: 22px;
+      background: transparent;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      font-size: 0.6875rem;
+      font-weight: 500;
+    }
+
+    .dock-btn[aria-current="page"] {
+      background: var(--surface);
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+
+    /* CHANNEL HEADER ARCHITECTURES */
+    /* A) Proposed Mobile (channel_header_v2_layout res/lEd.xml: rounded inset banner + non-overlapping left 72-80dp avatar beside channel name/handle) */
+    .ch-hdr-v2-mobile {
+      padding: 8px 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .banner-v2-mobile {
+      width: 100%;
+      aspect-ratio: 3.4 / 1;
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--banner-a);
+      display: block;
+    }
+
+    .ch-v2-identity-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .ch-v2-avatar {
+      width: 74px;
+      height: 74px;
+      border-radius: 50%;
+      background: var(--surface);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .ch-v2-avatar.has-live-ring {
+      padding: 3px;
+      border: 2px solid var(--live-red);
+    }
+
+    /* B) Proposed Tablet Landscape (layout/channel_header sw600dp res/egU.xml: rounded/full 6:1 banner, 108dp/128dp left avatar, 152dp inset, top-right/inline action cluster) */
+    .ch-hdr-tablet-wrap {
+      padding: 10px 20px 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .banner-tablet-ref {
+      width: 100%;
+      aspect-ratio: 6 / 1;
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--banner-a);
+      display: block;
+    }
+
+    .ch-hdr-tablet-body {
+      position: relative;
+      padding: 12px 0 14px 146px;
+      min-height: 98px;
+    }
+
+    .avatar-tablet-ref {
+      position: absolute;
+      left: 16px;
+      top: -38px;
+      width: 112px;
+      height: 112px;
+      border-radius: 50%;
+      border: 4px solid var(--bg);
+      background: var(--surface);
+      z-index: 2;
+    }
+
+    .avatar-tablet-ref.has-live-ring {
+      box-shadow: 0 0 0 2px var(--live-red);
+    }
+
+    .tablet-info-grid {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .tablet-info-col {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .tablet-action-cluster {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-top: 4px;
+      flex-shrink: 0;
+    }
+
+    /* C) Current PrismPlayer Banner & Header */
+    .channel-header-wrap.current-inset {
+      padding: 14px 16px 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .banner-current {
+      width: 100%;
+      height: 128px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: var(--banner-a);
+    }
+
+    .tablet-frame .banner-current {
+      height: 160px;
+    }
+
+    .hdr-current {
+      padding-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hdr-current-top {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .avatar-current-mobile {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: 2px solid var(--live-red);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .avatar-current-tablet {
+      width: 82px;
+      height: 82px;
+      border-radius: 50%;
+      border: 2px solid var(--live-red);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .banner-box svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .live-pill {
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--live-red);
+      color: #ffffff;
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 2px solid var(--bg);
+      white-space: nowrap;
+      text-transform: uppercase;
+    }
+
+    .channel-title-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .channel-name {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--text-primary);
+    }
+
+    .tablet-frame .channel-name {
+      font-size: 1.625rem;
+    }
+
+    .channel-meta {
+      margin: 3px 0 0;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+
+    .desc-preview-btn {
+      padding: 2px 0;
+      min-height: 44px;
+      border: 0;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+
+    .desc-preview-btn:hover .desc-more {
+      text-decoration: underline;
+    }
+
+    .desc-more {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .link-row-btn {
+      min-height: 44px;
+      border: 0;
+      background: transparent;
+      padding: 2px 0;
+      color: var(--text-primary);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-align: left;
+    }
+
+    .link-row-btn .link-host {
+      color: var(--cta-blue);
+    }
+
+    /* Action Buttons Row (channel_action_buttons_phone.eml-js & flexible_actions_channels) */
+    .actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Visually 36dp pill matching APK channel_subscribe_button_total_height while providing >=44px hit wrapper */
+    .hit-wrap-44 {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      position: relative;
+    }
+
+    .actions-row.mobile-full .hit-wrap-44 {
+      flex: 1;
+    }
+
+    .actions-row.mobile-full .btn-sub,
+    .actions-row.mobile-full .btn-join {
+      width: 100%;
+    }
+
+    .btn-sub, .btn-join {
+      height: 36px;
+      min-width: 44px;
+      padding: 0 16px;
+      border-radius: 18px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      position: relative;
+      overflow: hidden;
+      transition: background-color 180ms ease, color 180ms ease, transform 100ms ease, border-color 180ms ease;
+    }
+
+    /* Extend invisible hit target to 44px vertically for accessibility R-33 */
+    .btn-sub::before, .btn-join::before {
+      content: "";
+      position: absolute;
+      inset: -4px 0;
+    }
+
+    .btn-sub {
+      border: 1px solid transparent;
+      background: var(--pill-bg);
+      color: var(--pill-fg);
+    }
+
+    .btn-sub[aria-pressed="true"] {
+      background: var(--surface);
+      color: var(--text-primary);
+      border-color: var(--border);
+    }
+
+    .btn-sub:hover {
+      opacity: 0.92;
+    }
+
+    .btn-join {
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text-primary);
+    }
+
+    .btn-join:hover {
+      background: var(--surface-hover);
+    }
+
+    .btn-join[aria-pressed="true"] {
+      border-color: var(--member-badge-border);
+      background: var(--member-badge-bg);
+      color: var(--member-badge-fg);
+    }
+
+    .btn-cta-blue {
+      border: 0;
+      background: var(--cta-blue);
+      color: var(--cta-blue-ink);
+    }
+
+    /* 3-Stage Subscribe Lottie-Inspired CSS Keyframe Animations */
+    @keyframes ytContainerSweep {
+      0% { transform: scale(0.96); }
+      40% { transform: scale(1.03); box-shadow: 0 0 0 3px rgba(255, 0, 51, 0.35); }
+      100% { transform: scale(1); box-shadow: none; }
+    }
+
+    @keyframes ytShimmerBand {
+      0% { transform: translateX(-120%) skewX(-20deg); opacity: 0.9; }
+      100% { transform: translateX(220%) skewX(-20deg); opacity: 0; }
+    }
+
+    @keyframes ytBellSwing {
+      0% { transform: rotate(0deg); }
+      22% { transform: rotate(-18deg) scale(1.15); }
+      45% { transform: rotate(16deg) scale(1.15); }
+      70% { transform: rotate(-10deg) scale(1.06); }
+      88% { transform: rotate(6deg); }
+      100% { transform: rotate(0deg) scale(1); }
+    }
+
+    @keyframes ytSparklePop {
+      0% { opacity: 1; transform: translate(-50%, -50%) scale(0.4); }
+      60% { opacity: 1; transform: translate(var(--sx), var(--sy)) scale(1.05); }
+      100% { opacity: 0; transform: translate(calc(var(--sx) * 1.35), calc(var(--sy) * 1.35)) scale(0.2); }
+    }
+
+    @keyframes ytLikeTapFeedback {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.26) rotate(-12deg); }
+      75% { transform: scale(0.94) rotate(4deg); }
+      100% { transform: scale(1) rotate(0deg); }
+    }
+
+    @keyframes ytSheetSlideIn {
+      from { opacity: 0; transform: translateY(28px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .btn-sub.is-animating {
+      animation: ytContainerSweep 460ms cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .btn-sub.is-animating::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      width: 55%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+      animation: ytShimmerBand 500ms ease-out forwards;
+      pointer-events: none;
+    }
+
+    .btn-sub.is-animating svg.bell-svg {
+      transform-origin: top center;
+      animation: ytBellSwing 560ms ease;
+    }
+
+    .sparkle-burst {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+      z-index: 12;
+    }
+
+    .sparkle-dot {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      animation: ytSparklePop 520ms ease-out forwards;
+    }
+
+    .like-pop {
+      animation: ytLikeTapFeedback 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    dialog.proto-dialog[open] {
+      animation: ytSheetSlideIn 220ms cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    /* Sticky Tabs Bar (DefaultTabsBar res/zZY.xml) */
+    .tabs-bar {
+      display: flex;
+      align-items: stretch;
+      overflow-x: auto;
+      border-bottom: 1px solid var(--border);
+      padding: 0 12px;
+      gap: 2px;
+      scrollbar-width: none;
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 3;
+    }
+
+    .tabs-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab-btn {
+      min-height: 44px;
+      min-width: 48px;
+      padding: 0 13px;
+      border: 0;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      font-weight: 600;
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .tab-btn[aria-selected="true"] {
+      color: var(--text-primary);
+    }
+
+    .tab-btn[aria-selected="true"]::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 10px;
+      right: 10px;
+      height: 2.5px;
+      border-radius: 2px 2px 0 0;
+      background: var(--text-primary);
+    }
+
+    .tab-btn.fixed-ind[aria-selected="true"]::after {
+      left: 50%;
+      right: auto;
+      width: 34px;
+      transform: translateX(-50%);
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--live-red);
+      display: inline-block;
+    }
+
+    /* Filter Chips (chips_shelf.eml-js) */
+    .filter-chips-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px 2px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .chip-btn {
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-primary);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chip-btn:hover {
+      background: var(--surface-hover);
+    }
+
+    .chip-btn[aria-pressed="true"] {
+      background: var(--pill-bg);
+      color: var(--pill-fg);
+      border-color: var(--pill-bg);
+    }
+
+    /* Feed Container */
+    .feed-content {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .tablet-frame .feed-content {
+      padding: 16px 20px;
+    }
+
+    .section-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 2px 0;
+    }
+
+    .shelf-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 0 10px;
+      gap: 8px;
+    }
+
+    .shelf-header-btn {
+      border: 0;
+      background: transparent;
+      color: var(--text-primary);
+      padding: 4px 8px;
+      margin-left: -8px;
+      min-height: 44px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .shelf-header-btn:hover {
+      background: var(--surface);
+    }
+
+    .shelf-subcopy {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin: -6px 0 10px;
+    }
+
+    .clickable-surface {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+    }
+
+    /* Featured Hero / Trailer on Home */
+    .trailer-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      color: var(--text-primary);
+      width: 100%;
+    }
+
+    .tablet-frame .trailer-hero {
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .trailer-info {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    /* Shelves & Grids */
+    .shelf-row {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .shelf-card-video {
+      width: 176px;
+      flex-shrink: 0;
+    }
+
+    .tablet-frame .shelf-card-video {
+      width: 212px;
+    }
+
+    .shelf-card-short {
+      width: 128px;
+      flex-shrink: 0;
+    }
+
+    .tablet-frame .shelf-card-short {
+      width: 148px;
+    }
+
+    .grid-videos {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1fr;
+    }
+
+    /* Compact Horizontal List Rows (Matches real YouTube Mobile Videos/Live/Playlists) */
+    .mobile-frame.is-proposed .grid-videos.compact-rows {
+      gap: 14px;
+      grid-template-columns: 1fr;
+    }
+
+    .mobile-frame.is-proposed .grid-videos.compact-rows .media-card {
+      display: grid;
+      grid-template-columns: 162px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .mobile-frame.is-proposed .grid-videos.compact-rows .card-foot-row {
+      padding-top: 1px;
+    }
+
+    .mobile-frame.is-proposed .grid-videos.compact-rows .card-title {
+      font-size: 0.875rem;
+      line-height: 1.28;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .mobile-frame.is-proposed .grid-videos.compact-rows .playlist-stack {
+      padding-top: 6px;
+    }
+
+    .tablet-frame.cols-3 .grid-videos {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .tablet-frame.cols-4 .grid-videos {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    /* Mobile Shorts Tab: 3-column tight grid (matches YT Android APK) */
+    .grid-shorts {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .tablet-frame .grid-shorts {
+      gap: 10px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .grid-channels {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+    }
+
+    .tablet-frame .grid-channels {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    /* Media Card + Shorts Press Animation (animator/shorts_button_reduce_size_animation 100ms scale 0.9) */
+    .media-card {
+      width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--text-primary);
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      border-radius: 12px;
+      position: relative;
+      transition: transform 100ms ease;
+    }
+
+    .media-card.is-short-card:active {
+      transform: scale(0.92);
+    }
+
+    .card-foot-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 4px;
+    }
+
+    .card-copy-col {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .card-more-btn {
+      width: 36px;
+      height: 36px;
+      margin: -4px -8px 0 0;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .card-more-btn:hover {
+      background: var(--surface);
+      color: var(--text-primary);
+    }
+
+    /* Thumbnails */
+    .thumb-wrap {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      position: relative;
+      background: var(--surface);
+    }
+
+    .thumb-wrap.short-ratio {
+      aspect-ratio: 9 / 16;
+      border-radius: 8px;
+    }
+
+    .thumb-wrap svg.art {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .duration-pill {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      background: rgba(15, 15, 15, 0.88);
+      color: #ffffff;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .live-thumb-pill {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      background: var(--live-red);
+      color: #ffffff;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      letter-spacing: 0.03em;
+    }
+
+    /* Current PrismPlayer badge on top of thumbnail (for comparison) */
+    .members-only-badge-overlay {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      background: var(--member-badge-bg);
+      color: var(--member-badge-fg);
+      border: 1px solid var(--member-badge-border);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Proposed YouTube Ref badge cleanly BELOW metadata line (inline green star circle + Members only text) */
+    .members-meta-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      width: fit-content;
+      margin-top: 3px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--member-green);
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .members-circle-ico {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: var(--member-badge-border);
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .sort-inline-btn {
+      min-height: 36px;
+      padding: 0 4px;
+      border: 0;
+      background: transparent;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Home: Our members borderless avatar strip & Membership Active Header */
+    .our-members-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .our-members-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .our-members-top h4 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .see-perks-link {
+      border: 0;
+      background: transparent;
+      color: var(--text-primary);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 6px 8px;
+      min-height: 36px;
+      border-radius: 8px;
+    }
+
+    .see-perks-link:hover {
+      background: var(--surface);
+    }
+
+    .our-members-avatars {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 2px 0 4px;
+      scrollbar-width: none;
+    }
+
+    .member-circle-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 0;
+      padding: 0;
+      background: var(--surface);
+      color: #ffffff;
+      font-size: 0.875rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .active-member-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 0 6px;
+    }
+
+    .active-member-avatar {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      flex-shrink: 0;
+    }
+
+    .active-member-tier-pip {
+      position: absolute;
+      right: -3px;
+      bottom: -3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--member-badge-bg);
+      color: var(--member-badge-fg);
+      border: 2px solid var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .perks-scroll-row {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+
+    .perk-outline-card {
+      border: 1px solid var(--border);
+      background: transparent;
+      border-radius: 10px;
+      padding: 12px 14px;
+      min-width: 196px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-primary);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      flex-shrink: 0;
+      text-align: left;
+    }
+
+    .perk-outline-card:hover {
+      background: var(--surface);
+    }
+
+    /* Stacked Playlist Folder Deck (res/7Us.xml PlaylistThumbnailView) */
+    .playlist-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+    }
+
+    .pl-deck-top-2 {
+      width: 86%;
+      height: 4px;
+      border-radius: 6px 6px 0 0;
+      background: var(--border-strong);
+      opacity: 0.45;
+      margin-bottom: 2px;
+    }
+
+    .pl-deck-top-1 {
+      width: 93%;
+      height: 5px;
+      border-radius: 6px 6px 0 0;
+      background: var(--border-strong);
+      opacity: 0.72;
+      margin-bottom: 2px;
+    }
+
+    .playlist-count-pill {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      background: rgba(15, 15, 15, 0.88);
+      color: #ffffff;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 7px;
+      border-radius: 5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .short-overlay {
+      position: absolute;
+      inset: auto 0 0 0;
+      padding: 24px 8px 8px;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0) 100%);
+      color: #ffffff;
+    }
+
+    .short-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1.25;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .short-sub {
+      margin-top: 2px;
+      font-size: 0.6875rem;
+      color: rgba(255, 255, 255, 0.88);
+    }
+
+    .card-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      line-height: 1.32;
+      color: var(--text-primary);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-meta {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    /* COMMUNITY / POSTS TAB (layout/backstage_post res/jCj.xml + post_multi_image_attachment_v2.eml) */
+    .posts-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 680px;
+      width: 100%;
+    }
+
+    .post-card {
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .post-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .post-author-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .post-author-meta {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .post-author-name {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .post-time {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .post-body {
+      margin: 0;
+      font-size: 0.9375rem;
+      line-height: 1.45;
+      color: var(--text-primary);
+    }
+
+    .post-carousel {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .post-slide-stage {
+      aspect-ratio: 16 / 10;
+      width: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .post-slide-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(15, 15, 15, 0.72);
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+
+    .post-slide-nav.prev { left: 8px; }
+    .post-slide-nav.next { right: 8px; }
+
+    .post-dots {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 0;
+      background: var(--bg);
+    }
+
+    .post-dot-btn {
+      width: 8px;
+      height: 8px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: var(--border-strong);
+      transition: transform 140ms ease, background-color 140ms ease;
+    }
+
+    .post-dot-btn[aria-current="true"] {
+      background: var(--text-primary);
+      transform: scale(1.25);
+    }
+
+    /* Interactive Poll */
+    .post-poll {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .poll-option-btn {
+      width: 100%;
+      min-height: 44px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--poll-bar-bg);
+      color: var(--text-primary);
+      text-align: left;
+      font-size: 0.875rem;
+      font-weight: 500;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .poll-option-btn[aria-checked="true"] {
+      border-color: var(--cta-blue);
+      font-weight: 700;
+    }
+
+    .poll-fill-bar {
+      position: absolute;
+      inset: 0 auto 0 0;
+      background: var(--poll-bar-fill);
+      transition: width 260ms ease;
+      pointer-events: none;
+    }
+
+    .poll-opt-text, .poll-opt-pct {
+      position: relative;
+      z-index: 1;
+    }
+
+    .post-actions-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 10px;
+      padding-top: 2px;
+    }
+
+    .post-act-btn {
+      min-height: 44px;
+      min-width: 44px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 18px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .post-act-btn:hover {
+      background: var(--surface);
+      color: var(--text-primary);
+    }
+
+    .post-act-btn[aria-pressed="true"] {
+      color: var(--cta-blue);
+    }
+
+    /* MEMBERSHIP TAB (sponsorships_header_layout res/uNt.xml + sponsorships_tier_layout res/wt2.xml + member_recognition_shelf) */
+    .sponsorships-header-card {
+      border: 1px solid var(--member-badge-border);
+      background: var(--surface-elevated);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .sponsorships-hdr-copy {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .sponsorships-eyebrow {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--member-green);
+    }
+
+    .sponsorships-hdr-copy h4 {
+      margin: 0;
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .sponsorships-hdr-copy p {
+      margin: 0;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+
+    .sponsorships-avatar-badge {
+      position: relative;
+      width: 68px;
+      height: 68px;
+      flex-shrink: 0;
+    }
+
+    .sponsorships-medal-badge {
+      position: absolute;
+      right: -4px;
+      bottom: -4px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--member-badge-bg);
+      color: var(--member-badge-fg);
+      border: 2px solid var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .recognition-shelf {
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .recognition-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .recognition-member {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 62px;
+      font-size: 0.6875rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    .tiers-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .tablet-frame .tiers-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .tier-card {
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tier-card.selected {
+      border-color: var(--member-badge-border);
+    }
+
+    .tier-price {
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+    }
+
+    .tier-perks {
+      margin: 4px 0;
+      padding-left: 18px;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* Channel Card Tiles */
+    .channel-card-tile {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-align: left;
+      min-height: 70px;
+    }
+
+    .channel-card-tile:hover {
+      background: var(--surface);
+    }
+
+    /* Loading / Empty / Error */
+    .state-panel {
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      border-radius: 14px;
+      padding: 24px 18px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .state-panel p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      max-width: 44ch;
+    }
+
+    .state-panel.error p {
+      color: var(--error-text);
+      font-weight: 500;
+    }
+
+    .skeleton-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    }
+
+    .skel-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .skel-block {
+      background: var(--surface);
+      border-radius: 10px;
+    }
+
+    .skel-thumb {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+    }
+
+    .skel-line-lg { width: 82%; height: 14px; }
+    .skel-line-sm { width: 52%; height: 12px; }
+
+    /* Destination Shell Views (Home / Subscriptions / You) */
+    .dest-view {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .dest-card {
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    /* Bell Inline Menu List inside Dialog (bell_inline_menu.eml) */
+    .bell-menu-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .bell-opt-btn {
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.9375rem;
+      font-weight: 500;
+    }
+
+    .bell-opt-btn[aria-checked="true"] {
+      border-color: var(--pill-bg);
+      font-weight: 700;
+    }
+
+    .bell-opt-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Extracted APK Assets Drawer */
+    .apk-assets-panel {
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .apk-assets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .apk-asset-chip {
+      border: 1px solid var(--border);
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.75rem;
+    }
+
+    .apk-asset-chip code {
+      display: block;
+      font-size: 0.6875rem;
+      color: var(--text-secondary);
+      word-break: break-word;
+    }
+
+    /* Modal Dialog & Player */
+    dialog.proto-dialog {
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      background: var(--surface-elevated);
+      color: var(--text-primary);
+      width: min(94vw, 540px);
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 20px;
+      box-shadow: var(--shadow-elevated);
+    }
+
+    dialog.proto-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.65);
+    }
+
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .dialog-header h3 {
+      margin: 0;
+      font-size: 1.0625rem;
+      font-weight: 700;
+    }
+
+    .dialog-body {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .dialog-actions {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .proto-player-stage {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      background: #0a0a0a;
+      color: #f1f1f1;
+      border: 1px solid var(--border-strong);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .proto-player-stage.short-stage {
+      aspect-ratio: 9 / 16;
+      width: 206px;
+      margin: 0 auto;
+    }
+
+    .player-stage-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: #d4d4d4;
+    }
+
+    .player-stage-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .player-play-btn {
+      min-width: 56px;
+      min-height: 56px;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      font-size: 0.875rem;
+      font-weight: 700;
+      padding: 0 18px;
+    }
+
+    .player-play-btn:hover {
+      background: rgba(255, 255, 255, 0.24);
+    }
+
+    .player-progress-track {
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.22);
+      overflow: hidden;
+    }
+
+    .player-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 160ms ease;
+    }
+
+    .player-controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chat-replay-box {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 10px;
+      padding: 10px 12px;
+      max-height: 140px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.8125rem;
+      color: var(--text-primary);
+    }
+
+    .comment-form {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .comment-input {
+      flex: 1;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg);
+      color: var(--text-primary);
+      padding: 0 12px;
+      font-size: 0.875rem;
+    }
+
+    .playlist-queue {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .playlist-row-btn {
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      text-align: left;
+    }
+
+    .playlist-row-btn:hover {
+      background: var(--surface-hover);
+    }
+
+    .toast-region {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      z-index: 40;
+      background: var(--surface-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.875rem;
+      box-shadow: var(--shadow-elevated);
+    }
+
+    .toast-region[hidden] {
+      display: none;
+    }
+
+    .wb-footer {
+      border-top: 1px solid var(--border);
+      padding: 16px 20px;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    @media (max-width: 640px) {
+      .wb-header { padding: 12px; }
+      .wb-main { padding: 12px 10px 28px; }
+      .device-frame.mobile-frame { height: 700px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="wb-header">
+    <div class="wb-header-inner">
+      <div class="wb-title-row">
+        <div>
+          <h1>PrismPlayer Channel Screen Prototype</h1>
+          <p class="wb-subtitle">Referensi YouTube 21.45.83 APK: UX Subscribe/Join, Tab Home, Videos, Shorts, Live, Playlists, Posts (Komunitas), dan Membership</p>
+        </div>
+        <button type="button" class="seg-btn" id="toggleAssetsBtn" aria-pressed="false" style="border:1px solid var(--border-strong);">
+          APK Icons &amp; Anims (14)
+        </button>
+      </div>
+
+      <div class="wb-controls" role="toolbar" aria-label="Kontrol prototipe">
+        <div class="ctrl-group" role="group" aria-label="Arsitektur Layout">
+          <span class="ctrl-label">Layout</span>
+          <button type="button" class="seg-btn" data-mode="proposed" aria-pressed="true">Proposed (YouTube Ref)</button>
+          <button type="button" class="seg-btn" data-mode="current" aria-pressed="false">Current PrismPlayer</button>
+        </div>
+
+        <div class="ctrl-group" role="group" aria-label="Tampilan Layar">
+          <span class="ctrl-label">Screen</span>
+          <button type="button" class="seg-btn" data-view="both" aria-pressed="true">Mobile + Tablet</button>
+          <button type="button" class="seg-btn" data-view="mobile" aria-pressed="false">Mobile</button>
+          <button type="button" class="seg-btn" data-view="tablet" aria-pressed="false">Tablet Landscape</button>
+        </div>
+
+        <div class="ctrl-group" role="group" aria-label="State Data">
+          <span class="ctrl-label">State</span>
+          <button type="button" class="seg-btn" data-state="populated" aria-pressed="true">Normal</button>
+          <button type="button" class="seg-btn" data-state="loading" aria-pressed="false">Loading</button>
+          <button type="button" class="seg-btn" data-state="empty" aria-pressed="false">Empty</button>
+          <button type="button" class="seg-btn" data-state="error" aria-pressed="false">Error</button>
+        </div>
+
+        <div class="ctrl-group" role="group" aria-label="Kasus Membership Channel">
+          <span class="ctrl-label">Channel</span>
+          <button type="button" class="seg-btn" data-channel-case="membership" aria-pressed="true">With Membership</button>
+          <button type="button" class="seg-btn" data-channel-case="standard" aria-pressed="false">Standard Channel</button>
+        </div>
+
+        <div class="ctrl-group" role="group" aria-label="Tema Warna">
+          <span class="ctrl-label">Theme</span>
+          <button type="button" class="seg-btn" data-theme-toggle="dark" aria-pressed="true">Dark</button>
+          <button type="button" class="seg-btn" data-theme-toggle="light" aria-pressed="false">Light</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wb-main">
+    <section class="spec-strip" aria-label="Ringkasan parameter arsitektur aktif" id="specStrip"></section>
+
+    <section class="apk-assets-panel" id="apkAssetsPanel" hidden aria-label="Ikon vektor dan animasi hasil ekstraksi YouTube 21.45.83 APK"></section>
+
+    <div class="canvas-grid" id="canvasGrid">
+      <section class="device-section mobile-section" id="mobileSection" aria-labelledby="mobileHeading">
+        <div class="device-heading-bar">
+          <h2 id="mobileHeading">Mobile Screen (&lt; 600dp)</h2>
+          <span class="device-meta-tag" id="mobileTag"></span>
+        </div>
+        <div class="device-frame mobile-frame" id="mobileFrame" data-device="mobile"></div>
+      </section>
+
+      <section class="device-section tablet-section" id="tabletSection" aria-labelledby="tabletHeading">
+        <div class="device-heading-bar">
+          <h2 id="tabletHeading">Tablet Landscape (sw600dp-land)</h2>
+          <span class="device-meta-tag" id="tabletTag"></span>
+        </div>
+        <div class="tablet-scroll-stage" tabindex="0" aria-label="Kanvas tablet landscape">
+          <div class="device-frame tablet-frame" id="tabletFrame" data-device="tablet"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="wb-footer">
+    Prototype Data Notice: Ikon SVG dan pola animasi diekstrak dari YouTube_21.45.83.apk (`res/*.xml`, `assets/.../*.eml`). Judul, metadata, dan avatar adalah placeholder simulasi.
+  </footer>
+
+  <dialog class="proto-dialog" id="protoDialog" aria-labelledby="dialogTitle">
+    <div class="dialog-header">
+      <h3 id="dialogTitle">Detail</h3>
+      <button type="button" class="icon-btn" id="dialogCloseIcon" aria-label="Tutup dialog">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M18 6L6 18M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <div class="dialog-body" id="dialogBody"></div>
+    <div class="dialog-actions" id="dialogActions"></div>
+  </dialog>
+
+  <div class="toast-region" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    /* =====================================================================
+       EXACT VECTOR ICON PATHS EXTRACTED FROM YouTube_21.45.83.apk (aapt2)
+       ===================================================================== */
+    const APK_ICONS = {
+      homeFill: {
+        label: "Home (Filled)",
+        res: "drawable/yt_fill_experimental_home_vd_theme_24 (res/xOT.xml)",
+        vb: "0 0 24 24",
+        d: "m11.485,2.143 l-8,4.8 -2,1.2a1,1 0,0 0,1.03 1.714L3,9.567V20a2,2 0,0 0,2 2h5v-8h4v8h5a2,2 0,0 0,2 -2V9.567l0.485,0.29a1,1 0,0 0,1.03 -1.714l-2,-1.2 -8,-4.8a1,1 0,0 0,-1.03 0Z"
+      },
+      homeOutline: {
+        label: "Home (Outline)",
+        res: "drawable/yt_outline_experimental_home_vd_theme_24 (res/Fil.xml)",
+        vb: "0 0 24 24",
+        d: "m11.485,2.143 l-8,4.8 -2,1.2a1,1 0,0 0,1.03 1.714L3,9.567V20a2,2 0,0 0,2 2h6v-7h2v7h6a2,2 0,0 0,2 -2V9.567l0.485,0.29a1,1 0,0 0,1.03 -1.714l-2,-1.2 -8,-4.8a1,1 0,0 0,-1.03 0ZM5,8.366l7,-4.2 7,4.2V20h-4v-5.5a1.5,1.5 0,0 0,-1.5 -1.5h-3A1.5,1.5 0,0 0,9 14.5V20H5V8.366Z"
+      },
+      shortsFill24: {
+        label: "Shorts 24dp",
+        res: "drawable/yt_fill_experimental_shorts_vd_theme_24 (res/v37.xml)",
+        vb: "0 0 24 24",
+        d: "m13.974,2.052 l-8,4.7a4,4 0,0 0,0.385 7.097l0.942,0.423 -1.327,0.78a4,4 0,0 0,4.052 6.897l8,-4.7a4.001,4.001 0,0 0,-0.384 -7.096L16.7,9.73l1.326,-0.78a4,4 0,1 0,-4.052 -6.897ZM10,15V9l5,3 -5,3Z"
+      },
+      shorts12: {
+        label: "Shorts 12dp Badge",
+        res: "drawable/yt_fill_youtube_shorts_vd_theme_12 (res/AMs.xml)",
+        vb: "0 0 12 12",
+        d: "M9.664,2.106a2,2 0,0 1,-0.894 2.683l-0.491,0.245 0.625,0.376a2,2 0,0 1,-0.134 3.504l-3.75,1.875A2,2 0,0 1,3.23 7.21l0.491,-0.246 -0.626,-0.375a2,2 0,0 1,0.135 -3.504L6.98,1.21a2,2 0,0 1,2.683 0.895Z"
+      },
+      subsOutline: {
+        label: "Subscriptions 24dp",
+        res: "drawable/yt_outline_experimental_subscriptions_vd_theme_24 (res/yjV.xml)",
+        vb: "0 0 24 24",
+        d: "M18,1L6,1a2,2 0,0 0,-2 2h16a2,2 0,0 0,-2 -2ZM21,5L3,5a2,2 0,0 0,-2 2v13a2,2 0,0 0,2 2h18a2,2 0,0 0,2 -2L23,7a2,2 0,0 0,-2 -2ZM3,20L3,7h18v13L3,20ZM16,13.5L10,10v7l6,-3.5Z"
+      },
+      search24: {
+        label: "Search 24dp",
+        res: "drawable/yt_outline_experimental_search_vd_theme_24 (res/u2A.xml)",
+        vb: "0 0 24 24",
+        d: "M11,2a9,9 0,1 0,5.641 16.01,0.966 0.966,0 0,0 0.152,0.197l3.5,3.5a1,1 0,1 0,1.414 -1.414l-3.5,-3.5a1,1 0,0 0,-0.197 -0.153A8.96,8.96 0,0 0,20 11a9,9 0,0 0,-9 -9ZM11,4a7,7 0,1 1,0 14,7 7,0 0,1 0,-14Z"
+      },
+      overflowVert: {
+        label: "Overflow Vertical",
+        res: "drawable/yt_outline_experimental_overflow_vertical_vd_theme_24 (res/-rH.xml)",
+        vb: "0 0 24 24",
+        d: "M12,4a2,2 0,1 0,0 4,2 2,0 0,0 0,-4ZM12,10a2,2 0,1 0,0 4,2 2,0 0,0 0,-4ZM12,16a2,2 0,1 0,0 4,2 2,0 0,0 0,-4Z"
+      },
+      verified12: {
+        label: "Verified Badge 12dp",
+        res: "drawable/yt_fill_experimental_verified_badge_vd_theme_12 (res/eZc.xml)",
+        vb: "0 0 12 12",
+        d: "M4.516,1.121a2.1,2.1 0,0 1,2.97 0l0.378,0.38L8.4,1.501c1.16,0 2.1,0.94 2.1,2.099v0.536l0.379,0.38a2.1,2.1 0,0 1,0 2.97l-0.379,0.378v0.537a2.1,2.1 0,0 1,-2.1 2.1h-0.536l-0.379,0.378a2.1,2.1 0,0 1,-2.97 0l-0.378,-0.379L3.6,10.5a2.1,2.1 0,0 1,-2.1 -2.1v-0.536l-0.379,-0.378a2.1,2.1 0,0 1,0 -2.97l0.379,-0.379L1.5,3.6c0,-1.16 0.94,-2.1 2.1,-2.1h0.537l0.379,-0.379ZM8.853,4.147a0.5,0.5 0,0 0,-0.707 0L5,7.293 3.853,6.147a0.5,0.5 0,0 0,-0.707 0.707L5,8.707l3.853,-3.853a0.5,0.5 0,0 0,0 -0.707Z"
+      },
+      bellWaves: {
+        label: "Bell All (Waves)",
+        res: "drawable/yt_fill_experimental_bell_waves_vd_theme_24 (res/_fO.xml)",
+        vb: "0 0 24 24",
+        d: "M19.395,1.196a1,1 0,0 0,-0.199 1.4A9,9 0,0 1,21 8a1,1 0,0 0,2 0,11 11,0 0,0 -2.205,-6.605 1,1 0,0 0,-1.4 -0.199ZM3.203,1.396A11,11 0,0 0,1 8a1,1 0,0 0,2 0c0,-1.949 0.633,-3.845 1.803,-5.404a1,1 0,0 0,-1.6 -1.2ZM12,1a7,7 0,0 0,-7 7v4.446c0,0.181 -0.05,0.36 -0.143,0.515l-2.26,3.768A1.5,1.5 0,0 0,3.883 19h16.233a1.5,1.5 0,0 0,1.287 -2.271l-2.26,-3.768a1,1 0,0 1,-0.143 -0.515L19,8a7,7 0,0 0,-7 -7ZM15.874,20L8.126,20a4.002,4.002 0,0 0,7.748 0Z"
+      },
+      bellOutline: {
+        label: "Bell Personalized",
+        res: "drawable/yt_outline_bell_vd_theme_24 (res/liq.xml)",
+        vb: "0 0 24 24",
+        d: "M10,20h4c0,1.1 -0.9,2 -2,2S10,21.1 10,20zM20,17.35V19H4v-1.65l2,-1.88v-5.15c0,-2.92 1.56,-5.22 4,-5.98V3.96c0,-1.42 1.49,-2.5 2.99,-1.76C13.64,2.52 14,3.23 14,3.96l0,0.39c2.44,0.75 4,3.06 4,5.98v5.15L20,17.35zM19,17.77l-2,-1.88v-5.47c0,-2.47 -1.19,-4.36 -3.13,-5.1c-1.26,-0.53 -2.64,-0.5 -3.84,0.03C8.15,6.11 7,7.99 7,10.42v5.47l-2,1.88V18h14V17.77z"
+      },
+      bellSlash: {
+        label: "Bell None (Slash)",
+        res: "drawable/yt_outline_experimental_bell_slash_vd_theme_24 (res/X7a.xml)",
+        vb: "0 0 24 24",
+        d: "M12,1a7,7 0,0 0,-6.213 3.774l1.719,1.032A5,5 0,0 1,17 8v3.502l2,1.199V8a7,7 0,0 0,-7 -7ZM1.141,5.485a1,1 0,0 0,0.343 1.372l3.514,2.109v3.48a1,1 0,0 1,-0.143 0.514L3.05,15.97c-0.8,1.334 0.16,3.03 1.716,3.03H8a4,4 0,1 0,8 0l6,-0.001a1,1 0,0 0,0.515 -1.856l-20,-12a1,1 0,0 0,-1.373 0.342ZM7,12.446v-2.28L18.39,17H4.766l1.806,-3.011A3,3 0,0 0,7 12.446ZM10,19h4a2,2 0,0 1,-4 0Z"
+      },
+      chevronDown18: {
+        label: "Chevron Down 18dp",
+        res: "drawable/yt_outline_experimental_chevron_down_vd_theme_18 (res/80n.xml)",
+        vb: "0 0 18 18",
+        d: "M14.03,6.595a0.75,0.75 0,0 0,-1.004 -0.052l-0.056,0.052L9,10.565l-3.97,-3.97a0.75,0.75 0,1 0,-1.06 1.06L9,12.685l5.03,-5.03 0.052,-0.056a0.75,0.75 0,0 0,-0.052 -1.004Z"
+      },
+      chevronRight18: {
+        label: "Chevron Right 18dp",
+        res: "drawable/yt_outline_experimental_chevron_right_vd_theme_18 (res/m2h.xml)",
+        vb: "0 0 18 18",
+        d: "M6.595,3.97a0.75,0.75 0,0 0,-0.052 1.004l0.052,0.056L10.565,9l-3.97,3.97a0.75,0.75 0,1 0,1.06 1.06L12.685,9l-5.03,-5.03 -0.056,-0.052a0.75,0.75 0,0 0,-1.004 0.052Z"
+      },
+      membership24: {
+        label: "Membership Medal 24dp",
+        res: "drawable/yt_outline_experimental_memberships_vd_theme_24 (res/6id.xml)",
+        vb: "0 0 24 24",
+        d: "M12,1a8.5,8.5 0,0 0,-6 14.52L6,22a1,1 0,0 0,1.37 0.93L12,21.077l4.63,1.852A1.002,1.002 0,0 0,18 22v-6.48A8.5,8.5 0,0 0,12 1ZM12,3a6.5,6.5 0,1 1,0 13,6.5 6.5,0 0,1 0,-13ZM11.73,6.295 L10.824,8.132 8.797,8.427a0.3,0.3 0,0 0,-0.166 0.511l1.467,1.43 -0.346,2.019a0.3,0.3 0,0 0,0.435 0.316L12,11.75l1.814,0.953a0.3,0.3 0,0 0,0.434 -0.316l-0.346,-2.019 1.467,-1.43a0.3,0.3 0,0 0,-0.166 -0.511l-2.027,-0.295 -0.907,-1.837a0.3,0.3 0,0 0,-0.538 0M16.001,17v3.523l-3.63,-1.452a1,1 0,0 0,-0.742 0L8,20.523L8,17a8.46,8.46 0,0 0,4 1,8.46 8.46,0 0,0 4,-1"
+      },
+      membership12: {
+        label: "Members Only 12dp",
+        res: "drawable/yt_fill_memberships_vd_theme_12 (res/-ns.xml)",
+        vb: "0 0 12 12",
+        evenOdd: true,
+        d: "M6,11.5a5.5,5.5 0,1 0,0 -11,5.5 5.5,0 0,0 0,11ZM7.058,4.544L6,2 4.942,4.544l-2.746,0.22 2.092,1.792 -0.64,2.68L6,7.8l2.351,1.436 -0.64,-2.68 2.093,-1.792 -2.746,-0.22Z"
+      },
+      liveRadar: {
+        label: "Live Radar 24dp",
+        res: "drawable/yt_outline_radar_live_vd_theme_24 (res/fJ5.xml)",
+        vb: "0 0 24 24",
+        d: "M14,12c0,1.1 -0.9,2 -2,2s-2,-0.9 -2,-2s0.9,-2 2,-2S14,10.9 14,12zM8.48,8.45L7.77,7.75C6.68,8.83 6,10.34 6,12s0.68,3.17 1.77,4.25l0.71,-0.71C7.57,14.64 7,13.39 7,12S7.57,9.36 8.48,8.45zM16.23,7.75l-0.71,0.71C16.43,9.36 17,10.61 17,12s-0.57,2.64 -1.48,3.55l0.71,0.71C17.32,15.17 18,13.66 18,12S17.32,8.83 16.23,7.75zM5.65,5.63L4.95,4.92C3.13,6.73 2,9.24 2,12s1.13,5.27 2.95,7.08l0.71,-0.71C4.02,16.74 3,14.49 3,12S4.02,7.26 5.65,5.63zM19.05,4.92l-0.71,0.71C19.98,7.26 21,9.51 21,12s-1.02,4.74 -2.65,6.37l0.71,0.71C20.87,17.27 22,14.76 22,12S20.87,6.73 19.05,4.92z"
+      },
+      playlist24: {
+        label: "Playlist 24dp",
+        res: "drawable/yt_outline_experimental_playlist_vd_theme_24 (res/1KO.xml)",
+        vb: "0 0 24 24",
+        d: "M16,15.395a0.5,0.5 0,0 1,0.762 -0.426L22.5,18.5l-5.738,3.531a0.5,0.5 0,0 1,-0.762 -0.425v-6.212ZM14,19L4,19a1,1 0,1 1,0 -2h10v2ZM20,11a1,1 0,1 1,0 2L4,13a1,1 0,1 1,0 -2h16ZM20,5a1,1 0,1 1,0 2L4,7a1,1 0,0 1,0 -2h16Z"
+      },
+      post24: {
+        label: "Community Post 24dp",
+        res: "drawable/yt_outline_experimental_post_vd_theme_24 (res/E3B.xml)",
+        vb: "0 0 24 24",
+        d: "M13,20a1,1 0,1 1,0 2L5,22a1,1 0,1 1,0 -2h8ZM19,16a1,1 0,1 1,0 2L5,18a1,1 0,1 1,0 -2h14ZM18,2a2,2 0,0 1,2 2v8l-0.01,0.204A2,2 0,0 1,18 14L6,14a2,2 0,0 1,-1.99 -1.796L4,12L4,4a2,2 0,0 1,2 -2h12ZM16.515,8.975a1,1 0,0 0,-1.03 0L10.443,12L18,12L18,9.865l-1.485,-0.89ZM6,12h0.556l7.9,-4.74c0.95,-0.57 2.138,-0.57 3.088,0l0.456,0.273L18,4L6,4v8ZM9,5.5a1.5,1.5 0,1 1,0 3,1.5 1.5,0 0,1 0,-3Z"
+      },
+      poll24: {
+        label: "Poll 24dp",
+        res: "drawable/yt_outline_experimental_poll_vd_theme_24 (res/XnY.xml)",
+        vb: "0 0 24 24",
+        d: "M4,2a1,1 0,0 0,-2 0v20a1,1 0,1 0,2 0L4,2ZM12,2L6,2v2h6v2L6,6v2h6a2,2 0,0 0,2 -2L14,4a2,2 0,0 0,-2 -2ZM22,11a2,2 0,0 0,-2 -2L6,9v2h14v2L6,13v2h14a2,2 0,0 0,2 -2v-2ZM16,16L6,16v2h10v2L6,20v2h10a2,2 0,0 0,2 -2v-2a2,2 0,0 0,-2 -2Z"
+      },
+      thumbUp18: {
+        label: "Thumb Up 18dp",
+        res: "drawable/yt_outline_experimental_thumb_up_vd_theme_18 (res/Bts.xml)",
+        vb: "0 0 18 18",
+        d: "m7.748,0.854 l0.779,0.13a3,3 0,0 1,2.44 3.588L10.5,6.75h3.046a2.748,2.748 0,0 1,2.204 4.387l0.015,0.066A2.862,2.862 0,0 1,15 13.874v0.033c0,0.227 -0.037,0.452 -0.109,0.668l-0.08,0.21a2.815,2.815 0,0 1,-2.59 1.715H9.516l-0.294,-0.005a9.002,9.002 0,0 1,-3.918 -1.041l-0.256,-0.142 -0.204,-0.116a1.502,1.502 0,0 0,-0.55 -0.186L4.102,15H2.625l-0.116,-0.006a1.126,1.126 0,0 1,-1.003 -1.005l-0.006,-0.114v-4.5c0,-0.62 0.504,-1.124 1.125,-1.124h1.342a0.75,0.75 0,0 0,0.66 -0.395l0.048,-0.107 2.24,-6.403a0.75,0.75 0,0 1,0.833 -0.491ZM6.09,8.243A2.25,2.25 0,0 1,3.967 9.75H3v3.749h1.1a3,3 0,0 1,1.49 0.395l0.202,0.116a7.503,7.503 0,0 0,3.724 0.99h2.703c0.566,0 1.07,-0.363 1.248,-0.9a0.61,0.61 0,0 0,0.032 -0.193v-0.655l0.44,-0.439a1.36,1.36 0,0 0,0.363 -1.272l-0.014,-0.065 -0.157,-0.675 0.413,-0.556a1.248,1.248 0,0 0,-0.999 -1.995H10.5a1.501,1.501 0,0 1,-1.467 -1.815L9.5,4.257a1.5,1.5 0,0 0,-1.22 -1.794l-0.157,-0.026L6.09,8.243Z"
+      },
+      thumbDown18: {
+        label: "Thumb Down 18dp",
+        res: "drawable/yt_outline_experimental_thumb_down_vd_theme_18 (res/De0.xml)",
+        vb: "0 0 18 18",
+        d: "m8.482,1.5 l0.294,0.005a9.01,9.01 0,0 1,3.918 1.04l0.257,0.143 0.203,0.116c0.17,0.097 0.357,0.16 0.55,0.185l0.194,0.012h1.477l0.115,0.006c0.53,0.054 0.95,0.475 1.004,1.005l0.006,0.114v4.499c0,0.621 -0.504,1.125 -1.125,1.125h-1.343a0.75,0.75 0,0 0,-0.66 0.395l-0.048,0.107 -2.24,6.402a0.75,0.75 0,0 1,-0.832 0.491l-0.78,-0.13a3,3 0,0 1,-2.439 -3.587L7.5,11.25H4.454a2.749,2.749 0,0 1,-2.683 -2.151,2.762 2.762,0 0,1 0.479,-2.237l-0.016,-0.065A2.862,2.862 0,0 1,3 4.125v-0.032c0,-0.227 0.037,-0.453 0.108,-0.668l0.08,-0.211A2.816,2.816 0,0 1,5.78 1.5h2.703ZM5.78,3c-0.566,0 -1.069,0.362 -1.248,0.9a0.613,0.613 0,0 0,-0.031 0.193v0.654l-0.44,0.44c-0.333,0.332 -0.47,0.813 -0.364,1.271l0.015,0.065 0.157,0.675 -0.413,0.557a1.248,1.248 0,0 0,0.999 1.995H7.5a1.501,1.501 0,0 1,1.467 1.815L8.5,13.742a1.5,1.5 0,0 0,1.22 1.794l0.157,0.027 2.031,-5.806a2.25,2.25 0,0 1,2.124 -1.507H15V4.501h-1.102a3.001,3.001 0,0 1,-1.489 -0.396l-0.202,-0.116A7.504,7.504 0,0 0,8.482 3H5.78Z"
+      },
+      share24: {
+        label: "Share 24dp",
+        res: "drawable/yt_outline_experimental_share_vd_theme_24 (res/ZmA.xml)",
+        vb: "0 0 24 24",
+        d: "M10,3.158L10,7.51c-5.428,0.223 -8.27,3.75 -8.875,11.199 -0.04,0.487 -0.07,0.975 -0.09,1.464l-0.014,0.395c-0.014,0.473 0.578,0.684 0.88,0.32 0.302,-0.368 0.61,-0.73 0.925,-1.086l0.244,-0.273c1.79,-1.967 3,-2.677 4.93,-2.917a18.011,18.011 0,0 1,2 -0.112v4.346a1,1 0,0 0,1.646 0.763l9.805,-8.297 1.55,-1.31 -1.55,-1.31 -9.805,-8.297A1,1 0,0 0,10 3.158ZM12,9.428v0.002,-4.116l7.904,6.688L12,18.689v-4.212l-2.023,0.024c-1.935,0.022 -3.587,0.17 -5.197,1.024a9,9 0,0 0,-1.348 0.893c0.355,-1.947 0.916,-3.39 1.63,-4.425 1.062,-1.541 2.607,-2.385 5.02,-2.485L12,9.428Z"
+      },
+      sort24: {
+        label: "Sort 24dp",
+        res: "drawable/yt_outline_experimental_sort_vd_theme_24 (res/D92.xml)",
+        vb: "0 0 24 24",
+        d: "M21,5L3,5a1,1 0,0 0,0 2h18a1,1 0,1 0,0 -2ZM15,11L3,11a1,1 0,0 0,0 2h12a1,1 0,0 0,0 -2ZM9,17L3,17a1,1 0,0 0,0 2h6a1,1 0,0 0,0 -2Z"
+      }
+    };
+
+    function iconSvg(key, size = 18, extraClass = "", label = "") {
+      const ico = APK_ICONS[key];
+      if (!ico) return "";
+      const a11y = label ? `role="img" aria-label="${escapeHtml(label)}"` : `aria-hidden="true"`;
+      const fillRule = ico.evenOdd ? `fill-rule="evenodd"` : "";
+      return `<svg class="${extraClass}" width="${size}" height="${size}" viewBox="${ico.vb}" fill="currentColor" ${a11y}><path ${fillRule} d="${ico.d}"/></svg>`;
+    }
+
+    const COMMENT_SVG_16 = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+
+    /* =====================================================================
+       APPLICATION STATE & SAMPLE DATA
+       ===================================================================== */
+    const appState = {
+      mode: "proposed",
+      view: "both",
+      dataState: "populated",
+      theme: "dark",
+      showAssetsPanel: false,
+      subscribed: false,
+      justSubscribedAnim: false,
+      notifPref: "Personalized", // "All" | "Personalized" | "None"
+      searchOpen: { mobile: false, tablet: false },
+      searchQuery: "",
+      collapsedBar: { mobile: false, tablet: false },
+      activeTab: { mobile: "Home", tablet: "Home" },
+      sortOrder: "latest",     // "latest" | "popular" | "oldest"
+      accessFilter: "all",     // "all" | "members" | "public"
+      shortsSort: "latest",    // "latest" | "popular"
+      liveFilter: "all",       // "all" | "live" | "past"
+      playlistSort: "recent",  // "recent" | "newest"
+      memberFilter: "all",     // "all" | "videos" | "replays"
+      hasMembership: true,
+      isMemberJoined: false,
+      memberTier: "Level 2: Insiders",
+      activeChannelId: "main",
+      savedIds: ["v1", "mr1"],
+      likedIds: ["mv1", "post1"],
+      dislikedIds: [],
+      pollVotes: { post2: 0 }, // option index or null
+      postSlide: { post1: 0 },
+      postComments: {
+        post1: [
+          { user: "@ui_reviewer", text: "Susunan banner dan tab Home sudah terasa sangat pas!" },
+          { user: "@android_dev", text: "Bell inline menu dan animasi subscribe-nya akurat." }
+        ],
+        post2: [
+          { user: "@member_budi", text: "Vote Komunitas + Polling responsif banget." }
+        ]
+      },
+      player: { openId: null, kind: "video", playing: true, progress: 28, speed: "1.0x", showChat: false, showComments: false },
+      navDest: "Channel"
+    };
+
+    const SAMPLE_VIDEOS = [
+      { id: "v1", title: "YouTube 21.45.83 Channel Header v2 & sw600dp Architecture", ageOrder: 1, rankOrder: 3, duration: "12:40", meta: "18K views · 1d ago" },
+      { id: "v2", title: "Animated Subscribe Button 3-Stage Lottie Flow Walkthrough", ageOrder: 2, rankOrder: 1, duration: "18:05", meta: "42K views · 4d ago" },
+      { id: "v3", title: "Elements EML & Community Post Carousel Deep Dive", ageOrder: 3, rankOrder: 2, duration: "09:22", meta: "29K views · 1w ago" },
+      { id: "v4", title: "Channel Tabs Ordering: Home, Videos, Shorts, Live, Membership", ageOrder: 4, rankOrder: 6, duration: "14:15", meta: "9.4K views · 2w ago" },
+      { id: "v5", title: "Tablet Landscape Grid: 1-Col Mobile to Multi-Col Desktop", ageOrder: 5, rankOrder: 4, duration: "07:50", meta: "21K views · 3w ago" },
+      { id: "v6", title: "Bell Inline Notification Options & Sponsorship Offer Sheet", ageOrder: 6, rankOrder: 5, duration: "21:10", meta: "15K views · 1mo ago" },
+      { id: "v7", title: "Playlist Stacked Thumbnail View vs Flat List Items", ageOrder: 7, rankOrder: 8, duration: "06:33", meta: "6.8K views · 1mo ago" },
+      { id: "v8", title: "Compose Navigation Rail vs Floating Bottom Dock Ergonomics", ageOrder: 8, rankOrder: 7, duration: "11:04", meta: "12K views · 2mo ago" }
+    ];
+
+    const SAMPLE_LIVE_PUBLIC = [
+      { id: "lv0", title: "LIVE NOW: Live Design Review & APK Decompilation Q&A", ageOrder: 0, rankOrder: 1, duration: "LIVE", meta: "1.2K watching", membersOnly: false, isReplay: false, isLiveNow: true },
+      { id: "lv1", title: "Public Live Replay 01: UI Refactor & Accessibility Check", ageOrder: 2, rankOrder: 2, duration: "54:20", meta: "14K views · Streamed 4d ago", membersOnly: false, isReplay: true },
+      { id: "lv2", title: "Public Live Replay 02: Tablet Landscape Layout Tuning", ageOrder: 5, rankOrder: 4, duration: "41:12", meta: "8.9K views · Streamed 2w ago", membersOnly: false, isReplay: true }
+    ];
+
+    const SAMPLE_MEMBERSHIP_ITEMS = [
+      { id: "mv1", title: "Members Video 01: Source Code Full Compose Channel Header", ageOrder: 1, rankOrder: 1, duration: "28:45", meta: "4.1K views · 2d ago", membersOnly: true, isReplay: false },
+      { id: "mr1", title: "Members Live Replay 01: Monthly Roadmap AMA Stream", ageOrder: 2, rankOrder: 2, duration: "1:18:30", meta: "2.3K views · Streamed 3d ago", membersOnly: true, isReplay: true },
+      { id: "mv2", title: "Members Video 02: Lottie Animation Timing Tokens Breakdown", ageOrder: 3, rankOrder: 4, duration: "19:14", meta: "1.8K views · 5d ago", membersOnly: true, isReplay: false },
+      { id: "mr2", title: "Members Live Replay 02: Live Debugging & Profiler Review", ageOrder: 4, rankOrder: 3, duration: "1:04:08", meta: "3.1K views · Streamed 1w ago", membersOnly: true, isReplay: true },
+      { id: "mv3", title: "Members Video 03: Behind the Scenes Design Tokens", ageOrder: 5, rankOrder: 6, duration: "15:52", meta: "1.2K views · 2w ago", membersOnly: true, isReplay: false },
+      { id: "mr3", title: "Members Live Replay 03: Early Build Feedback Stream", ageOrder: 6, rankOrder: 5, duration: "49:16", meta: "980 views · Streamed 3w ago", membersOnly: true, isReplay: true }
+    ];
+
+    const SAMPLE_SHORTS = [
+      { id: "s1", title: "Shorts 100ms Scale Animation", views: "38K views", rank: 2 },
+      { id: "s2", title: "Subscribe Sparkles Lottie Breakdown", views: "91K views", rank: 1 },
+      { id: "s3", title: "Tablet 6:1 Banner Proportions", views: "22K views", rank: 4 },
+      { id: "s4", title: "Bell Menu: All vs Personalized", views: "47K views", rank: 3 },
+      { id: "s5", title: "Members-only Meta Tag Placement", views: "19K views", rank: 5 },
+      { id: "s6", title: "Playlist Stacked Deck Anatomy", views: "14K views", rank: 6 }
+    ];
+
+    const SAMPLE_PLAYLISTS = [
+      { id: "p1", title: "YouTube 21.45 APK Reverse Engineering Series", count: "12 videos", updated: "Updated today", recentOrder: 1, createdOrder: 4 },
+      { id: "p2", title: "PrismPlayer Responsive Mobile & Tablet UI", count: "8 videos", updated: "Updated 3d ago", recentOrder: 2, createdOrder: 3 },
+      { id: "p3", title: "Elements EML & Jetpack Compose Mapping", count: "15 videos", updated: "Updated 1w ago", recentOrder: 3, createdOrder: 2 },
+      { id: "p4", title: "Accessibility & Contrast Gate Guides", count: "6 videos", updated: "Updated 2w ago", recentOrder: 4, createdOrder: 1 }
+    ];
+
+    const SAMPLE_CHANNELS = [
+      { id: "c1", name: "Prism Dev Lab", handle: "@prism_devlab", subs: "84K subscribers" },
+      { id: "c2", name: "Compose Motion UI", handle: "@compose_motion", subs: "52K subscribers" },
+      { id: "c3", name: "APK Resource Inspector", handle: "@apk_inspector", subs: "31K subscribers" }
+    ];
+
+    const SAMPLE_POSTS = [
+      {
+        id: "post1",
+        time: "18 hours ago",
+        text: "Preview tata letak Channel Header v2 dan Multi-Image Carousel (post_multi_image_attachment_v2.eml) lengkap dengan page indicator dots dan lightbox.",
+        kind: "carousel",
+        slides: [
+          "Slide 1/3: Mobile Header v2 (Avatar kiri + Metadata kanan)",
+          "Slide 2/3: Tablet sw600dp (Banner 6:1 + Action Cluster kanan)",
+          "Slide 3/3: Members-only Tag di bawah 'Streamed 3d ago'"
+        ],
+        likes: 412,
+        commentsCount: 2
+      },
+      {
+        id: "post2",
+        time: "3 days ago",
+        text: "Tab mana di halaman Channel yang paling ingin kalian prioritaskan untuk update PrismPlayer berikutnya?",
+        kind: "poll",
+        options: [
+          { label: "Home & For You Shelf + Channel Trailer", baseVotes: 48 },
+          { label: "Komunitas (Posts, Poll, Carousel, Komen)", baseVotes: 34 },
+          { label: "Animated Subscribe + Bell Inline Menu", baseVotes: 18 }
+        ],
+        likes: 285,
+        commentsCount: 1
+      },
+      {
+        id: "post3",
+        time: "1 week ago",
+        text: "Rekaman live Q&A tentang rasio layout tablet dan posisi tombol Join / Subscribe sudah tersedia di tab Live & Membership.",
+        kind: "videoLink",
+        videoId: "v2",
+        likes: 194,
+        commentsCount: 0
+      }
+    ];
+
+    const MEMBERSHIP_TIERS = [
+      {
+        name: "Level 1: Supporters",
+        price: "Rp19.000/month",
+        perks: ["Loyalty badge di samping nama", "Custom channel emoji di Live Chat", "Prioritas respon di Komunitas"]
+      },
+      {
+        name: "Level 2: Insiders",
+        price: "Rp49.000/month",
+        perks: ["Akses seluruh Members-only Videos & Live Replays", "Download aset Figma & Compose snippets", "Semua perks Level 1"]
+      },
+      {
+        name: "Level 3: Producers",
+        price: "Rp149.000/month",
+        perks: ["Nama di layar credit akhir video", "Sesi Live Code Review bulanan", "Semua perks Level 1 & 2"]
+      }
+    ];
+
+    function getActiveChannelInfo() {
+      if (appState.activeChannelId !== "main") {
+        const found = SAMPLE_CHANNELS.find(c => c.id === appState.activeChannelId);
+        if (found) {
+          return { id: found.id, name: found.name, handle: found.handle, subs: found.subs, initials: found.id.toUpperCase(), isRelated: true };
+        }
+      }
+      return { id: "main", name: "Prism Studio Demo", handle: "@prism_demo", subs: "128K subscribers", initials: "PS", isRelated: false };
+    }
+
+    function getAllVideoItems() {
+      return SAMPLE_VIDEOS.concat(SAMPLE_LIVE_PUBLIC, SAMPLE_MEMBERSHIP_ITEMS);
+    }
+
+    /* =====================================================================
+       PLACEHOLDER VISUAL ARTWORK GENERATORS
+       ===================================================================== */
+    function bannerSvg(label, uid) {
+      return `
+        <svg viewBox="0 0 1200 220" width="1200" height="220" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${escapeHtml(label)}">
+          <defs>
+            <linearGradient id="bnGrad-${uid}" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="var(--banner-a)" />
+              <stop offset="100%" stop-color="var(--banner-b)" />
+            </linearGradient>
+          </defs>
+          <rect width="1200" height="220" fill="url(#bnGrad-${uid})" />
+          <circle cx="980" cy="40" r="150" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2" />
+          <circle cx="980" cy="40" r="95" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+          <polygon points="120,220 330,60 540,220" fill="rgba(255,255,255,0.05)" />
+          <text x="50%" y="55%" text-anchor="middle" fill="var(--text-secondary)" font-size="20" font-weight="600">${escapeHtml(label)}</text>
+        </svg>`;
+    }
+
+    function avatarSvg(sizePx, withLive, initials = "PS") {
+      return `
+        <svg viewBox="0 0 100 100" width="${sizePx}" height="${sizePx}" style="display:block;width:100%;height:100%;" role="img" aria-label="Avatar channel ${initials}">
+          <circle cx="50" cy="50" r="49" fill="var(--surface-elevated)" />
+          <circle cx="50" cy="50" r="35" fill="var(--surface)" stroke="var(--border-strong)" stroke-width="2" />
+          <text x="50" y="59" text-anchor="middle" fill="var(--text-primary)" font-size="28" font-weight="700">${initials}</text>
+        </svg>
+        ${withLive ? `<span class="live-pill">LIVE</span>` : ""}`;
+    }
+
+    function thumbSvg(label, isShort = false) {
+      const w = isShort ? 270 : 320;
+      const h = isShort ? 480 : 180;
+      return `
+        <svg class="art" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <rect width="${w}" height="${h}" fill="var(--surface)" />
+          <rect x="12" y="12" width="${w - 24}" height="${h - 24}" rx="8" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="6 6" />
+          <polygon points="${isShort ? "118,215 118,265 162,240" : "146,74 146,106 176,90"}" fill="var(--text-secondary)" opacity="0.52" />
+          <text x="50%" y="${isShort ? "36%" : "29%"}" text-anchor="middle" fill="var(--text-secondary)" font-size="12" font-weight="600">${escapeHtml(label)}</text>
+        </svg>`;
+    }
+
+    /* =====================================================================
+       TAB ORDER & FILTERING
+       ===================================================================== */
+    function getTabsForMode() {
+      if (appState.mode === "proposed") {
+        // Matches real YouTube Android screenshots: Home, Videos, Shorts, Live, Playlists, Posts, Membership (far right, NO star icon)
+        return appState.hasMembership
+          ? ["Home", "Videos", "Shorts", "Live", "Playlists", "Posts", "Membership"]
+          : ["Home", "Videos", "Shorts", "Live", "Playlists", "Posts", "Channels"];
+      }
+      return appState.hasMembership
+        ? ["Videos", "Membership", "Shorts", "Live", "Playlists", "Channels"]
+        : ["Videos", "Shorts", "Live", "Playlists", "Channels"];
+    }
+
+    function ensureValidTabs() {
+      const tabs = getTabsForMode();
+      for (const dev of ["mobile", "tablet"]) {
+        if (!tabs.includes(appState.activeTab[dev])) {
+          appState.activeTab[dev] = tabs[0];
+        }
+      }
+    }
+
+    function getFilteredVideos(tabName = "Videos") {
+      const q = appState.searchQuery.trim().toLowerCase();
+      let list = [];
+      if (tabName === "Membership") {
+        list = SAMPLE_MEMBERSHIP_ITEMS.slice();
+        if (appState.mode === "proposed") {
+          if (appState.memberFilter === "videos") list = list.filter(v => !v.isReplay);
+          else if (appState.memberFilter === "replays") list = list.filter(v => v.isReplay);
+        }
+      } else if (tabName === "Live") {
+        list = appState.hasMembership
+          ? SAMPLE_LIVE_PUBLIC.concat(SAMPLE_MEMBERSHIP_ITEMS.filter(v => v.isReplay))
+          : SAMPLE_LIVE_PUBLIC.slice();
+        if (appState.mode === "proposed") {
+          if (appState.liveFilter === "live") list = list.filter(v => v.isLiveNow);
+          else if (appState.liveFilter === "past") list = list.filter(v => !v.isLiveNow);
+          if (appState.hasMembership) {
+            if (appState.accessFilter === "members") list = list.filter(v => v.membersOnly);
+            else if (appState.accessFilter === "public") list = list.filter(v => !v.membersOnly);
+          }
+        }
+      } else {
+        list = appState.hasMembership
+          ? SAMPLE_VIDEOS.slice(0, 6).concat(SAMPLE_MEMBERSHIP_ITEMS.filter(v => !v.isReplay))
+          : SAMPLE_VIDEOS.slice();
+        if (appState.mode === "proposed" && appState.hasMembership) {
+          if (appState.accessFilter === "members") list = list.filter(v => v.membersOnly);
+          else if (appState.accessFilter === "public") list = list.filter(v => !v.membersOnly);
+        }
+      }
+      if (q) list = list.filter(v => v.title.toLowerCase().includes(q));
+      if (appState.mode === "proposed") {
+        if (appState.sortOrder === "popular") list.sort((a, b) => a.rankOrder - b.rankOrder);
+        else if (appState.sortOrder === "oldest") list.sort((a, b) => b.ageOrder - a.ageOrder);
+        else list.sort((a, b) => a.ageOrder - b.ageOrder);
+      }
+      return list;
+    }
+
+    /* =====================================================================
+       RENDER SPEC STRIP & EXTRACTED APK ASSETS INSPECTOR
+       ===================================================================== */
+    function renderSpecStrip() {
+      const strip = document.getElementById("specStrip");
+      const proposed = appState.mode === "proposed";
+      const items = proposed
+        ? [
+            ["Header Mobile & Tablet", "Mobile v2 (res/lEd.xml): avatar kiri 74dp | Tablet (res/egU.xml): 112dp overlap + actions kanan"],
+            ["Subscribe & Join UX", "Subscribe animasi 3-tahap -> Bell menu (All/Personalized/None/Unsub) | Join -> Sheet tiers"],
+            ["Tab Bar & Komunitas", "Home, Videos, Shorts, Live, Playlists, Posts, Channels, Membership (kanan, tanpa bintang)"],
+            ["Navigasi & Grid", "Mobile: docked bottom bar 52dp | Tablet: Nav Rail 74dp + 3-col Videos / 5-col Shorts"]
+          ]
+        : [
+            ["Header Current", "Banner 128dp/160dp rounded + Avatar 70dp/82dp + Subscribe & Join pill"],
+            ["Tab Order", "Mulai di Videos · Tab Membership di posisi ke-2 + indikator tetap 34dp"],
+            ["Members-only Badge", "Badge Members only di pojok kiri atas thumbnail (perbandingan sebelum perbaikan)"],
+            ["Navigasi & Grid", "Floating translucent dock 344dp melayang di Mobile & Tablet"]
+          ];
+
+      strip.innerHTML = items.map(([k, v]) => `
+        <div class="spec-item">
+          <span class="spec-key">${k}</span>
+          <span class="spec-val">${v}</span>
+        </div>`).join("");
+
+      document.getElementById("mobileTag").textContent = proposed
+        ? "res/lEd.xml v2 · Bell inline menu · 3-col Shorts · Docked bottom nav"
+        : "ChannelHeader.kt · Floating dock · Videos-first tab";
+
+      document.getElementById("tabletTag").textContent = proposed
+        ? "res/egU.xml · Left Nav Rail 74dp · Actions top-right · 3-col Videos / 5-col Shorts"
+        : "Floating glass dock · 3-col Videos · Badge di thumbnail";
+
+      const grid = document.getElementById("canvasGrid");
+      grid.classList.toggle("single-view", appState.view !== "both");
+    }
+
+    function renderApkAssetsPanel() {
+      const panel = document.getElementById("apkAssetsPanel");
+      const keys = ["verified12", "bellWaves", "bellOutline", "bellSlash", "membership24", "membership12", "shorts12", "shortsFill24", "playlist24", "post24", "poll24", "liveRadar", "thumbUp18", "share24"];
+      panel.innerHTML = `
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;">
+          <strong>Ikon SVG &amp; Animasi Hasil Ekstraksi Langsung dari YouTube_21.45.83.apk</strong>
+          <span class="card-meta">Animasi: animated_subscribe_button (3 stage), shorts_button_reduce_size (100ms 0.9x), sponsorships_dialog_animate_in</span>
+        </div>
+        <div class="apk-assets-grid">
+          ${keys.map(k => {
+            const ico = APK_ICONS[k];
+            return `
+              <div class="apk-asset-chip">
+                <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:var(--surface);border-radius:8px;flex-shrink:0;">
+                  ${iconSvg(k, 18)}
+                </div>
+                <div style="min-width:0;">
+                  <strong>${ico.label}</strong>
+                  <code>${ico.res}</code>
+                </div>
+              </div>`;
+          }).join("")}
+        </div>`;
+    }
+
+    /* =====================================================================
+       SHARED UI COMPONENT HELPERS
+       ===================================================================== */
+    function subButtonHtml(device) {
+      const animCls = appState.justSubscribedAnim ? "is-animating" : "";
+      if (!appState.subscribed) {
+        return `
+          <span class="hit-wrap-44">
+            <button type="button" class="btn-sub ${animCls}" data-action="subscribe" data-device="${device}" aria-pressed="false">
+              <span>Subscribe</span>
+            </button>
+          </span>`;
+      }
+      const bellKey = appState.notifPref === "All"
+        ? "bellWaves"
+        : (appState.notifPref === "None" ? "bellSlash" : "bellOutline");
+      return `
+        <span class="hit-wrap-44">
+          <button type="button" class="btn-sub ${animCls}" data-action="subscribe" data-device="${device}" aria-pressed="true" aria-label="Subscribed, notifikasi ${appState.notifPref}. Klik untuk ubah pengaturan notifikasi.">
+            ${iconSvg(bellKey, 16, "bell-svg")}
+            <span>Subscribed</span>
+            ${iconSvg("chevronDown18", 14)}
+          </button>
+        </span>`;
+    }
+
+    function joinButtonHtml(device) {
+      if (!appState.hasMembership) return "";
+      const text = appState.isMemberJoined ? "See perks" : "Join";
+      return `
+        <span class="hit-wrap-44">
+          <button type="button" class="btn-join" data-action="join" data-device="${device}" aria-pressed="${appState.isMemberJoined}">
+            ${appState.isMemberJoined ? iconSvg("membership12", 14) : ""}
+            <span>${text}</span>
+          </button>
+        </span>`;
+    }
+
+    function renderVideoCard(v, isShelf) {
+      const cls = isShelf ? "media-card shelf-card-video" : "media-card";
+      const thumbLabel = v.isLiveNow
+        ? "LIVE STREAM 16:9"
+        : (v.isReplay ? "LIVE REPLAY 16:9" : (isShelf ? "FOR YOU 16:9" : "VIDEO 16:9"));
+      const kind = v.membersOnly
+        ? (v.isReplay ? "Members-only Live Replay" : "Members-only Video")
+        : (v.isLiveNow ? "Live Now" : (v.isReplay ? "Live Replay" : "Video"));
+
+      const thumbRightBadge = v.isLiveNow
+        ? `<span class="live-thumb-pill">${iconSvg("liveRadar", 12)}<span>LIVE</span></span>`
+        : `<span class="duration-pill">${v.duration}</span>`;
+
+      const currentMemberOverlay = appState.mode === "current" && v.membersOnly
+        ? `<span class="members-only-badge-overlay">${iconSvg("membership12", 12)}<span>Members only</span></span>`
+        : "";
+
+      const proposedMemberBelow = appState.mode === "proposed" && v.membersOnly
+        ? `<span class="members-meta-tag"><span class="members-circle-ico" aria-hidden="true">${iconSvg("membership12", 9)}</span><span>Members only</span></span>`
+        : "";
+
+      return `
+        <div class="${cls}">
+          <button type="button" class="clickable-surface" data-play-card="true" data-item-id="${v.id}" data-item-kind="${kind}">
+            <div class="thumb-wrap">
+              ${thumbSvg(thumbLabel)}
+              ${currentMemberOverlay}
+              ${thumbRightBadge}
+            </div>
+          </button>
+          <div class="card-foot-row">
+            <button type="button" class="clickable-surface card-copy-col" data-play-card="true" data-item-id="${v.id}" data-item-kind="${kind}">
+              <span class="card-title">${escapeHtml(v.title)}</span>
+              <span class="card-meta">${escapeHtml(v.meta)}</span>
+              ${proposedMemberBelow}
+            </button>
+            <button type="button" class="card-more-btn" data-card-menu="${v.id}" aria-label="Opsi untuk ${escapeHtml(v.title)}">
+              ${iconSvg("overflowVert", 16)}
+            </button>
+          </div>
+        </div>`;
+    }
+
+    function renderShortCard(s, isShelf) {
+      const cls = isShelf ? "media-card is-short-card shelf-card-short" : "media-card is-short-card";
+      return `
+        <button type="button" class="${cls}" data-play-card="true" data-item-id="${s.id}" data-item-kind="Short">
+          <div class="thumb-wrap short-ratio">
+            ${thumbSvg("SHORTS 9:16", true)}
+            <div class="short-overlay">
+              <div class="short-title">${escapeHtml(s.title)}</div>
+              <div class="short-sub">${escapeHtml(s.views)}</div>
+            </div>
+          </div>
+        </button>`;
+    }
+
+    function renderPlaylistCard(p) {
+      const chName = getActiveChannelInfo().name;
+      const countNum = String(p.count || "0").replace(/\D+/g, "") || p.count;
+      return `
+        <div class="media-card">
+          <button type="button" class="clickable-surface playlist-stack" data-play-card="true" data-item-id="${p.id}" data-item-kind="Playlist">
+            <span class="pl-deck-top-2" aria-hidden="true"></span>
+            <span class="pl-deck-top-1" aria-hidden="true"></span>
+            <div class="thumb-wrap">
+              ${thumbSvg("PLAYLIST DECK")}
+              <span class="playlist-count-pill">
+                ${iconSvg("playlist24", 13)}
+                <span>${escapeHtml(countNum)}</span>
+              </span>
+            </div>
+          </button>
+          <div class="card-foot-row">
+            <button type="button" class="clickable-surface card-copy-col" data-play-card="true" data-item-id="${p.id}" data-item-kind="Playlist">
+              <span class="card-title">${escapeHtml(p.title)}</span>
+              <span class="card-meta">${escapeHtml(chName)} · Playlist</span>
+            </button>
+            <button type="button" class="card-more-btn" data-card-menu="${p.id}" aria-label="Opsi playlist ${escapeHtml(p.title)}">
+              ${iconSvg("overflowVert", 16)}
+            </button>
+          </div>
+        </div>`;
+    }
+
+    function renderPostCard(post, ch) {
+      const isLiked = appState.likedIds.includes(post.id);
+      const isDisliked = appState.dislikedIds.includes(post.id);
+      const likeTotal = post.likes + (isLiked ? 1 : 0);
+      const comments = appState.postComments[post.id] || [];
+      const totalComments = comments.length;
+
+      let attachmentHtml = "";
+      if (post.kind === "carousel") {
+        const idx = appState.postSlide[post.id] || 0;
+        const slideText = post.slides[idx];
+        attachmentHtml = `
+          <div class="post-carousel">
+            <div class="post-slide-stage">
+              <button type="button" class="clickable-surface" style="width:100%;height:100%;" data-lightbox-post="${post.id}" aria-label="Perbesar gambar postingan">
+                ${thumbSvg(slideText)}
+              </button>
+              <button type="button" class="post-slide-nav prev" data-slide-post="${post.id}" data-slide-delta="-1" aria-label="Slide sebelumnya">&#8249;</button>
+              <button type="button" class="post-slide-nav next" data-slide-post="${post.id}" data-slide-delta="1" aria-label="Slide berikutnya">&#8250;</button>
+            </div>
+            <div class="post-dots" role="group" aria-label="Indikator halaman carousel">
+              ${post.slides.map((_, di) => `<button type="button" class="post-dot-btn" data-slide-post="${post.id}" data-slide-index="${di}" aria-current="${di === idx}" aria-label="Halaman ${di + 1}"></button>`).join("")}
+            </div>
+          </div>`;
+      } else if (post.kind === "poll") {
+        const picked = appState.pollVotes[post.id];
+        const totalVotes = post.options.reduce((sum, o, idx) => sum + o.baseVotes + (picked === idx ? 1 : 0), 0);
+        attachmentHtml = `
+          <div class="post-poll" role="radiogroup" aria-label="Polling komunitas">
+            <div style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-secondary);">
+              ${iconSvg("poll24", 15)}
+              <span>${totalVotes} votes (klik untuk memilih atau ubah suara)</span>
+            </div>
+            ${post.options.map((opt, oi) => {
+              const votes = opt.baseVotes + (picked === oi ? 1 : 0);
+              const pct = Math.round((votes / totalVotes) * 100);
+              const checked = picked === oi;
+              return `
+                <button type="button" class="poll-option-btn" role="radio" aria-checked="${checked}" data-poll-post="${post.id}" data-poll-idx="${oi}">
+                  <span class="poll-fill-bar" style="width:${picked !== null && picked !== undefined ? pct : 0}%"></span>
+                  <span class="poll-opt-text">${checked ? "&#10003; " : ""}${escapeHtml(opt.label)}</span>
+                  <span class="poll-opt-pct">${picked !== null && picked !== undefined ? `${pct}%` : ""}</span>
+                </button>`;
+            }).join("")}
+          </div>`;
+      } else if (post.kind === "videoLink") {
+        const vid = SAMPLE_VIDEOS.find(v => v.id === post.videoId);
+        if (vid) {
+          attachmentHtml = `
+            <div style="border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--bg);">
+              ${renderVideoCard(vid, false)}
+            </div>`;
+        }
+      }
+
+      return `
+        <article class="post-card">
+          <div class="post-head">
+            <div class="post-author-row">
+              <div style="width:38px;height:38px;flex-shrink:0;">${avatarSvg(38, false, ch.initials)}</div>
+              <div class="post-author-meta">
+                <span class="post-author-name">${escapeHtml(ch.name)} ${iconSvg("verified12", 12)}</span>
+                <span class="post-time">${escapeHtml(post.time)}</span>
+              </div>
+            </div>
+            <button type="button" class="icon-btn" data-card-menu="${post.id}" aria-label="Menu postingan">${iconSvg("overflowVert", 18)}</button>
+          </div>
+          <p class="post-body">${escapeHtml(post.text)}</p>
+          ${attachmentHtml}
+          <div class="post-actions-bar">
+            <button type="button" class="post-act-btn" data-post-like="${post.id}" aria-pressed="${isLiked}" aria-label="Sukai postingan (${likeTotal})">
+              ${iconSvg("thumbUp18", 18, isLiked ? "like-pop" : "")}
+              <span>${likeTotal}</span>
+            </button>
+            <button type="button" class="post-act-btn" data-post-dislike="${post.id}" aria-pressed="${isDisliked}" aria-label="Tidak suka postingan">
+              ${iconSvg("thumbDown18", 18)}
+            </button>
+            <button type="button" class="post-act-btn" data-post-share="${post.id}" aria-label="Bagikan postingan">
+              ${iconSvg("share24", 18)}
+              <span>Share</span>
+            </button>
+            <button type="button" class="post-act-btn" data-post-comments="${post.id}" aria-label="Buka komentar (${totalComments})">
+              ${COMMENT_SVG_16}
+              <span>${totalComments}</span>
+            </button>
+          </div>
+        </article>`;
+    }
+
+    function renderNavItems(kind) {
+      const isProposed = appState.mode === "proposed";
+      const cls = kind === "rail" ? "rail-item" : (kind === "dock" ? "dock-btn" : "yt-nav-btn");
+
+      const items = isProposed
+        ? [
+            ["Home", iconSvg(appState.navDest === "Home" ? "homeFill" : "homeOutline", 20)],
+            ["Shorts", iconSvg("shortsFill24", 20)],
+            ["Subs", iconSvg("subsOutline", 20)],
+            ["Channel", `<span style="width:22px;height:22px;display:inline-flex;border-radius:50%;overflow:hidden;border:${appState.navDest === "Channel" ? "2px solid var(--text-primary)" : "1px solid var(--border-strong)"};">${avatarSvg(22, false, "PS")}</span>`],
+            ["Library", iconSvg("playlist24", 20)]
+          ]
+        : [
+            ["Home", iconSvg("homeOutline", 20)],
+            ["Subs", iconSvg("subsOutline", 20)],
+            ["Channel", `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c2-4 14-4 16 0"/></svg>`],
+            ["Library", iconSvg("playlist24", 20)]
+          ];
+
+      return items.map(([dest, svg]) => {
+        const label = dest === "Subs" ? "Subscriptions" : (dest === "Library" && isProposed ? "You" : dest);
+        const current = appState.navDest === dest ? `aria-current="page"` : "";
+        return `
+          <button type="button" class="${cls}" data-nav="${dest}" ${current}>
+            ${kind === "rail" ? `<span class="rail-pill">${svg}</span>` : svg}
+            <span>${label}</span>
+          </button>`;
+      }).join("");
+    }
+
+    /* =====================================================================
+       MAIN DEVICE RENDERER
+       ===================================================================== */
+    function renderDevice(device) {
+      const isTablet = device === "tablet";
+      const isProposed = appState.mode === "proposed";
+      const frame = document.getElementById(isTablet ? "tabletFrame" : "mobileFrame");
+
+      frame.classList.toggle("is-proposed", isProposed);
+      frame.classList.toggle("proposed-rail", isTablet && isProposed);
+      frame.classList.toggle("cols-3", !isProposed || isTablet);
+      frame.classList.toggle("has-floating-dock", !isProposed);
+
+      const ch = getActiveChannelInfo();
+      const activeTab = appState.activeTab[device];
+      const tabs = getTabsForMode();
+      const videos = getFilteredVideos(activeTab);
+      const q = appState.searchQuery.trim().toLowerCase();
+      const filteredShorts = (q ? SAMPLE_SHORTS.filter(s => s.title.toLowerCase().includes(q)) : SAMPLE_SHORTS).slice().sort((a, b) => appState.shortsSort === "popular" ? a.rank - b.rank : 0);
+      const filteredPlaylists = (q ? SAMPLE_PLAYLISTS.filter(p => p.title.toLowerCase().includes(q)) : SAMPLE_PLAYLISTS).slice().sort((a, b) => appState.playlistSort === "newest" ? a.createdOrder - b.createdOrder : a.recentOrder - b.recentOrder);
+      const filteredChannels = q ? SAMPLE_CHANNELS.filter(c => c.name.toLowerCase().includes(q) || c.handle.toLowerCase().includes(q)) : SAMPLE_CHANNELS;
+      const filteredPosts = q ? SAMPLE_POSTS.filter(p => p.text.toLowerCase().includes(q)) : SAMPLE_POSTS;
+
+      const searchOpen = appState.searchOpen[device];
+      const topCollapsed = isProposed && appState.collapsedBar[device] && !searchOpen && appState.navDest === "Channel";
+      const metaText = `${ch.handle} · ${ch.subs} · 142 videos`;
+      const verifiedSvg = iconSvg("verified12", 14, "", "Verified channel");
+
+      const actionsHtml = `${subButtonHtml(device)}${joinButtonHtml(device)}`;
+
+      /* 1. Channel Header matching exact APK structures */
+      const headerHtml = (() => {
+        if (isProposed && isTablet) {
+          return `
+            <div class="ch-hdr-tablet-wrap">
+              <button type="button" class="clickable-surface banner-tablet-ref" data-action="banner-info" aria-label="Detail banner tablet 6:1">${bannerSvg(`${ch.name} · sw600dp-land 6:1 Banner`, `${device}-prop`)}</button>
+              <div class="ch-hdr-tablet-body">
+                <button type="button" class="clickable-surface avatar-tablet-ref ${!ch.isRelated ? "has-live-ring" : ""}" data-action="open-live" data-device="${device}" aria-label="Buka tab Live channel">${avatarSvg(104, !ch.isRelated, ch.initials)}</button>
+                <div class="tablet-info-grid">
+                  <div class="tablet-info-col">
+                    <button type="button" class="clickable-surface channel-title-line" data-action="about">
+                      <h3 class="channel-name">${escapeHtml(ch.name)}</h3>
+                      ${verifiedSvg}
+                    </button>
+                    <button type="button" class="clickable-surface" data-action="about">
+                      <p class="channel-meta">${metaText}</p>
+                    </button>
+                    <button type="button" class="desc-preview-btn" data-action="about">
+                      <span>Tablet layout res/egU.xml: 112dp avatar kiri, action cluster di kanan atas ... <span class="desc-more">more</span></span>
+                    </button>
+                    <button type="button" class="link-row-btn" data-action="about">
+                      <span class="link-host">prismplayer.dev/channel</span><span>and 2 more links</span>
+                    </button>
+                  </div>
+                  <div class="tablet-action-cluster">${actionsHtml}</div>
+                </div>
+              </div>
+            </div>`;
+        }
+        if (isProposed && !isTablet) {
+          return `
+            <div class="ch-hdr-v2-mobile">
+              <button type="button" class="clickable-surface banner-v2-mobile" data-action="banner-info" aria-label="Detail banner mobile v2">${bannerSvg(`${ch.name} · Inset Banner v2`, `${device}-prop`)}</button>
+              <div class="ch-v2-identity-row">
+                <button type="button" class="clickable-surface ch-v2-avatar ${!ch.isRelated ? "has-live-ring" : ""}" data-action="open-live" data-device="${device}" aria-label="Buka tab Live channel">${avatarSvg(68, !ch.isRelated, ch.initials)}</button>
+                <div style="min-width:0;flex:1;">
+                  <button type="button" class="clickable-surface channel-title-line" data-action="about">
+                    <h3 class="channel-name">${escapeHtml(ch.name)}</h3>
+                    ${verifiedSvg}
+                  </button>
+                  <button type="button" class="clickable-surface" data-action="about">
+                    <p class="channel-meta">${metaText}</p>
+                  </button>
+                </div>
+              </div>
+              <button type="button" class="desc-preview-btn" data-action="about" style="min-height:28px;">
+                <span>ChannelHeader v2 (res/lEd.xml): avatar sejajar di kiri tanpa overlap banner ... <span class="desc-more">more</span></span>
+              </button>
+              <button type="button" class="link-row-btn" data-action="about" style="min-height:28px;">
+                <span class="link-host">prismplayer.dev/channel</span><span>and 2 more links</span>
+              </button>
+              <div class="actions-row mobile-full">${actionsHtml}</div>
+            </div>`;
+        }
+        return `
+          <div class="channel-header-wrap current-inset">
+            <button type="button" class="clickable-surface banner-current" data-action="banner-info" aria-label="Info banner current">${bannerSvg(isTablet ? "Current PrismPlayer Banner 160dp" : "Current PrismPlayer Banner 128dp", `${device}-curr`)}</button>
+            <div class="hdr-current">
+              <div class="hdr-current-top">
+                <button type="button" class="clickable-surface ${isTablet ? "avatar-current-tablet" : "avatar-current-mobile"}" data-action="open-live" data-device="${device}" aria-label="Buka tab Live channel">${avatarSvg(isTablet ? 78 : 66, !ch.isRelated, ch.initials)}</button>
+                <div style="flex:1;min-width:0;">
+                  <button type="button" class="clickable-surface channel-title-line" data-action="about">
+                    <h3 class="channel-name">${escapeHtml(ch.name)}</h3>
+                    ${verifiedSvg}
+                  </button>
+                  <button type="button" class="clickable-surface" data-action="about">
+                    <p class="channel-meta">${metaText}</p>
+                  </button>
+                </div>
+                ${isTablet ? `<div class="actions-row">${actionsHtml}</div>` : ""}
+              </div>
+              <button type="button" class="desc-preview-btn" data-action="about">
+                <span>Deskripsi PrismPlayer saat ini dipotong 96 karakter ... <span class="desc-more">more</span></span>
+              </button>
+              ${!isTablet ? `<div class="actions-row mobile-full">${actionsHtml}</div>` : ""}
+            </div>
+          </div>`;
+      })();
+
+      /* 2. Tabs Bar (NO star icon on Membership tab, Membership sits at far right in Proposed, NO red dot on Live) */
+      const tabsHtml = `
+        <div class="tabs-bar" role="tablist" aria-label="Tab channel ${device}">
+          ${tabs.map(tab => `
+            <button type="button" role="tab" class="tab-btn ${!isProposed ? "fixed-ind" : ""}" data-device="${device}" data-tab="${tab}" aria-selected="${activeTab === tab}">
+              <span>${tab}</span>
+              ${!isProposed && tab === "Live" ? `<span class="live-dot" aria-label="Sedang live"></span>` : ""}
+            </button>`).join("")}
+        </div>`;
+
+      /* 3. Tab Filter Chips (Matching real YouTube Android screenshots: Latest v | Members only | Public, Sort by v) */
+      const sortLabelMap = { latest: "Latest", popular: "Popular", oldest: "Oldest" };
+      const filterBarHtml = (() => {
+        if (!isProposed) return "";
+        if (activeTab === "Videos" || activeTab === "Live") {
+          const accessChips = appState.hasMembership
+            ? [["members", "Members only"], ["public", "Public"]].map(([k, lbl]) => `
+                <button type="button" class="chip-btn" data-access-filter="${k}" aria-pressed="${appState.accessFilter === k}">${lbl}</button>`).join("")
+            : [["popular", "Popular"], ["oldest", "Oldest"]].map(([k, lbl]) => `
+                <button type="button" class="chip-btn" data-sort="${k}" aria-pressed="${appState.sortOrder === k}">${lbl}</button>`).join("");
+          const liveSub = activeTab === "Live"
+            ? `<button type="button" class="chip-btn" data-live-filter="${appState.liveFilter === "live" ? "all" : "live"}" aria-pressed="${appState.liveFilter === "live"}">Live now</button>`
+            : "";
+          return `
+            <div class="filter-chips-bar" role="group" aria-label="Filter ${activeTab}">
+              <button type="button" class="chip-btn" data-cycle-sort="true" aria-pressed="${appState.accessFilter === "all"}">
+                <span>${sortLabelMap[appState.sortOrder]}</span>
+                ${iconSvg("chevronDown18", 14)}
+              </button>
+              ${accessChips}
+              ${liveSub}
+            </div>`;
+        }
+        if (activeTab === "Shorts") {
+          return `
+            <div class="filter-chips-bar" role="group" aria-label="Urutkan Shorts">
+              ${[["latest", "Latest"], ["popular", "Popular"]].map(([k, lbl]) => `
+                <button type="button" class="chip-btn" data-shorts-sort="${k}" aria-pressed="${appState.shortsSort === k}">${lbl}</button>`).join("")}
+            </div>`;
+        }
+        if (activeTab === "Playlists") {
+          return `
+            <div class="filter-chips-bar" role="group" aria-label="Urutkan playlist">
+              <button type="button" class="sort-inline-btn" data-cycle-playlist-sort="true">
+                ${iconSvg("sort24", 18)}
+                <span>Sort by</span>
+                ${iconSvg("chevronDown18", 14)}
+                <span class="card-meta" style="font-weight:400;">(${appState.playlistSort === "recent" ? "Recently added" : "Newest"})</span>
+              </button>
+            </div>`;
+        }
+        return "";
+      })();
+
+      /* 4. Body Content for All 7+ Channel Tabs */
+      const bodyContentHtml = (() => {
+        if (appState.dataState === "loading") {
+          return `
+            <div class="feed-content" aria-busy="true">
+              <div class="state-panel"><p>Memuat konten tab ${activeTab}...</p></div>
+              <div class="skeleton-grid">
+                ${[1, 2, 3, 4].map(() => `<div class="skel-card" aria-hidden="true"><div class="skel-block skel-thumb"></div><div class="skel-block skel-line-lg"></div><div class="skel-block skel-line-sm"></div></div>`).join("")}
+              </div>
+            </div>`;
+        }
+        if (appState.dataState === "empty") {
+          return `
+            <div class="feed-content">
+              <div class="state-panel">
+                <h3>Belum ada konten di tab ${activeTab}</h3>
+                <p>Tidak ada item untuk filter saat ini.</p>
+                <button type="button" class="btn-join" data-action="reset-state">Muat ulang data</button>
+              </div>
+            </div>`;
+        }
+        if (appState.dataState === "error") {
+          return `
+            <div class="feed-content">
+              <div class="state-panel error" role="alert">
+                <h3>Gagal memuat tab ${activeTab}</h3>
+                <p>Simulasi error jaringan saat mengambil daftar item channel.</p>
+                <button type="button" class="btn-sub" data-action="retry-load">Try again</button>
+              </div>
+            </div>`;
+        }
+
+        if (activeTab === "Home") {
+          const ourMembersShelf = isProposed && appState.hasMembership
+            ? `
+              <div class="our-members-section">
+                <div class="our-members-top">
+                  <h4>Our members</h4>
+                  <button type="button" class="see-perks-link" data-action="join" data-device="${device}">See perks</button>
+                </div>
+                <p class="shelf-subcopy" style="margin:0;">Thank you, channel members!</p>
+                <div class="our-members-avatars">
+                  ${[
+                    ["A", "#1e7e34"], ["R", "#2962ff"], ["K", "#d84315"], ["D", "#6a1b9a"],
+                    ["N", "#00838f"], ["M", "#37474f"], ["B", "#c62828"], ["F", "#558b2f"]
+                  ].map(([lt, bg]) => `
+                    <button type="button" class="member-circle-btn" style="background:${bg};" data-go-tab="Membership" data-device="${device}" aria-label="Member ${lt}">${lt}</button>`).join("")}
+                </div>
+              </div>`
+            : "";
+
+          const forYouList = appState.hasMembership
+            ? [SAMPLE_LIVE_PUBLIC[0], SAMPLE_MEMBERSHIP_ITEMS[1], ...SAMPLE_VIDEOS.slice(0, 3)]
+            : SAMPLE_VIDEOS.slice(0, 5);
+
+          const heroVid = appState.subscribed ? SAMPLE_VIDEOS[1] : SAMPLE_VIDEOS[0];
+          const heroLabel = appState.subscribed ? "Featured for Returning Subscribers" : "Channel Trailer";
+
+          return `
+            <div class="feed-content">
+              ${ourMembersShelf}
+              <div>
+                <div class="shelf-header" style="margin-bottom:8px;">
+                  <button type="button" class="shelf-header-btn" data-go-tab="Videos" data-device="${device}">
+                    <span>For You</span>
+                    ${iconSvg("chevronRight18", 16)}
+                  </button>
+                </div>
+                <div class="shelf-row">
+                  ${forYouList.filter(v => !q || v.title.toLowerCase().includes(q)).map(v => renderVideoCard(v, true)).join("")}
+                </div>
+              </div>
+              <div class="section-divider"></div>
+              <div>
+                <div class="shelf-header" style="margin-bottom:8px;">
+                  <span style="font-size:0.875rem;font-weight:700;color:var(--text-secondary);">${heroLabel}</span>
+                </div>
+                <button type="button" class="trailer-hero" data-play-card="true" data-item-id="${heroVid.id}" data-item-kind="Video">
+                  <div class="thumb-wrap">
+                    ${thumbSvg(heroLabel.toUpperCase())}
+                    <span class="duration-pill">${heroVid.duration}</span>
+                  </div>
+                  <div class="trailer-info">
+                    <span class="card-title" style="font-size:0.9375rem;">${escapeHtml(heroVid.title)}</span>
+                    <span class="card-meta">${escapeHtml(heroVid.meta)}</span>
+                  </div>
+                </button>
+              </div>
+              <div class="section-divider"></div>
+              <div>
+                <div class="shelf-header">
+                  <button type="button" class="shelf-header-btn" data-go-tab="Shorts" data-device="${device}">
+                    <span style="color:var(--accent);display:inline-flex;">${iconSvg("shorts12", 18)}</span>
+                    <span>Shorts</span>
+                    ${iconSvg("chevronRight18", 16)}
+                  </button>
+                </div>
+                <div class="shelf-row">
+                  ${filteredShorts.map(s => renderShortCard(s, true)).join("")}
+                </div>
+              </div>
+              <div class="section-divider"></div>
+              <div>
+                <div class="shelf-header">
+                  <button type="button" class="shelf-header-btn" data-go-tab="Posts" data-device="${device}">
+                    ${iconSvg("post24", 18)}
+                    <span>Latest Community Post</span>
+                    ${iconSvg("chevronRight18", 16)}
+                  </button>
+                </div>
+                ${renderPostCard(SAMPLE_POSTS[1], ch)}
+              </div>
+              <div class="section-divider"></div>
+              <div>
+                <div class="shelf-header">
+                  <button type="button" class="shelf-header-btn" data-go-tab="Playlists" data-device="${device}">
+                    ${iconSvg("playlist24", 18)}
+                    <span>Created Playlists</span>
+                    ${iconSvg("chevronRight18", 16)}
+                  </button>
+                </div>
+                <div class="grid-videos ${isProposed && !isTablet ? "compact-rows" : ""}">
+                  ${filteredPlaylists.slice(0, isTablet ? 3 : 2).map(p => renderPlaylistCard(p)).join("")}
+                </div>
+              </div>
+              <div class="section-divider"></div>
+              <div>
+                <div class="shelf-header"><span style="font-size:0.9375rem;font-weight:700;">Featured Channels</span></div>
+                <div class="grid-channels">
+                  ${filteredChannels.map(c => `
+                    <button type="button" class="channel-card-tile" data-channel-id="${c.id}">
+                      <div style="width:44px;height:44px;flex-shrink:0;">${avatarSvg(44, false, c.id.toUpperCase())}</div>
+                      <div style="min-width:0;">
+                        <div class="card-title">${escapeHtml(c.name)}</div>
+                        <div class="card-meta">${escapeHtml(c.handle)} · ${escapeHtml(c.subs)}</div>
+                      </div>
+                    </button>`).join("")}
+                </div>
+              </div>
+            </div>`;
+        }
+
+        if (activeTab === "Shorts") {
+          return `
+            <div class="feed-content">
+              <div class="grid-shorts">
+                ${filteredShorts.map(s => renderShortCard(s, false)).join("") || `<p class="card-meta">Tidak ada Short untuk "${escapeHtml(appState.searchQuery)}".</p>`}
+              </div>
+            </div>`;
+        }
+
+        if (activeTab === "Playlists") {
+          return `
+            <div class="feed-content">
+              <div class="grid-videos ${isProposed && !isTablet ? "compact-rows" : ""}">
+                ${filteredPlaylists.map(p => renderPlaylistCard(p)).join("")}
+              </div>
+            </div>`;
+        }
+
+        if (activeTab === "Posts") {
+          return `
+            <div class="feed-content">
+              <div class="posts-feed">
+                ${filteredPosts.map(post => renderPostCard(post, ch)).join("")}
+              </div>
+            </div>`;
+        }
+
+        if (activeTab === "Channels") {
+          return `
+            <div class="feed-content">
+              <div class="grid-channels">
+                ${filteredChannels.map(c => `
+                  <button type="button" class="channel-card-tile" data-channel-id="${c.id}">
+                    <div style="width:48px;height:48px;flex-shrink:0;">${avatarSvg(48, false, c.id.toUpperCase())}</div>
+                    <div style="min-width:0;">
+                      <div class="card-title">${escapeHtml(c.name)}</div>
+                      <div class="card-meta">${escapeHtml(c.handle)} · ${escapeHtml(c.subs)}</div>
+                    </div>
+                  </button>`).join("")}
+              </div>
+            </div>`;
+        }
+
+        if (activeTab === "Membership") {
+          const sponsorshipsHdrHtml = isProposed
+            ? (appState.isMemberJoined
+              ? `
+                <div class="active-member-bar">
+                  <div class="active-member-avatar">
+                    ${avatarSvg(48, false, "M")}
+                    <span class="active-member-tier-pip" aria-hidden="true">${iconSvg("membership12", 12)}</span>
+                  </div>
+                  <div style="min-width:0;flex:1;">
+                    <div style="font-size:0.9375rem;font-weight:700;">#${escapeHtml(appState.memberTier.split(":")[0].toUpperCase())}</div>
+                    <div style="font-size:0.8125rem;font-weight:600;color:var(--cta-blue);">Member</div>
+                    <div class="card-meta">4 months</div>
+                  </div>
+                  <button type="button" class="btn-sub" style="background:var(--surface);color:var(--text-primary);" data-action="join" data-device="${device}">Upgrade</button>
+                  <button type="button" class="card-more-btn" data-action="join" data-device="${device}" aria-label="Opsi membership">${iconSvg("overflowVert", 18)}</button>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <strong style="font-size:0.875rem;">Your perks</strong>
+                  <div class="perks-scroll-row">
+                    <button type="button" class="perk-outline-card" data-member-filter="videos">
+                      ${iconSvg("playlist24", 18)}
+                      <span>100+ Members-only videos</span>
+                    </button>
+                    <button type="button" class="perk-outline-card" data-member-filter="replays">
+                      ${iconSvg("post24", 18)}
+                      <span>85+ Members-only replays &amp; posts</span>
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <div class="shelf-header" style="margin-bottom:8px;">
+                    <button type="button" class="shelf-header-btn" data-member-filter="all">
+                      <span>Highlighted content for members</span>
+                      ${iconSvg("chevronRight18", 16)}
+                    </button>
+                  </div>
+                  <div class="shelf-row">
+                    ${SAMPLE_MEMBERSHIP_ITEMS.slice(0, 3).map(v => renderVideoCard(v, true)).join("")}
+                  </div>
+                </div>`
+              : `
+                <div class="sponsorships-header-card">
+                  <div class="sponsorships-hdr-copy">
+                    <span class="sponsorships-eyebrow">Join this channel</span>
+                    <h4>Get access to membership perks</h4>
+                    <p>Pilih tier untuk membuka Members-only Videos, Live Replays, dan Loyalty Badges.</p>
+                    <div class="actions-row" style="margin-top:6px;">
+                      <button type="button" class="btn-join btn-cta-blue" data-action="join" data-device="${device}" aria-pressed="false">
+                        <span>Join</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="sponsorships-avatar-badge">
+                    ${avatarSvg(64, false, ch.initials)}
+                    <span class="sponsorships-medal-badge" aria-hidden="true">${iconSvg("membership24", 15)}</span>
+                  </div>
+                </div>
+                <div class="tiers-grid">
+                  ${MEMBERSHIP_TIERS.map(t => `
+                    <div class="tier-card">
+                      <strong style="font-size:0.9375rem;">${t.name}</strong>
+                      <span class="tier-price">${t.price}</span>
+                      <ul class="tier-perks">${t.perks.map(pk => `<li>${pk}</li>`).join("")}</ul>
+                      <button type="button" class="btn-join btn-cta-blue" data-join-tier="${t.name}" aria-pressed="false" style="margin-top:auto;">
+                        <span>Join</span>
+                      </button>
+                    </div>`).join("")}
+                </div>`)
+            : `
+              <div class="sponsorships-header-card">
+                <div class="sponsorships-hdr-copy">
+                  <span class="sponsorships-eyebrow">Current PrismPlayer · TAB_MEMBERSHIP (Playlist UUMO)</span>
+                  <h4>Flat Grid Tanpa Recognition Shelf &amp; Tier Cards</h4>
+                  <p>Di versi Current, badge Members only masih menimpa thumbnail atas dan tab berada di posisi ke-2.</p>
+                </div>
+              </div>`;
+
+          return `
+            <div class="feed-content">
+              ${sponsorshipsHdrHtml}
+              <div class="filter-chips-bar" style="padding:0;" role="group" aria-label="Filter membership">
+                ${[["all", "All"], ["videos", "Videos"], ["replays", "Live Replays"]].map(([k, lbl]) => `
+                  <button type="button" class="chip-btn" data-member-filter="${k}" aria-pressed="${appState.memberFilter === k}">${lbl}</button>`).join("")}
+              </div>
+              <div class="grid-videos ${isProposed && !isTablet ? "compact-rows" : ""}">
+                ${videos.map(v => renderVideoCard(v, false)).join("")}
+              </div>
+            </div>`;
+        }
+
+        // Videos / Live (Mobile Proposed uses compact horizontal list rows matching real YouTube screenshots!)
+        return `
+          <div class="feed-content">
+            <div class="grid-videos ${isProposed && !isTablet ? "compact-rows" : ""}">
+              ${videos.map(v => renderVideoCard(v, false)).join("") || `<div class="state-panel"><p>Tidak ada video yang cocok dengan "${escapeHtml(appState.searchQuery)}".</p><button type="button" class="btn-join" data-action="clear-search">Hapus pencarian</button></div>`}
+            </div>
+          </div>`;
+      })();
+
+      const showRail = isTablet && isProposed;
+      const showYtDockedBottom = !isTablet && isProposed;
+      const showFloatingDock = !isProposed;
+
+      const topTitleText = appState.navDest === "Channel" ? ch.name : appState.navDest;
+      const scrollAreaHtml = appState.navDest === "Channel"
+        ? `${headerHtml}${tabsHtml}${filterBarHtml}${bodyContentHtml}`
+        : renderDestView();
+
+      frame.innerHTML = `
+        <div class="app-shell">
+          ${showRail ? `<nav class="tablet-nav-rail" aria-label="Navigasi rail tablet">${renderNavItems("rail")}</nav>` : ""}
+          <div class="app-viewport">
+            <div class="top-bar ${topCollapsed ? "collapsed" : ""}">
+              <button type="button" class="icon-btn" data-action="back" aria-label="Kembali">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              </button>
+              <h3 class="top-bar-title" ${searchOpen ? "hidden" : ""}>${escapeHtml(topTitleText)}</h3>
+              <form class="search-inline-form" data-device="${device}" ${searchOpen ? "" : "hidden"}>
+                <label for="search-${device}" class="sr-only">Cari di channel</label>
+                <input id="search-${device}" class="search-input" type="search" value="${escapeHtml(appState.searchQuery)}" placeholder="${isProposed ? "Search in channel..." : "Global search..."}" />
+                <button type="button" class="icon-btn" data-action="close-search" data-device="${device}" aria-label="Tutup pencarian">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+              </form>
+              <button type="button" class="icon-btn" data-action="open-search" data-device="${device}" aria-label="Cari dalam channel" ${searchOpen ? "hidden" : ""}>
+                ${iconSvg("search24", 20)}
+              </button>
+              <div class="dropdown-anchor" ${searchOpen ? "hidden" : ""}>
+                <button type="button" class="icon-btn" data-action="toggle-menu" data-device="${device}" aria-label="Opsi channel" aria-expanded="false">
+                  ${iconSvg("overflowVert", 20)}
+                </button>
+                <div class="menu-popover" id="menu-${device}" hidden>
+                  <button type="button" class="menu-item" data-menu-action="share">${iconSvg("share24", 16)}<span>Share channel</span></button>
+                  <button type="button" class="menu-item" data-menu-action="copy">Copy channel link</button>
+                  <button type="button" class="menu-item" data-menu-action="about">About channel</button>
+                </div>
+              </div>
+            </div>
+            <div class="scroll-body" data-scroll-device="${device}">${scrollAreaHtml}</div>
+            ${showYtDockedBottom ? `<nav class="yt-bottom-bar" aria-label="Navigasi bawah mobile">${renderNavItems("yt-bottom")}</nav>` : ""}
+            <div class="floating-dock-wrap" ${showFloatingDock ? "" : "hidden"}>
+              <nav class="floating-dock" aria-label="Floating dock PrismPlayer">${renderNavItems("dock")}</nav>
+            </div>
+          </div>
+        </div>`;
+
+      wireScrollBehavior(device);
+    }
+
+    function renderDestView() {
+      const dest = appState.navDest;
+      if (dest === "Home") {
+        return `
+          <div class="dest-view">
+            <div class="dest-card">
+              <div><h4 style="margin:0 0 4px;">Home Feed (Simulasi Shell)</h4><p class="card-meta" style="margin:0;">Klik tombol di kanan atau ikon avatar di bottom bar untuk kembali ke Channel.</p></div>
+              <button type="button" class="btn-sub" data-nav="Channel">Buka Prism Studio Demo</button>
+            </div>
+            <div class="grid-videos">${SAMPLE_VIDEOS.slice(0, 4).map(v => renderVideoCard(v, false)).join("")}</div>
+          </div>`;
+      }
+      if (dest === "Shorts") {
+        return `<div class="dest-view"><div class="grid-shorts">${SAMPLE_SHORTS.map(s => renderShortCard(s, false)).join("")}</div></div>`;
+      }
+      if (dest === "Subs") {
+        return `
+          <div class="dest-view">
+            <div class="dest-card">
+              <div><h4 style="margin:0 0 4px;">Subscriptions</h4><p class="card-meta" style="margin:0;">Status: ${appState.subscribed ? `Subscribed (${appState.notifPref})` : "Belum disubscribe"}</p></div>
+              <button type="button" class="btn-sub" data-action="subscribe">${appState.subscribed ? "Atur Bell" : "Subscribe"}</button>
+            </div>
+            <div class="grid-channels">
+              <button type="button" class="channel-card-tile" data-channel-id="main">
+                <div style="width:48px;height:48px;">${avatarSvg(48, true, "PS")}</div>
+                <div><div class="card-title">Prism Studio Demo</div><div class="card-meta">@prism_demo</div></div>
+              </button>
+              ${SAMPLE_CHANNELS.map(c => `<button type="button" class="channel-card-tile" data-channel-id="${c.id}"><div style="width:48px;height:48px;">${avatarSvg(48, false, c.id.toUpperCase())}</div><div><div class="card-title">${c.name}</div><div class="card-meta">${c.handle}</div></div></button>`).join("")}
+            </div>
+          </div>`;
+      }
+      const saved = getAllVideoItems().filter(v => appState.savedIds.includes(v.id));
+      return `
+        <div class="dest-view">
+          <div class="dest-card">
+            <div><h4 style="margin:0 0 4px;">You / Library (${saved.length} Saved)</h4><p class="card-meta" style="margin:0;">Membership: ${appState.isMemberJoined ? appState.memberTier : "Belum join"}</p></div>
+            <button type="button" class="btn-sub" data-nav="Channel">Kembali ke Channel</button>
+          </div>
+          <div class="grid-videos">${saved.map(v => renderVideoCard(v, false)).join("")}</div>
+        </div>`;
+    }
+
+    /* =====================================================================
+       INTERACTIVE DIALOGS: BELL INLINE MENU, JOIN TIERS, COMMENTS, PLAYERS
+       ===================================================================== */
+    const dialogEl = document.getElementById("protoDialog");
+    let lastFocusTrigger = null;
+
+    function openDialog(title, bodyHtml, actionsHtml) {
+      if (!dialogEl.open) lastFocusTrigger = document.activeElement;
+      document.getElementById("dialogTitle").textContent = title;
+      document.getElementById("dialogBody").innerHTML = bodyHtml;
+      document.getElementById("dialogActions").innerHTML = actionsHtml;
+      if (!dialogEl.open) dialogEl.showModal();
+    }
+
+    function closeDialog() {
+      if (dialogEl.open) dialogEl.close();
+      if (lastFocusTrigger && typeof lastFocusTrigger.focus === "function") lastFocusTrigger.focus();
+    }
+
+    document.getElementById("dialogCloseIcon").addEventListener("click", closeDialog);
+    dialogEl.addEventListener("cancel", closeDialog);
+    dialogEl.addEventListener("click", e => { if (e.target === dialogEl) closeDialog(); });
+
+    function openBellNotificationMenu() {
+      const ch = getActiveChannelInfo();
+      const opts = [
+        ["All", "bellWaves", "All", "Semua video, Shorts, dan live stream"],
+        ["Personalized", "bellOutline", "Personalized", "Rekomendasi berdasarkan aktivitas Anda"],
+        ["None", "bellSlash", "None", "Bisukan semua notifikasi dari channel ini"]
+      ];
+      openDialog(
+        `Notifications · ${ch.name}`,
+        `<p style="margin:0;">Referensi <code>bell_inline_menu.eml</code> &amp; <code>subscribe_menu_notifications.eml</code>:</p>
+         <div class="bell-menu-list" role="radiogroup" aria-label="Pilihan notifikasi channel">
+           ${opts.map(([key, iconKey, lbl, desc]) => `
+             <button type="button" class="bell-opt-btn" role="radio" aria-checked="${appState.notifPref === key}" data-set-notif="${key}">
+               <span class="bell-opt-left">
+                 ${iconSvg(iconKey, 20)}
+                 <span><strong>${lbl}</strong><br><span class="card-meta">${desc}</span></span>
+               </span>
+               <span>${appState.notifPref === key ? "&#10003;" : ""}</span>
+             </button>`).join("")}
+         </div>`,
+        `<button type="button" class="btn-join" data-do-unsub="true" style="color:var(--error-text);border-color:var(--error-text);">Unsubscribe</button>
+         <button type="button" class="btn-sub" onclick="closeDialog()">Done</button>`
+      );
+    }
+
+    function openJoinModal() {
+      const ch = getActiveChannelInfo();
+      openDialog(
+        `Join ${ch.name}`,
+        `<div class="sponsorships-header-card">
+           <div class="sponsorships-hdr-copy">
+             <span class="sponsorships-eyebrow">sponsorships_offer_dialog</span>
+             <h4>Unlock member-only videos &amp; live replays</h4>
+             <p>${appState.isMemberJoined ? `Aktif saat ini: ${appState.memberTier}` : "Pilih salah satu tier di bawah:"}</p>
+           </div>
+           <div class="sponsorships-avatar-badge">
+             ${avatarSvg(56, false, ch.initials)}
+             <span class="sponsorships-medal-badge">${iconSvg("membership24", 14)}</span>
+           </div>
+         </div>
+         <div style="display:flex;flex-direction:column;gap:10px;">
+           ${MEMBERSHIP_TIERS.map(t => {
+             const picked = appState.memberTier === t.name;
+             return `
+               <div class="tier-card ${picked ? "selected" : ""}">
+                 <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                   <strong>${t.name}</strong>
+                   <span class="tier-price">${t.price}</span>
+                 </div>
+                 <ul class="tier-perks">${t.perks.map(pk => `<li>${pk}</li>`).join("")}</ul>
+                 <div class="actions-row">
+                   <button type="button" class="btn-join ${picked ? "btn-cta-blue" : ""}" data-pick-tier="${t.name}" aria-pressed="${picked}">
+                     <span>${picked ? "Tier Dipilih" : "Pilih Tier"}</span>
+                   </button>
+                 </div>
+               </div>`;
+           }).join("")}
+         </div>`,
+        `<button type="button" class="btn-join btn-cta-blue" data-toggle-join-member="true">
+           <span>${appState.isMemberJoined ? "Keluar Membership (Demo)" : `Join (${appState.memberTier})`}</span>
+         </button>
+         <button type="button" class="btn-sub" data-go-membership-tab="true">Buka tab Membership</button>
+         <button type="button" class="btn-sub" onclick="closeDialog()">Tutup</button>`
+      );
+    }
+
+    function openWatchPlayer(itemId) {
+      const item = getAllVideoItems().find(v => v.id === itemId);
+      if (!item) return;
+      appState.player.openId = item.id;
+      appState.player.kind = "video";
+      const locked = Boolean(item.membersOnly) && !appState.isMemberJoined;
+      const isLiked = appState.likedIds.includes(item.id);
+      const isSaved = appState.savedIds.includes(item.id);
+      const chatHtml = (item.isReplay || item.isLiveNow) && appState.player.showChat && !locked
+        ? `<div class="chat-replay-box"><div><strong>@member_andi</strong>: Penjelasan rasio sw600dp sangat jelas!</div><div><strong>@dev_sari</strong>: Live Chat Replay responsif di Android.</div></div>`
+        : "";
+
+      const stageHtml = locked
+        ? `<div class="proto-player-stage">
+             <div class="player-stage-top"><span>${item.isReplay ? "Members-only Live Replay" : "Members-only Video"}</span><span>${item.duration}</span></div>
+             <div class="player-stage-center">
+               <span class="members-meta-tag">${iconSvg("membership12", 12)}<span>Members only</span></span>
+               <strong>Konten khusus Member</strong>
+               <span>Join membership untuk memutar konten ini.</span>
+               <button type="button" class="btn-join btn-cta-blue" data-unlock-in-player="true"><span>Join &amp; Putar</span></button>
+             </div>
+             <div class="player-progress-track"><div class="player-progress-fill" style="width:0%"></div></div>
+           </div>`
+        : `<div class="proto-player-stage">
+             <div class="player-stage-top"><span>${appState.player.playing ? "Playing" : "Paused"} · ${appState.player.speed} · 1080p</span><span>${item.duration}</span></div>
+             <div class="player-stage-center">
+               <button type="button" class="player-play-btn" data-player-act="toggle-play">${appState.player.playing ? "&#10074;&#10074; Pause" : "&#9654; Play"}</button>
+               <span style="font-size:0.75rem;color:#cfcfcf;">Progress: ${appState.player.progress}%</span>
+             </div>
+             <div class="player-progress-track"><div class="player-progress-fill" style="width:${appState.player.progress}%"></div></div>
+           </div>`;
+
+      openDialog(
+        item.isLiveNow ? "Live Stream Player" : (item.membersOnly ? "Members-only Player" : "Video Player"),
+        `${stageHtml}
+         <div><p style="margin:0 0 3px;color:var(--text-primary);font-weight:700;">${escapeHtml(item.title)}</p><p style="margin:0;font-size:0.75rem;">${escapeHtml(item.meta)}</p>${item.membersOnly ? `<div style="margin-top:6px;"><span class="members-meta-tag">${iconSvg("membership12", 12)}<span>Members only</span></span></div>` : ""}</div>
+         <div class="player-controls-row">
+           ${locked ? "" : `<button type="button" class="chip-btn" data-player-act="seek-fwd">+15s</button><button type="button" class="chip-btn" data-player-act="cycle-speed">Speed: ${appState.player.speed}</button>`}
+           <button type="button" class="chip-btn" data-player-act="toggle-like" aria-pressed="${isLiked}">${iconSvg("thumbUp18", 16)}<span>${isLiked ? "Liked" : "Like"}</span></button>
+           <button type="button" class="chip-btn" data-player-act="toggle-save" aria-pressed="${isSaved}">${isSaved ? "Saved" : "Save"}</button>
+           ${(item.isReplay || item.isLiveNow) && !locked ? `<button type="button" class="chip-btn" data-player-act="toggle-chat" aria-pressed="${appState.player.showChat}">Live Chat</button>` : ""}
+         </div>
+         ${chatHtml}`,
+        `<button type="button" class="btn-sub" onclick="closeDialog()">Tutup</button>`
+      );
+    }
+
+    function openShortsPlayer(shortId) {
+      const idx = Math.max(0, SAMPLE_SHORTS.findIndex(s => s.id === shortId));
+      const item = SAMPLE_SHORTS[idx];
+      if (!item) return;
+      appState.player.openId = item.id;
+      appState.player.kind = "short";
+      const isLiked = appState.likedIds.includes(item.id);
+      openDialog(
+        "Shorts Player",
+        `<div class="proto-player-stage short-stage">
+           <div class="player-stage-top"><span>Shorts ${idx + 1}/${SAMPLE_SHORTS.length}</span><span>9:16</span></div>
+           <div class="player-stage-center"><button type="button" class="player-play-btn" data-player-act="toggle-play">${appState.player.playing ? "&#10074;&#10074; Pause" : "&#9654; Play"}</button></div>
+           <div><div style="font-weight:700;font-size:0.875rem;">${escapeHtml(item.title)}</div><div style="font-size:0.75rem;color:#cfcfcf;">${escapeHtml(item.views)}</div></div>
+         </div>
+         <div class="player-controls-row" style="justify-content:center;">
+           <button type="button" class="chip-btn" data-short-step="-1">Prev</button>
+           <button type="button" class="chip-btn" data-short-step="1">Next</button>
+           <button type="button" class="chip-btn" data-player-act="toggle-like" aria-pressed="${isLiked}">${iconSvg("thumbUp18", 16)}<span>${isLiked ? "Liked" : "Like"}</span></button>
+           <button type="button" class="chip-btn" data-player-act="toggle-comments" aria-pressed="${appState.player.showComments}">Comments</button>
+         </div>
+         ${appState.player.showComments ? `<div class="chat-replay-box"><div><strong>@viewer_01</strong>: Animasi scale 0.9x di card Shorts berasa smooth!</div></div>` : ""}`,
+        `<button type="button" class="btn-sub" onclick="closeDialog()">Tutup</button>`
+      );
+    }
+
+    function openPlaylistSheet(plId) {
+      const pl = SAMPLE_PLAYLISTS.find(p => p.id === plId);
+      if (!pl) return;
+      const queue = SAMPLE_VIDEOS.slice(0, 4);
+      openDialog(
+        "Playlist Queue",
+        `<p style="margin:0;"><strong>${escapeHtml(pl.title)}</strong> · ${escapeHtml(pl.count)}</p>
+         <div class="playlist-queue">
+           ${queue.map((v, i) => `<button type="button" class="playlist-row-btn" data-play-video-id="${v.id}"><span><strong>${i + 1}.</strong> ${escapeHtml(v.title)}</span><span class="card-meta">${v.duration}</span></button>`).join("")}
+         </div>`,
+        `<button type="button" class="btn-sub" data-play-video-id="${queue[0].id}">Play All</button>
+         <button type="button" class="btn-sub" onclick="closeDialog()">Tutup</button>`
+      );
+    }
+
+    function openPostCommentsDialog(postId) {
+      const list = appState.postComments[postId] || [];
+      openDialog(
+        `Community Comments (${list.length})`,
+        `<div class="chat-replay-box" style="max-height:220px;">
+           ${list.length ? list.map(c => `<div><strong>${escapeHtml(c.user)}</strong>: ${escapeHtml(c.text)}</div>`).join("") : `<div>Belum ada komentar. Jadilah yang pertama!</div>`}
+         </div>
+         <form class="comment-form" data-add-comment-form="${postId}">
+           <label for="new-comment-input" class="sr-only">Tulis komentar</label>
+           <input id="new-comment-input" class="comment-input" type="text" placeholder="Tambah komentar simulasi..." required />
+           <button type="submit" class="btn-sub">Post</button>
+         </form>`,
+        `<button type="button" class="btn-sub" onclick="closeDialog()">Tutup</button>`
+      );
+    }
+
+    function triggerSubscribeAnimation(btnEl) {
+      appState.justSubscribedAnim = true;
+      renderAll();
+      // Spawn sparkles around subscribe buttons right after render
+      document.querySelectorAll(".btn-sub[data-action='subscribe']").forEach(b => {
+        const burst = document.createElement("span");
+        burst.className = "sparkle-burst";
+        const dirs = [[-34, -20], [34, -20], [-42, 6], [42, 6], [0, -28], [22, 22], [-22, 22]];
+        const colors = ["#ff0033", "#ffbb00", "#ffffff", "#3ea6ff"];
+        dirs.forEach(([x, y], idx) => {
+          const d = document.createElement("span");
+          d.className = "sparkle-dot";
+          d.style.setProperty("--sx", `${x}px`);
+          d.style.setProperty("--sy", `${y}px`);
+          d.style.background = colors[idx % colors.length];
+          burst.appendChild(d);
+        });
+        b.parentElement.appendChild(burst);
+        setTimeout(() => burst.remove(), 550);
+      });
+      setTimeout(() => { appState.justSubscribedAnim = false; }, 600);
+    }
+
+    /* =====================================================================
+       EVENTS & ORCHESTRATION
+       ===================================================================== */
+    document.getElementById("toggleAssetsBtn").addEventListener("click", (e) => {
+      appState.showAssetsPanel = !appState.showAssetsPanel;
+      e.currentTarget.setAttribute("aria-pressed", String(appState.showAssetsPanel));
+      const p = document.getElementById("apkAssetsPanel");
+      p.hidden = !appState.showAssetsPanel;
+      if (appState.showAssetsPanel) renderApkAssetsPanel();
+    });
+
+    document.addEventListener("submit", (e) => {
+      if (e.target.classList.contains("search-inline-form")) {
+        e.preventDefault();
+        showToast(appState.searchQuery.trim() ? `Filter pencarian: "${appState.searchQuery.trim()}"` : "Menampilkan semua item");
+        return;
+      }
+      const cForm = e.target.closest("[data-add-comment-form]");
+      if (cForm) {
+        e.preventDefault();
+        const postId = cForm.dataset.addCommentForm;
+        const inp = cForm.querySelector("input");
+        const val = inp ? inp.value.trim() : "";
+        if (val) {
+          if (!appState.postComments[postId]) appState.postComments[postId] = [];
+          appState.postComments[postId].push({ user: "@anda_demo", text: val });
+          renderAll();
+          openPostCommentsDialog(postId);
+          showToast("Komentar ditambahkan (simulasi)");
+        }
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      const modeBtn = e.target.closest("button[data-mode]");
+      if (modeBtn) { appState.mode = modeBtn.dataset.mode; document.querySelectorAll("button[data-mode]").forEach(b => b.setAttribute("aria-pressed", String(b === modeBtn))); renderAll(); return; }
+
+      const viewBtn = e.target.closest("[data-view]");
+      if (viewBtn) { appState.view = viewBtn.dataset.view; document.querySelectorAll("[data-view]").forEach(b => b.setAttribute("aria-pressed", String(b === viewBtn))); renderAll(); return; }
+
+      const stateBtn = e.target.closest("[data-state]");
+      if (stateBtn) { appState.dataState = stateBtn.dataset.state; document.querySelectorAll("[data-state]").forEach(b => b.setAttribute("aria-pressed", String(b === stateBtn))); renderAll(); return; }
+
+      const themeBtn = e.target.closest("[data-theme-toggle]");
+      if (themeBtn) { appState.theme = themeBtn.dataset.themeToggle; document.querySelectorAll("[data-theme-toggle]").forEach(b => b.setAttribute("aria-pressed", String(b === themeBtn))); renderAll(); return; }
+
+      const caseBtn = e.target.closest("[data-channel-case]");
+      if (caseBtn) {
+        appState.hasMembership = caseBtn.dataset.channelCase === "membership";
+        if (!appState.hasMembership) appState.isMemberJoined = false;
+        document.querySelectorAll("[data-channel-case]").forEach(b => b.setAttribute("aria-pressed", String(b === caseBtn)));
+        renderAll();
+        return;
+      }
+
+      const tabBtn = e.target.closest("[data-tab]");
+      if (tabBtn) { appState.navDest = "Channel"; appState.activeTab[tabBtn.dataset.device] = tabBtn.dataset.tab; renderDevice(tabBtn.dataset.device); return; }
+
+      const goTabBtn = e.target.closest("[data-go-tab]");
+      if (goTabBtn) {
+        const target = goTabBtn.dataset.goTab;
+        if (getTabsForMode().includes(target)) {
+          appState.navDest = "Channel";
+          if (goTabBtn.dataset.device) appState.activeTab[goTabBtn.dataset.device] = target;
+          else { appState.activeTab.mobile = target; appState.activeTab.tablet = target; }
+          renderAll();
+        }
+        return;
+      }
+
+      const sortBtn = e.target.closest("[data-sort]");
+      if (sortBtn) { appState.sortOrder = sortBtn.dataset.sort; renderAll(); return; }
+
+      const cycleSortBtn = e.target.closest("[data-cycle-sort]");
+      if (cycleSortBtn) {
+        const order = ["latest", "popular", "oldest"];
+        appState.sortOrder = order[(order.indexOf(appState.sortOrder) + 1) % order.length];
+        appState.accessFilter = "all";
+        renderAll();
+        showToast(`Urutan: ${appState.sortOrder}`);
+        return;
+      }
+
+      const accessBtn = e.target.closest("[data-access-filter]");
+      if (accessBtn) {
+        const picked = accessBtn.dataset.accessFilter;
+        appState.accessFilter = appState.accessFilter === picked ? "all" : picked;
+        renderAll();
+        return;
+      }
+
+      const cyclePlSort = e.target.closest("[data-cycle-playlist-sort]");
+      if (cyclePlSort) {
+        appState.playlistSort = appState.playlistSort === "recent" ? "newest" : "recent";
+        renderAll();
+        showToast(appState.playlistSort === "recent" ? "Playlist: Recently added" : "Playlist: Date created (newest)");
+        return;
+      }
+
+      const sSortBtn = e.target.closest("[data-shorts-sort]");
+      if (sSortBtn) { appState.shortsSort = sSortBtn.dataset.shortsSort; renderAll(); return; }
+
+      const lFiltBtn = e.target.closest("[data-live-filter]");
+      if (lFiltBtn) { appState.liveFilter = lFiltBtn.dataset.liveFilter; renderAll(); return; }
+
+      const pSortBtn = e.target.closest("[data-playlist-sort]");
+      if (pSortBtn) { appState.playlistSort = pSortBtn.dataset.playlistSort; renderAll(); return; }
+
+      const mFiltBtn = e.target.closest("[data-member-filter]");
+      if (mFiltBtn) { appState.memberFilter = mFiltBtn.dataset.memberFilter; renderAll(); return; }
+
+      const navBtn = e.target.closest("[data-nav]");
+      if (navBtn) { appState.navDest = navBtn.dataset.nav; renderAll(); return; }
+
+      const chTile = e.target.closest("[data-channel-id]");
+      if (chTile) {
+        appState.activeChannelId = chTile.dataset.channelId;
+        appState.navDest = "Channel";
+        appState.activeTab.mobile = getTabsForMode()[0];
+        appState.activeTab.tablet = getTabsForMode()[0];
+        renderAll();
+        showToast(`Membuka channel ${getActiveChannelInfo().name}`);
+        return;
+      }
+
+      /* Community Post Interactions */
+      const slideBtn = e.target.closest("[data-slide-post]");
+      if (slideBtn) {
+        const pid = slideBtn.dataset.slidePost;
+        const post = SAMPLE_POSTS.find(p => p.id === pid);
+        if (post) {
+          const cur = appState.postSlide[pid] || 0;
+          if (slideBtn.dataset.slideIndex !== undefined) appState.postSlide[pid] = Number(slideBtn.dataset.slideIndex);
+          else appState.postSlide[pid] = (cur + Number(slideBtn.dataset.slideDelta) + post.slides.length) % post.slides.length;
+          renderAll();
+        }
+        return;
+      }
+
+      const lightboxBtn = e.target.closest("[data-lightbox-post]");
+      if (lightboxBtn) {
+        const pid = lightboxBtn.dataset.lightboxPost;
+        const post = SAMPLE_POSTS.find(p => p.id === pid);
+        const idx = appState.postSlide[pid] || 0;
+        if (post) {
+          openDialog("Post Image Lightbox (post_image_lightbox.eml)", `<div class="thumb-wrap">${thumbSvg(post.slides[idx])}</div>`, `<button type="button" class="btn-sub" onclick="closeDialog()">Tutup Lightbox</button>`);
+        }
+        return;
+      }
+
+      const pollBtn = e.target.closest("[data-poll-post]");
+      if (pollBtn) {
+        appState.pollVotes[pollBtn.dataset.pollPost] = Number(pollBtn.dataset.pollIdx);
+        renderAll();
+        showToast("Suara polling tersimpan");
+        return;
+      }
+
+      const postLike = e.target.closest("[data-post-like]");
+      if (postLike) {
+        const pid = postLike.dataset.postLike;
+        const i = appState.likedIds.indexOf(pid);
+        if (i >= 0) appState.likedIds.splice(i, 1);
+        else { appState.likedIds.push(pid); appState.dislikedIds = appState.dislikedIds.filter(x => x !== pid); }
+        renderAll();
+        return;
+      }
+
+      const postDislike = e.target.closest("[data-post-dislike]");
+      if (postDislike) {
+        const pid = postDislike.dataset.postDislike;
+        const i = appState.dislikedIds.indexOf(pid);
+        if (i >= 0) appState.dislikedIds.splice(i, 1);
+        else { appState.dislikedIds.push(pid); appState.likedIds = appState.likedIds.filter(x => x !== pid); }
+        renderAll();
+        return;
+      }
+
+      const postShare = e.target.closest("[data-post-share]");
+      if (postShare) { showToast("Tautan postingan komunitas disalin"); return; }
+
+      const postCmt = e.target.closest("[data-post-comments]");
+      if (postCmt) { openPostCommentsDialog(postCmt.dataset.postComments); return; }
+
+      /* Card Menu & Card Playback */
+      const cardMenu = e.target.closest("[data-card-menu]");
+      if (cardMenu) {
+        const id = cardMenu.dataset.cardMenu;
+        openDialog("Opsi Item", `<p style="margin:0;">Pilih aksi cepat untuk item <code>${escapeHtml(id)}</code>:</p>`, `<button type="button" class="btn-sub" data-quick-save="${escapeHtml(id)}">${appState.savedIds.includes(id) ? "Hapus dari Saved" : "Save to Watch Later"}</button><button type="button" class="btn-sub" onclick="closeDialog()">Tutup</button>`);
+        return;
+      }
+
+      const quickSave = e.target.closest("[data-quick-save]");
+      if (quickSave) {
+        const id = quickSave.dataset.quickSave;
+        const idx = appState.savedIds.indexOf(id);
+        if (idx >= 0) appState.savedIds.splice(idx, 1); else appState.savedIds.push(id);
+        closeDialog();
+        renderAll();
+        showToast(idx >= 0 ? "Dihapus dari Library" : "Disimpan ke Library / Watch Later");
+        return;
+      }
+
+      const playCard = e.target.closest("[data-play-card]");
+      if (playCard) {
+        const kind = playCard.dataset.itemKind;
+        const id = playCard.dataset.itemId;
+        if (kind === "Short") { appState.player.playing = true; openShortsPlayer(id); }
+        else if (kind === "Playlist") openPlaylistSheet(id);
+        else { appState.player.playing = true; appState.player.progress = 28; appState.player.showChat = false; openWatchPlayer(id); }
+        return;
+      }
+
+      /* Membership Tier Pickers */
+      const joinTier = e.target.closest("[data-join-tier]");
+      if (joinTier) {
+        appState.memberTier = joinTier.dataset.joinTier;
+        appState.isMemberJoined = true;
+        renderAll();
+        showToast(`Bergabung ke ${appState.memberTier}`);
+        return;
+      }
+
+      const pickTier = e.target.closest("[data-pick-tier]");
+      if (pickTier) { appState.memberTier = pickTier.dataset.pickTier; openJoinModal(); return; }
+
+      const toggleMember = e.target.closest("[data-toggle-join-member]");
+      if (toggleMember) { appState.isMemberJoined = !appState.isMemberJoined; closeDialog(); renderAll(); showToast(appState.isMemberJoined ? `Member Aktif (${appState.memberTier})` : "Membership dinonaktifkan"); return; }
+
+      const goMemberTab = e.target.closest("[data-go-membership-tab]");
+      if (goMemberTab) { appState.activeTab.mobile = "Membership"; appState.activeTab.tablet = "Membership"; closeDialog(); renderAll(); return; }
+
+      const unlockBtn = e.target.closest("[data-unlock-in-player]");
+      if (unlockBtn) { appState.isMemberJoined = true; appState.player.playing = true; renderAll(); openWatchPlayer(appState.player.openId); return; }
+
+      const playVideoBtn = e.target.closest("[data-play-video-id]");
+      if (playVideoBtn) { appState.player.playing = true; appState.player.progress = 18; openWatchPlayer(playVideoBtn.dataset.playVideoId); return; }
+
+      const shortStepBtn = e.target.closest("[data-short-step]");
+      if (shortStepBtn) {
+        const delta = Number(shortStepBtn.dataset.shortStep);
+        const cur = Math.max(0, SAMPLE_SHORTS.findIndex(s => s.id === appState.player.openId));
+        openShortsPlayer(SAMPLE_SHORTS[(cur + delta + SAMPLE_SHORTS.length) % SAMPLE_SHORTS.length].id);
+        return;
+      }
+
+      const playerAct = e.target.closest("[data-player-act]");
+      if (playerAct) {
+        const pAct = playerAct.dataset.playerAct;
+        const id = appState.player.openId;
+        if (pAct === "toggle-play") appState.player.playing = !appState.player.playing;
+        else if (pAct === "seek-fwd") appState.player.progress = Math.min(100, appState.player.progress + 15);
+        else if (pAct === "cycle-speed") { const s = ["1.0x", "1.25x", "1.5x", "2.0x"]; appState.player.speed = s[(s.indexOf(appState.player.speed) + 1) % s.length]; }
+        else if (pAct === "toggle-like" && id) { const i = appState.likedIds.indexOf(id); if (i >= 0) appState.likedIds.splice(i, 1); else appState.likedIds.push(id); }
+        else if (pAct === "toggle-save" && id) { const i = appState.savedIds.indexOf(id); if (i >= 0) appState.savedIds.splice(i, 1); else appState.savedIds.push(id); renderAll(); }
+        else if (pAct === "toggle-chat") appState.player.showChat = !appState.player.showChat;
+        else if (pAct === "toggle-comments") appState.player.showComments = !appState.player.showComments;
+        if (appState.player.kind === "short") openShortsPlayer(id); else openWatchPlayer(id);
+        return;
+      }
+
+      /* Menu & Actions */
+      const menuAct = e.target.closest("[data-menu-action]");
+      if (menuAct) {
+        document.querySelectorAll(".menu-popover").forEach(m => { m.hidden = true; });
+        const act = menuAct.dataset.menuAction;
+        const ch = getActiveChannelInfo();
+        if (act === "copy") showToast(`Tautan ${ch.handle} disalin`);
+        else if (act === "share") openDialog("Share Channel", `<p>Bagikan <strong>${escapeHtml(ch.name)}</strong> (${escapeHtml(ch.handle)}) ke aplikasi lain.</p>`, `<button type="button" class="btn-sub" onclick="closeDialog()">Tutup</button>`);
+        else openAboutDialog();
+        return;
+      }
+
+      const notifPick = e.target.closest("[data-set-notif]");
+      if (notifPick) { appState.notifPref = notifPick.dataset.setNotif; closeDialog(); renderAll(); showToast(`Notifikasi diubah: ${appState.notifPref}`); return; }
+
+      const doUnsub = e.target.closest("[data-do-unsub]");
+      if (doUnsub) { appState.subscribed = false; closeDialog(); renderAll(); showToast("Berhenti berlangganan"); return; }
+
+      const actionEl = e.target.closest("[data-action]");
+      if (actionEl) {
+        const act = actionEl.dataset.action;
+        const dev = actionEl.dataset.device;
+        if (act === "subscribe") {
+          if (!appState.subscribed) {
+            appState.subscribed = true;
+            appState.notifPref = "Personalized";
+            triggerSubscribeAnimation(actionEl);
+            showToast(`Subscribed ke ${getActiveChannelInfo().name}`);
+          } else {
+            openBellNotificationMenu();
+          }
+          return;
+        }
+        if (act === "join") {
+          if (appState.mode === "current") {
+            const targetDev = dev || "mobile";
+            appState.navDest = "Channel";
+            appState.activeTab[targetDev] = "Membership";
+            renderDevice(targetDev);
+            return;
+          }
+          openJoinModal();
+          return;
+        }
+        if (act === "open-live") { appState.navDest = "Channel"; appState.activeTab[dev || "mobile"] = "Live"; renderDevice(dev || "mobile"); return; }
+        if (act === "banner-info") { openDialog("Channel Banner Spec", `<p>${appState.mode === "proposed" ? "Mobile v2 menggunakan inset rounded banner (res/lEd.xml) dan Tablet Landscape menggunakan rasio 6:1 (res/egU.xml)." : "Current PrismPlayer memakai banner fixed 128dp/160dp."}</p>`, `<button type="button" class="btn-sub" onclick="closeDialog()">Tutup</button>`); return; }
+        if (act === "about") { openAboutDialog(); return; }
+        if (act === "back") {
+          if (appState.activeChannelId !== "main") { appState.activeChannelId = "main"; renderAll(); return; }
+          if (appState.navDest !== "Channel") { appState.navDest = "Channel"; renderAll(); return; }
+          appState.activeTab.mobile = getTabsForMode()[0]; appState.activeTab.tablet = getTabsForMode()[0]; appState.searchQuery = ""; renderAll(); return;
+        }
+        if (act === "open-search" && dev) { appState.searchOpen[dev] = true; renderDevice(dev); const inp = document.getElementById(`search-${dev}`); if (inp) inp.focus(); return; }
+        if (act === "close-search" && dev) { appState.searchOpen[dev] = false; appState.searchQuery = ""; renderAll(); return; }
+        if (act === "toggle-menu" && dev) {
+          const m = document.getElementById(`menu-${dev}`);
+          if (m) { m.hidden = !m.hidden; actionEl.setAttribute("aria-expanded", String(!m.hidden)); }
+          return;
+        }
+        if (act === "retry-load") {
+          appState.dataState = "loading"; renderAll();
+          setTimeout(() => { appState.dataState = "populated"; document.querySelectorAll("[data-state]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.state === "populated"))); renderAll(); }, 450);
+          return;
+        }
+        if (act === "reset-state") { appState.dataState = "populated"; appState.searchQuery = ""; document.querySelectorAll("[data-state]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.state === "populated"))); renderAll(); return; }
+        if (act === "clear-search") { appState.searchQuery = ""; renderAll(); return; }
+      }
+
+      if (!e.target.closest(".dropdown-anchor")) {
+        document.querySelectorAll(".menu-popover").forEach(m => { m.hidden = true; });
+        document.querySelectorAll("[data-action='toggle-menu']").forEach(b => b.setAttribute("aria-expanded", "false"));
+      }
+    });
+
+    function openAboutDialog() {
+      const ch = getActiveChannelInfo();
+      openDialog(
+        `About · ${ch.name}`,
+        `<p><strong>${escapeHtml(ch.name)}</strong> (${escapeHtml(ch.handle)}) · ${escapeHtml(ch.subs)}</p>
+         <p>Referensi Channel Screen dari YouTube_21.45.83.apk mencakup header v2, animasi Subscribe 3-tahap, Bell inline menu, Join sponsorship sheet, dan 7 tab konten lengkap.</p>
+         <p>Tautan contoh: prismplayer.dev/channel, github.com/example/prism</p>`,
+        `<button type="button" class="btn-sub" onclick="closeDialog()">Tutup</button>`
+      );
+    }
+
+    document.addEventListener("input", (e) => {
+      if (e.target.classList.contains("search-input")) {
+        appState.searchQuery = e.target.value;
+        const dev = e.target.id.replace("search-", "");
+        const other = dev === "mobile" ? "tablet" : "mobile";
+        renderDevice(other);
+        const pos = e.target.selectionStart;
+        renderDevice(dev);
+        const reopened = document.getElementById(`search-${dev}`);
+        if (reopened) { reopened.focus(); reopened.value = appState.searchQuery; if (typeof pos === "number") reopened.setSelectionRange(pos, pos); }
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        document.querySelectorAll(".menu-popover").forEach(m => { m.hidden = true; });
+      }
+    });
+
+    function wireScrollBehavior(device) {
+      const scroller = document.querySelector(`[data-scroll-device="${device}"]`);
+      if (!scroller) return;
+      scroller.addEventListener("scroll", () => {
+        if (appState.mode !== "proposed") return;
+        const shouldCollapse = scroller.scrollTop > 48;
+        if (appState.collapsedBar[device] !== shouldCollapse) {
+          appState.collapsedBar[device] = shouldCollapse;
+          const bar = document.querySelector(`#${device}Frame .top-bar`);
+          if (bar) bar.classList.toggle("collapsed", shouldCollapse && !appState.searchOpen[device]);
+        }
+      }, { passive: true });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.hidden = false;
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => { el.hidden = true; }, 2400);
+    }
+
+    function renderAll() {
+      ensureValidTabs();
+      document.documentElement.setAttribute("data-theme", appState.theme);
+      document.documentElement.setAttribute("data-mode", appState.mode);
+      document.getElementById("mobileSection").hidden = appState.view === "tablet";
+      document.getElementById("tabletSection").hidden = appState.view === "mobile";
+      renderSpecStrip();
+      renderDevice("mobile");
+      renderDevice("tablet");
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>

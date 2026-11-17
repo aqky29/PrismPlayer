@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -75,8 +76,8 @@ import kotlinx.coroutines.launch
 private val AskPill = Color(0xFF272727)
 private val AskUserBubble = Color(0xFFF1F1F1)
 private val AskUserText = Color(0xFF0F0F0F)
-private val AskOutline = Color(0xFF444444)
-private val AskSendIdle = Color(0xFF7A7A7A)
+private val AskOutline = HairlineBorder
+private val AskSendIdle = Color(0xFF8E8E8E)
 private val AskError = Color(0xFFFF8A80)
 private val AskBody = TextStyle(color = Color.White, fontSize = 14.sp, lineHeight = 20.sp)
 private val AskLineGap = 20.dp
@@ -254,7 +255,7 @@ private fun AskAnswerView(answer: AskAnswer, showChips: Boolean, onChip: (AskChi
         Image(painterResource(R.drawable.yt_w_spark), null, Modifier.size(16.dp))
         AskLines(answer.text, onSeek)
         answer.disclaimer?.let { Text(it, color = Muted, fontSize = 12.sp, lineHeight = 16.sp) }
-        IconButton(onClick = { onCopy(answer.text) }, Modifier.size(32.dp)) {
+        IconButton(onClick = { onCopy(answer.text) }, Modifier.size(44.dp)) {
             Image(painterResource(R.drawable.yt_w_copy), "Copy", Modifier.size(18.dp), alpha = .8f)
         }
         if (showChips && answer.chips.isNotEmpty()) {
@@ -269,18 +270,23 @@ private fun AskAnswerView(answer: AskAnswer, showChips: Boolean, onChip: (AskChi
 private fun AskChipView(chip: AskChip, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     Row(
-        Modifier.clip(shape).border(1.dp, Color(0xFF3F3F3F), shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier
+            .heightIn(min = 44.dp)
+            .clip(shape)
+            .border(1.dp, HairlineBorder, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(painterResource(R.drawable.yt_w_spark), null, Modifier.size(16.dp))
-        Text(chip.text, color = Color.White, fontSize = 14.sp, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
+        Text(chip.text, color = TextPrimary, fontSize = 14.sp, maxLines = 1, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
 @Composable
 private fun AskThinking() {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+        CircularProgressIndicator(Modifier.size(18.dp), color = TextPrimary, strokeWidth = 2.dp)
         Text("Thinking…", color = Muted, fontSize = 14.sp)
     }
 }
@@ -289,17 +295,21 @@ private fun AskThinking() {
 private fun AskErrorView(message: String, onRetry: (() -> Unit)?) {
     Column {
         Text(message, color = AskError, fontSize = 14.sp)
-        if (onRetry != null) TextButton(onClick = onRetry) { Text("Try again", color = Color.White) }
+        if (onRetry != null) {
+            TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 44.dp)) {
+                Text("Try again", color = TextPrimary)
+            }
+        }
     }
 }
 
-/** Kotak input pil, ikon kirim outline tanpa lingkaran, dan chip "Ask ✦ Gemini" di bawahnya. */
+/** Kotak input pil, ikon kirim outline tanpa lingkaran, dan chip "Ask Gemini" di bawahnya. */
 @Composable
 private fun AskComposer(panel: AskPanel, input: String, enabled: Boolean, onInput: (String) -> Unit, onSend: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(1f).clip(RoundedCornerShape(50)).background(AskPill).padding(horizontal = 16.dp, vertical = 9.dp)) {
-                if (input.isEmpty()) Text(panel.placeholder, color = Color(0xFF9E9E9E), fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1)
+            Box(Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(50)).background(AskPill).padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
+                if (input.isEmpty()) Text(panel.placeholder, color = TextSubMuted, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1)
                 BasicTextField(
                     value = input,
                     onValueChange = { onInput(it.take(panel.maxCharacters)) },
