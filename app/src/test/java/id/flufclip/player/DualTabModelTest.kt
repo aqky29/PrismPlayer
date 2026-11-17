@@ -23,7 +23,7 @@ class DualTabModelTest {
     @Test
     fun mixPolicyUnmutesBothSlotsAndPreservesManualMuteOnFocusChange() {
         val model = DualTabModel(initialAudioPolicy = "focus")
-        model.setAudioPolicy("mix")
+        model.applyAudioPolicy("mix")
         assertFalse(model.slot1.muted)
         assertFalse(model.slot2.muted)
 

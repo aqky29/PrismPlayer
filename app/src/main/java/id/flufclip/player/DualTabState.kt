@@ -63,7 +63,7 @@ internal class DualTabModel(initialAudioPolicy: String = "focus") {
         updateSlot(slotId) { it.copy(muted = !it.muted) }
     }
 
-    fun setAudioPolicy(policy: String) {
+    fun applyAudioPolicy(policy: String) {
         val normalized = if (policy == "mix") "mix" else "focus"
         audioPolicy = normalized
         if (normalized == "focus") {
@@ -141,7 +141,7 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
 
     fun setAudioPolicy(policy: String, primary: ExoPlayer, secondary: ExoPlayer?) {
         PlayerSettings.updateDualAudioPolicy(policy)
-        model.setAudioPolicy(policy)
+        model.applyAudioPolicy(policy)
         syncAudio(primary, secondary)
     }
 
