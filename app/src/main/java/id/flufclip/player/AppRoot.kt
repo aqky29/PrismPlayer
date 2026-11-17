@@ -1466,7 +1466,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             )
             return
         }
-        val short = item.isShortFormContent || (browse.channel != null && browse.channelTab == ChannelTabs.SHORTS)
         val knownRef = if (!short && browse.playlist == null) {
             InnerTubePlayer.videoIdOf(item.url)?.let { WatchHistory.playlistRefForVideoId(it, watchPrefs) }
         } else null

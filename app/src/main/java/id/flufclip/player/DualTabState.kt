@@ -185,7 +185,7 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
         }
         val job = scope.launch {
             try {
-                val resolved = VideoRepository.video(item.url, context)
+                val resolved = VideoRepository.resolve(item.url, context)
                 val targetPlayer = if (targetSlot == 2) {
                     secondaryProvider().also { secondaryAllocated = true }
                 } else {

@@ -126,6 +126,7 @@ internal fun DualWatchScreen(
             .navigationBarsPadding(),
     ) {
         val wide = isWideWatchLayout(maxWidth, maxHeight)
+        val containerHeight = maxHeight
 
         Column(modifier = Modifier.fillMaxSize()) {
             DualWorkspaceBar(
@@ -186,7 +187,7 @@ internal fun DualWatchScreen(
                     }
                 }
             } else {
-                val playerHeight = ((maxHeight - 250.dp) / 2f).coerceIn(144.dp, 200.dp)
+                val playerHeight = ((containerHeight - 250.dp) / 2f).coerceIn(144.dp, 200.dp)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
