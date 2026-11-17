@@ -118,6 +118,13 @@ internal fun playbackLoadControl(): DefaultLoadControl =
         .setPrioritizeTimeOverSizeThresholdsForStreaming(true)
         .build()
 
+/** Smaller streaming buffer for Slot 2 in Dual Tab Mode to limit concurrent memory use. */
+internal fun secondaryLoadControl(): DefaultLoadControl =
+    DefaultLoadControl.Builder()
+        .setBufferDurationsMsForStreaming(6_000, 15_000, 500, 1_000)
+        .setPrioritizeTimeOverSizeThresholdsForStreaming(true)
+        .build()
+
 internal fun playbackLiveSpeedControl(): DefaultLivePlaybackSpeedControl =
     DefaultLivePlaybackSpeedControl.Builder()
         .setFallbackMinPlaybackSpeed(0.95f)

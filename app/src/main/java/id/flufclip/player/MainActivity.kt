@@ -198,6 +198,9 @@ class MainActivity : ComponentActivity() {
             OfflinePlaybackBridge.pause()
         }
         super.onStop()
+        if (PlayerSettings.dualModeEnabled) {
+            PlaybackSessionHost.currentSecondaryPlayer()?.pause()
+        }
         val keepOnline = PlayerSettings.backgroundPlayback &&
             (backgroundPlaybackEligible() || PlaybackSessionHost.keepForegroundDuringTransition)
         if (keepOnline) {
@@ -210,6 +213,11 @@ class MainActivity : ComponentActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
         if (isInPictureInPictureMode) {
+            if (PlayerSettings.dualModeEnabled) {
+                val primary = PlaybackSessionHost.currentOnlinePlayer()
+                val secondary = PlaybackSessionHost.currentSecondaryPlayer()
+                if (pipPlayer === secondary) primary?.pause() else secondary?.pause()
+            }
             PlaybackSessionHost.setVideoTrackDisabled(pipPlayer, false)
         }
     }

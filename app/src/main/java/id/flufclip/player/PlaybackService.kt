@@ -8,6 +8,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -31,6 +32,7 @@ internal object PlaybackSessionHost {
     )
 
     private var onlinePlayer: ExoPlayer? = null
+    private var secondaryPlayer: ExoPlayer? = null
     internal var activeTarget: Target? = null
         private set
     internal var keepForegroundDuringTransition: Boolean = false
@@ -49,8 +51,61 @@ internal object PlaybackSessionHost {
             .also { onlinePlayer = it }
     }
 
+    fun obtainSecondaryPlayer(context: Context): ExoPlayer {
+        secondaryPlayer?.let { return it }
+        val appContext = context.applicationContext
+        val renderers = DefaultRenderersFactory(appContext).setEnableDecoderFallback(true)
+        return ExoPlayer.Builder(appContext, renderers)
+            .setLoadControl(secondaryLoadControl())
+            .setLivePlaybackSpeedControl(playbackLiveSpeedControl())
+            .setHandleAudioBecomingNoisy(false)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .build()
+            .apply { setAudioAttributes(AudioAttributes.DEFAULT, false) }
+            .also { secondaryPlayer = it }
+    }
+
+    fun currentOnlinePlayer(): ExoPlayer? = onlinePlayer
+
+    fun currentSecondaryPlayer(): ExoPlayer? = secondaryPlayer
+
+    fun releaseSecondaryPlayer() {
+        secondaryPlayer?.stop()
+        secondaryPlayer?.clearMediaItems()
+        secondaryPlayer?.release()
+        secondaryPlayer = null
+    }
+
+    fun applyDualAudioRouting(
+        primary: ExoPlayer,
+        secondary: ExoPlayer?,
+        focusedSlot: Int,
+        audioPolicy: String,
+        slot1Muted: Boolean,
+        slot2Muted: Boolean,
+    ) {
+        val focusPrimary = focusedSlot != 2 || secondary == null
+        primary.setAudioAttributes(AudioAttributes.DEFAULT, focusPrimary)
+        secondary?.setAudioAttributes(AudioAttributes.DEFAULT, !focusPrimary)
+        val pVol = when {
+            slot1Muted -> 0f
+            audioPolicy == "mix" -> 1f
+            focusPrimary -> 1f
+            else -> 0f
+        }
+        val sVol = when {
+            slot2Muted -> 0f
+            audioPolicy == "mix" -> 1f
+            !focusPrimary -> 1f
+            else -> 0f
+        }
+        primary.volume = pVol
+        secondary?.volume = sVol
+    }
+
     fun releaseOnlinePlayerIfIdle() {
         if (activeTarget?.tag == "online") return
+        releaseSecondaryPlayer()
         onlinePlayer?.release()
         onlinePlayer = null
     }
@@ -60,6 +115,7 @@ internal object PlaybackSessionHost {
             activeTarget = null
             serviceInstance?.stopFromHost()
         }
+        releaseSecondaryPlayer()
         onlinePlayer?.release()
         onlinePlayer = null
     }

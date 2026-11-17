@@ -1,0 +1,1937 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlufPlay — Dual Tab Mode Prototype (Mobile & Tablet Landscape)</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --surface: #272727;
+      --surface-elevated: #212121;
+      --surface-card: #181818;
+      --watch-action: #343434;
+      --border: #303030;
+      --hairline: #616161;
+      --text: #f1f1f1;
+      --text-sec: #aaaaaa;
+      --text-muted: #888888;
+      --accent: #ff0033;
+      --blue: #3ea6ff;
+      --green: #34c77b;
+      --tab1: #3ea6ff;
+      --tab2: #34c77b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #070709;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      gap: 14px;
+    }
+
+    /* Outer Prototype Control Bar */
+    .sim-toolbar {
+      width: 100%;
+      max-width: 1120px;
+      background: #141418;
+      border: 1px solid #2b2b33;
+      border-radius: 16px;
+      padding: 12px 16px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .sim-brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .sim-brand h1 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sim-brand p {
+      font-size: 12px;
+      color: var(--text-sec);
+    }
+
+    .sim-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .seg-group {
+      display: inline-flex;
+      background: #0b0b0d;
+      border: 1px solid #2f2f38;
+      border-radius: 10px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .seg-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-sec);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 11px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    .seg-btn.active {
+      background: var(--surface);
+      color: #fff;
+    }
+
+    .ram-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(52, 199, 123, 0.12);
+      border: 1px solid rgba(52, 199, 123, 0.35);
+      color: #6dd58c;
+    }
+
+    .ram-pill.warn {
+      background: rgba(62, 166, 255, 0.12);
+      border-color: rgba(62, 166, 255, 0.35);
+      color: #7cc4ff;
+    }
+
+    /* Device Frame */
+    .stage {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      flex: 1;
+    }
+
+    .device-frame {
+      background: var(--bg);
+      border: 6px solid #222228;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transition: width 0.25s ease, height 0.25s ease, border-radius 0.25s ease;
+    }
+
+    .device-frame.mobile {
+      width: 390px;
+      height: 780px;
+      border-radius: 34px;
+    }
+
+    .device-frame.tablet {
+      width: 100%;
+      max-width: 1060px;
+      height: 650px;
+      border-radius: 24px;
+    }
+
+    /* Android Status Bar */
+    .status-bar {
+      height: 26px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-sec);
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+
+    /* App Shell Layout */
+    .app-shell {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      position: relative;
+    }
+
+    .device-frame.mobile .app-shell {
+      flex-direction: column;
+    }
+
+    .device-frame.tablet .app-shell {
+      flex-direction: row;
+    }
+
+    /* Tablet Navigation Rail */
+    .nav-rail {
+      display: none;
+      width: 72px;
+      background: #121212;
+      border-right: 1px solid #232323;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 6px;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .device-frame.tablet .nav-rail {
+      display: flex;
+    }
+
+    .rail-item {
+      width: 58px;
+      padding: 8px 4px;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: var(--text-sec);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      position: relative;
+    }
+
+    .rail-item.active {
+      background: var(--surface);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .rail-item.dual-nav {
+      color: var(--blue);
+    }
+
+    .rail-item.dual-nav.active {
+      background: rgba(62, 166, 255, 0.16);
+      color: #fff;
+    }
+
+    /* Mobile Bottom Bar */
+    .bottom-nav {
+      height: 58px;
+      background: #121212;
+      border-top: 1px solid #242424;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      flex-shrink: 0;
+      z-index: 20;
+    }
+
+    .device-frame.tablet .bottom-nav {
+      display: none;
+    }
+
+    .nav-btn {
+      border: none;
+      background: transparent;
+      color: var(--text-sec);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      cursor: pointer;
+      padding: 6px 10px;
+      position: relative;
+    }
+
+    .nav-btn.active {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .nav-badge {
+      position: absolute;
+      top: 2px;
+      right: 6px;
+      background: var(--blue);
+      color: #08131d;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 999px;
+    }
+
+    /* Main Content Column */
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+      background: var(--bg);
+    }
+
+    /* Top Bar */
+    .top-bar {
+      height: 50px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid #1f1f1f;
+      flex-shrink: 0;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 17px;
+      letter-spacing: -0.3px;
+    }
+
+    .logo-badge {
+      width: 30px;
+      height: 21px;
+      border-radius: 6px;
+      background: var(--accent);
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 11px;
+    }
+
+    .mode-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(62, 166, 255, 0.14);
+      border: 1px solid rgba(62, 166, 255, 0.4);
+      color: #8fd0ff;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    .icon-btn:hover {
+      background: var(--surface);
+    }
+
+    /* Dual Mode Browser-like Target Strip (shown when Dual Mode ON & browsing) */
+    .dual-strip {
+      background: #171b22;
+      border-bottom: 1px solid #263140;
+      padding: 7px 12px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .dual-strip.show {
+      display: flex;
+    }
+
+    .dual-strip-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .target-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid #353b45;
+      background: #20242c;
+      color: var(--text-sec);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      max-width: 170px;
+    }
+
+    .target-pill.t1.active {
+      border-color: var(--tab1);
+      background: rgba(62, 166, 255, 0.16);
+      color: #fff;
+    }
+
+    .target-pill.t2.active {
+      border-color: var(--tab2);
+      background: rgba(52, 199, 123, 0.16);
+      color: #fff;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot.t1 { background: var(--tab1); }
+    .dot.t2 { background: var(--tab2); }
+
+    .truncate {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .open-dual-btn {
+      border: none;
+      background: var(--blue);
+      color: #07131e;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 6px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* Scrollable Views */
+    .screen {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+      display: none;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    .screen.flex-screen.active {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Home Feed */
+    .chip-row {
+      display: flex;
+      gap: 8px;
+      padding: 10px 14px;
+      overflow-x: auto;
+    }
+
+    .chip {
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 8px;
+      white-space: nowrap;
+      border: none;
+    }
+
+    .chip.active {
+      background: #fff;
+      color: #0f0f0f;
+    }
+
+    .feed-grid {
+      padding: 4px 14px 20px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .device-frame.tablet .feed-grid {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .video-card {
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .thumb-box {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #1b1b1b;
+    }
+
+    .thumb-art {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      position: relative;
+    }
+
+    .duration-tag {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .slot-assigned-tag {
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 6px;
+      color: #07121b;
+    }
+
+    .card-meta {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--surface);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.3;
+      color: var(--text);
+    }
+
+    .card-sub {
+      font-size: 11px;
+      color: var(--text-sec);
+      margin-top: 2px;
+    }
+
+    /* Me / Profile Screen (mirrors LibraryTab.kt) */
+    .me-wrap {
+      padding: 14px 16px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .device-frame.tablet .me-wrap {
+      max-width: 820px;
+      margin: 0 auto;
+    }
+
+    .profile-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .profile-avatar {
+      width: 66px;
+      height: 66px;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-sec);
+      flex-shrink: 0;
+    }
+
+    .profile-name {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .profile-sub {
+      font-size: 12px;
+      color: var(--text-sec);
+      margin-top: 3px;
+    }
+
+    .action-chips {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+    }
+
+    .yt-pill {
+      background: var(--surface);
+      color: var(--text);
+      border: none;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    /* Dual Mode Settings Card inside Me/Profile */
+    .mode-card {
+      background: #181a1f;
+      border: 1px solid #2e333d;
+      border-radius: 16px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .mode-card.enabled {
+      border-color: rgba(62, 166, 255, 0.55);
+      background: linear-gradient(180deg, rgba(62, 166, 255, 0.12), rgba(24, 26, 31, 0.95));
+    }
+
+    .mode-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .mode-title {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .beta-tag {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: rgba(52, 199, 123, 0.18);
+      color: var(--green);
+    }
+
+    .mode-desc {
+      font-size: 12px;
+      color: var(--text-sec);
+      line-height: 1.4;
+      margin-top: 3px;
+    }
+
+    /* Switch */
+    .switch {
+      width: 48px;
+      height: 28px;
+      border-radius: 999px;
+      background: #3d3d45;
+      position: relative;
+      cursor: pointer;
+      border: none;
+      flex-shrink: 0;
+      transition: 0.2s ease;
+    }
+
+    .switch.on {
+      background: var(--blue);
+    }
+
+    .switch-knob {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      transition: 0.2s ease;
+    }
+
+    .switch.on .switch-knob {
+      left: 23px;
+    }
+
+    .mode-options {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .mode-card.enabled .mode-options {
+      display: flex;
+    }
+
+    .opt-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+    }
+
+    .opt-select {
+      background: var(--surface);
+      color: #fff;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .cta-enter-dual {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: var(--blue);
+      color: #06131e;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .section-title {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .history-row {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+    }
+
+    .history-card {
+      width: 146px;
+      flex-shrink: 0;
+    }
+
+    /* Single Watch View (when Dual Mode OFF) */
+    .single-watch {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .device-frame.tablet .single-watch {
+      flex-direction: row;
+    }
+
+    .single-player-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .single-side-col {
+      padding: 12px 14px;
+      overflow-y: auto;
+    }
+
+    .device-frame.tablet .single-side-col {
+      width: 340px;
+      border-left: 1px solid #242424;
+    }
+
+    /* Dual Watch View — THE CORE PROTOTYPE */
+    .dual-workspace-bar {
+      background: #14161b;
+      border-bottom: 1px solid #272b34;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .ws-left, .ws-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mini-ctrl-btn {
+      border: 1px solid #343844;
+      background: #22252d;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 9px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .mini-ctrl-btn.active {
+      border-color: var(--blue);
+      background: rgba(62, 166, 255, 0.16);
+      color: #fff;
+    }
+
+    /* Dual Container: Portrait Stacked vs Tablet Landscape Side-by-Side */
+    .dual-stage {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* MOBILE PORTRAIT: 2 stacked players on top + focused detail panel on bottom */
+    .device-frame.mobile .dual-players-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 6px 8px;
+      background: #0a0a0c;
+      border-bottom: 1px solid #262626;
+      flex-shrink: 0;
+    }
+
+    .device-frame.mobile .dual-slot {
+      display: flex;
+      flex-direction: column;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1.5px solid #272727;
+      background: #141414;
+    }
+
+    .device-frame.mobile .dual-slot.focused.t1 { border-color: var(--tab1); }
+    .device-frame.mobile .dual-slot.focused.t2 { border-color: var(--tab2); }
+
+    .device-frame.mobile .slot-detail-in-col {
+      display: none;
+    }
+
+    .device-frame.mobile .mobile-focus-drawer {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* TABLET LANDSCAPE: Side-by-side 2 columns, each column has its own video + info/related */
+    .device-frame.tablet .dual-players-wrap {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    .device-frame.tablet .dual-slot {
+      display: flex;
+      flex-direction: column;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1.5px solid #292929;
+      background: #141414;
+      min-height: 0;
+    }
+
+    .device-frame.tablet .dual-slot.focused.t1 { border-color: var(--tab1); }
+    .device-frame.tablet .dual-slot.focused.t2 { border-color: var(--tab2); }
+
+    .device-frame.tablet .slot-detail-in-col {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .device-frame.tablet .mobile-focus-drawer {
+      display: none;
+    }
+
+    /* Slot Header Bar */
+    .slot-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 5px 8px;
+      background: #1b1d22;
+      font-size: 11px;
+    }
+
+    .slot-badge {
+      font-weight: 800;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 5px;
+      color: #06131c;
+      flex-shrink: 0;
+    }
+
+    .slot-badge.t1 { background: var(--tab1); }
+    .slot-badge.t2 { background: var(--tab2); }
+
+    .slot-header-title {
+      flex: 1;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Video Viewport inside Slot */
+    .video-viewport {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    /* Compact height on mobile portrait so 2 videos + bottom panel all fit cleanly */
+    .device-frame.mobile .video-viewport {
+      aspect-ratio: auto;
+      height: 148px;
+    }
+
+    .video-canvas {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .wave-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 26px;
+      margin-bottom: 6px;
+    }
+
+    .wave-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.85);
+      animation: bounce 0.8s infinite ease-in-out;
+    }
+
+    .paused .wave-bar {
+      animation-play-state: paused;
+      height: 6px !important;
+      opacity: 0.45;
+    }
+
+    .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.2s; }
+
+    @keyframes bounce {
+      0%, 100% { height: 6px; }
+      50% { height: 24px; }
+    }
+
+    .video-overlay-controls {
+      position: absolute;
+      inset: auto 0 0 0;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.86));
+      padding: 14px 10px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 30%;
+      transition: width 0.4s linear;
+    }
+
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+
+    .ctrl-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pill-mini {
+      border: none;
+      background: rgba(255, 255, 255, 0.16);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .pill-mini.muted {
+      background: rgba(255, 0, 51, 0.35);
+      color: #ffd0d8;
+    }
+
+    /* Mobile Bottom Drawer for Focused Tab */
+    .focus-tabs {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: #141416;
+      border-bottom: 1px solid #242424;
+      gap: 8px;
+    }
+
+    .focus-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .related-mini {
+      display: flex;
+      gap: 10px;
+      padding: 6px;
+      border-radius: 10px;
+      background: #1b1b1e;
+      cursor: pointer;
+      align-items: center;
+    }
+
+    .related-thumb {
+      width: 92px;
+      height: 52px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* Persistent Dual Mini Bar on Mobile when Dual Mode ON & user is on Home/Subs/Me */
+    .dual-mini-bar {
+      display: none;
+      background: #1c1f26;
+      border-top: 1px solid #2f3644;
+      padding: 6px 10px;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .dual-mini-bar.show {
+      display: flex;
+    }
+
+    .mini-slot-chip {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #252932;
+      padding: 5px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    /* Toast */
+    .toast {
+      position: absolute;
+      bottom: 72px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2b2d35;
+      color: #fff;
+      border: 1px solid #454a57;
+      padding: 8px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 50;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Simulator Controls (Outside Device) -->
+  <div class="sim-toolbar">
+    <div class="sim-brand">
+      <h1>
+        <span>FlufPlay Dual-Tab Prototype</span>
+        <span class="beta-tag" id="simModeBadge">NORMAL MODE</span>
+      </h1>
+      <p>Coba aktifkan mode di tab <b>Me</b>, lalu ubah perangkat antara <b>Android Mobile</b> & <b>Tablet Landscape</b>.</p>
+    </div>
+
+    <div class="sim-controls">
+      <div class="seg-group" aria-label="Device switch">
+        <button class="seg-btn active" id="btnMobile" onclick="setDevice('mobile')">Android Mobile</button>
+        <button class="seg-btn" id="btnTablet" onclick="setDevice('tablet')">Tablet Landscape</button>
+      </div>
+
+      <div class="seg-group" aria-label="Quick screen jump">
+        <button class="seg-btn" onclick="goScreen('home')">Home</button>
+        <button class="seg-btn" onclick="goScreen('me')">Me / Profile</button>
+        <button class="seg-btn" id="btnJumpWatch" onclick="openActiveWatch()">Watch View</button>
+      </div>
+
+      <div class="ram-pill" id="ramIndicator">
+        <span>RAM ~115 MB (1 ExoPlayer)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device Viewport -->
+  <div class="stage">
+    <div class="device-frame mobile" id="deviceFrame">
+      <!-- Android Status Bar -->
+      <div class="status-bar">
+        <span>06:18</span>
+        <span id="statusModeText">FlufPlay · Normal</span>
+        <span>5G · 92%</span>
+      </div>
+
+      <div class="app-shell">
+        <!-- Tablet Left Navigation Rail -->
+        <nav class="nav-rail" id="navRail">
+          <button class="rail-item" data-nav="home" onclick="goScreen('home')">
+            <span>⌂</span><span>Home</span>
+          </button>
+          <button class="rail-item" data-nav="shorts" onclick="showToast('Shorts (simulasi)')">
+            <span>⚡</span><span>Shorts</span>
+          </button>
+          <button class="rail-item" data-nav="subs" onclick="showToast('Subscriptions (simulasi)')">
+            <span>▤</span><span>Subs</span>
+          </button>
+          <button class="rail-item active" data-nav="me" onclick="goScreen('me')">
+            <span>☺</span><span>Me</span>
+          </button>
+          <button class="rail-item dual-nav" id="railDualBtn" style="display:none" data-nav="dual" onclick="goScreen('dual')">
+            <span>⧉</span><span>Dual</span>
+          </button>
+        </nav>
+
+        <!-- Main Area -->
+        <div class="main-area">
+          <!-- Top Bar -->
+          <div class="top-bar">
+            <div class="brand-logo">
+              <div class="logo-badge">▶</div>
+              <span>FlufPlay</span>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:6px;">
+              <button class="mode-chip" id="topModeChip" style="display:none" onclick="goScreen('dual')">
+                <span>⧉ Dual Aktif (2 Tab)</span>
+              </button>
+              <button class="icon-btn" title="Search" onclick="showToast('Search feed siap mengisi slot aktif')">🔍</button>
+            </div>
+          </div>
+
+          <!-- Dual Target Strip (muncul saat Dual Mode ON dan user sedang browsing di Home / Me) -->
+          <div class="dual-strip" id="dualBrowseStrip">
+            <div class="dual-strip-tabs">
+              <button class="target-pill t1 active" id="targetBtn1" onclick="setBrowseTarget(1)">
+                <span class="dot t1"></span>
+                <span class="truncate" id="targetLabel1">Tab 1: Lo-Fi Beats</span>
+              </button>
+              <button class="target-pill t2" id="targetBtn2" onclick="setBrowseTarget(2)">
+                <span class="dot t2"></span>
+                <span class="truncate" id="targetLabel2">Tab 2: Dev Podcast</span>
+              </button>
+            </div>
+            <button class="open-dual-btn" onclick="goScreen('dual')">Buka 2 Video ↗</button>
+          </div>
+
+          <!-- SCREEN 1: HOME FEED -->
+          <div class="screen" id="screen-home">
+            <div class="chip-row">
+              <button class="chip active">All</button>
+              <button class="chip">Live</button>
+              <button class="chip">Podcast</button>
+              <button class="chip">Music</button>
+              <button class="chip">Gaming</button>
+              <button class="chip">Tech</button>
+            </div>
+            <div style="padding: 0 14px 8px; font-size: 11px; color: var(--text-sec);" id="homeHintText">
+              Mode Normal: Tap video untuk menonton 1 video.
+            </div>
+            <div class="feed-grid" id="homeFeedGrid"></div>
+          </div>
+
+          <!-- SCREEN 2: ME / PROFILE (LibraryTab.kt) -->
+          <div class="screen active" id="screen-me">
+            <div class="me-wrap">
+              <div class="profile-header">
+                <div class="profile-avatar">F</div>
+                <div>
+                  <div class="profile-name">FlufUser</div>
+                  <div class="profile-sub">@flufclip · View account ›</div>
+                </div>
+              </div>
+
+              <div class="action-chips">
+                <button class="yt-pill" onclick="showToast('Switch account')">Switch account</button>
+                <button class="yt-pill" onclick="showToast('Downloads')">Downloads</button>
+                <button class="yt-pill" onclick="showToast('Watch history')">History</button>
+              </div>
+
+              <!-- DUAL MODE ENTRY POINT DI SCREEN ME/PROFILE -->
+              <div class="mode-card" id="meDualCard">
+                <div class="mode-card-head">
+                  <div>
+                    <div class="mode-title">
+                      <span>⧉ Dual Tab Mode (2 Media)</span>
+                      <span class="beta-tag">HEMAT RAM</span>
+                    </div>
+                    <div class="mode-desc">
+                      Ubah tampilan app agar bisa memutar 2 video sekaligus tanpa membebani RAM seperti browser.
+                    </div>
+                  </div>
+                  <button class="switch" id="dualModeSwitch" onclick="toggleDualMode()" aria-label="Toggle Dual Tab Mode">
+                    <div class="switch-knob"></div>
+                  </button>
+                </div>
+
+                <div class="mode-options">
+                  <div class="opt-row">
+                    <span>Audio saat 2 video play</span>
+                    <select class="opt-select" id="audioPolicySelect" onchange="applyAudioPolicy()">
+                      <option value="focus">1 Suara Aktif (Auto Mute satunya)</option>
+                      <option value="mix">Mix Kedua Audio Bersamaan</option>
+                    </select>
+                  </div>
+                  <div class="opt-row">
+                    <span>Batas resolusi Dual Mode</span>
+                    <select class="opt-select" onchange="showToast('Batas resolusi disimpan')">
+                      <option value="720">Max 720p (Direkomendasikan)</option>
+                      <option value="1080">Max 1080p</option>
+                    </select>
+                  </div>
+                  <button class="cta-enter-dual" onclick="goScreen('dual')">Masuk ke Dual Player (2 Video) →</button>
+                </div>
+              </div>
+
+              <div class="section-title">History ›</div>
+              <div class="history-row" id="meHistoryRow"></div>
+            </div>
+          </div>
+
+          <!-- SCREEN 3: SINGLE WATCH (Normal Mode) -->
+          <div class="screen flex-screen" id="screen-single">
+            <div class="single-watch">
+              <div class="single-player-col">
+                <div class="video-viewport" id="singleViewport" onclick="toggleSinglePlay()">
+                  <div class="video-canvas" id="singleCanvas" style="background: linear-gradient(135deg, #1b2838, #0f141c);">
+                    <div class="wave-bars">
+                      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                    </div>
+                    <div style="font-weight:700; font-size:14px;" id="singleCanvasTitle">Lo-Fi Coding Radio 24/7</div>
+                    <div style="font-size:11px; color:#ccc; margin-top:4px;">Mode Normal · 1 ExoPlayer aktif</div>
+                  </div>
+                  <div class="video-overlay-controls">
+                    <div class="progress-track"><div class="progress-fill" id="singleProg"></div></div>
+                    <div class="ctrl-row">
+                      <span id="singleTime">02:14 / LIVE</span>
+                      <div class="ctrl-actions">
+                        <button class="pill-mini" onclick="event.stopPropagation(); goScreen('me')">Aktifkan Dual di Me</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div style="padding: 12px 14px;">
+                  <div style="font-size:15px; font-weight:700;" id="singleTitleText">Lo-Fi Coding Radio 24/7</div>
+                  <div style="font-size:12px; color:var(--text-sec); margin-top:4px;" id="singleChannelText">ChilledBeats · 18K watching</div>
+                </div>
+              </div>
+              <div class="single-side-col">
+                <div style="font-size:13px; font-weight:700; margin-bottom:10px;">Up Next</div>
+                <div id="singleRelatedList" style="display:flex; flex-direction:column; gap:8px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SCREEN 4: DUAL WATCH MODE (2 Video Bersamaan) -->
+          <div class="screen flex-screen" id="screen-dual">
+            <!-- Workspace Toolbar -->
+            <div class="dual-workspace-bar">
+              <div class="ws-left">
+                <button class="mini-ctrl-btn" onclick="swapTabs()" title="Tukar posisi Tab 1 dan Tab 2">⇄ Swap</button>
+                <button class="mini-ctrl-btn" id="audioMixBtn" onclick="cycleAudioMode()">🔊 Focus Audio</button>
+              </div>
+              <div class="ws-right">
+                <button class="mini-ctrl-btn" onclick="goScreen('home')">+ Pilih Video</button>
+                <button class="mini-ctrl-btn" onclick="goScreen('me')">⚙ Mode</button>
+              </div>
+            </div>
+
+            <div class="dual-stage">
+              <div class="dual-players-wrap" id="dualPlayersWrap">
+                <!-- SLOT 1 -->
+                <div class="dual-slot focused t1" id="slotCard1" onclick="focusSlot(1)">
+                  <div class="slot-header">
+                    <span class="slot-badge t1">TAB 1</span>
+                    <span class="slot-header-title truncate" id="slotTitle1">Lo-Fi Coding Radio 24/7</span>
+                    <button class="pill-mini" onclick="event.stopPropagation(); replaceSlot(1)">Ganti</button>
+                  </div>
+
+                  <div class="video-viewport" id="viewport1" onclick="event.stopPropagation(); focusSlot(1); toggleSlotPlay(1)">
+                    <div class="video-canvas" id="canvas1" style="background: linear-gradient(135deg, #102a43, #0b1623);">
+                      <div class="wave-bars">
+                        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                      </div>
+                      <div style="font-weight:700; font-size:13px;" id="canvasTitle1">Lo-Fi Coding Radio 24/7</div>
+                      <div style="font-size:11px; color:#b8dfff; margin-top:3px;" id="canvasStatus1">▶ Playing · 720p</div>
+                    </div>
+
+                    <div class="video-overlay-controls">
+                      <div class="progress-track"><div class="progress-fill" id="prog1" style="background:var(--tab1)"></div></div>
+                      <div class="ctrl-row">
+                        <span id="time1">04:12</span>
+                        <div class="ctrl-actions">
+                          <button class="pill-mini" id="playBtn1" onclick="event.stopPropagation(); toggleSlotPlay(1)">⏸ Pause</button>
+                          <button class="pill-mini" id="muteBtn1" onclick="event.stopPropagation(); toggleSlotMute(1)">🔊 Audio</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Kolom Detail khusus Tablet Landscape -->
+                  <div class="slot-detail-in-col" id="tabletDetail1"></div>
+                </div>
+
+                <!-- SLOT 2 -->
+                <div class="dual-slot t2" id="slotCard2" onclick="focusSlot(2)">
+                  <div class="slot-header">
+                    <span class="slot-badge t2">TAB 2</span>
+                    <span class="slot-header-title truncate" id="slotTitle2">Android Media3 Deep Dive</span>
+                    <button class="pill-mini" onclick="event.stopPropagation(); replaceSlot(2)">Ganti</button>
+                  </div>
+
+                  <div class="video-viewport" id="viewport2" onclick="event.stopPropagation(); focusSlot(2); toggleSlotPlay(2)">
+                    <div class="video-canvas" id="canvas2" style="background: linear-gradient(135deg, #123524, #091a12);">
+                      <div class="wave-bars">
+                        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                      </div>
+                      <div style="font-weight:700; font-size:13px;" id="canvasTitle2">Android Media3 Deep Dive</div>
+                      <div style="font-size:11px; color:#b4f5d3; margin-top:3px;" id="canvasStatus2">▶ Playing · 720p (Muted)</div>
+                    </div>
+
+                    <div class="video-overlay-controls">
+                      <div class="progress-track"><div class="progress-fill" id="prog2" style="background:var(--tab2)"></div></div>
+                      <div class="ctrl-row">
+                        <span id="time2">11:38</span>
+                        <div class="ctrl-actions">
+                          <button class="pill-mini" id="playBtn2" onclick="event.stopPropagation(); toggleSlotPlay(2)">⏸ Pause</button>
+                          <button class="pill-mini muted" id="muteBtn2" onclick="event.stopPropagation(); toggleSlotMute(2)">🔇 Muted</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Kolom Detail khusus Tablet Landscape -->
+                  <div class="slot-detail-in-col" id="tabletDetail2"></div>
+                </div>
+              </div>
+
+              <!-- Mobile Portrait Only: Detail Panel untuk Tab yang dipilih -->
+              <div class="mobile-focus-drawer">
+                <div class="focus-tabs">
+                  <div style="display:flex; gap:6px;">
+                    <button class="mini-ctrl-btn active" id="mobFocusBtn1" onclick="focusSlot(1)">Detail Tab 1</button>
+                    <button class="mini-ctrl-btn" id="mobFocusBtn2" onclick="focusSlot(2)">Detail Tab 2</button>
+                  </div>
+                  <span style="font-size:11px; color:var(--text-sec);" id="mobFocusHint">Tap video untuk pause/play</span>
+                </div>
+                <div class="focus-body" id="mobileFocusBody"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dual Mini Bar (Mobile saat Dual Mode ON & user sedang di Home/Me) -->
+          <div class="dual-mini-bar" id="dualMiniBar">
+            <div class="mini-slot-chip" onclick="goScreen('dual')">
+              <span class="dot t1"></span>
+              <span class="truncate" id="miniLabel1">▶ Lo-Fi Radio</span>
+            </div>
+            <div class="mini-slot-chip" onclick="goScreen('dual')">
+              <span class="dot t2"></span>
+              <span class="truncate" id="miniLabel2">▶ Media3 Dive</span>
+            </div>
+            <button class="open-dual-btn" onclick="goScreen('dual')">2x View</button>
+          </div>
+
+          <!-- Mobile Bottom Navigation -->
+          <nav class="bottom-nav" id="bottomNav">
+            <button class="nav-btn" data-nav="home" onclick="goScreen('home')">
+              <span>⌂</span><span>Home</span>
+            </button>
+            <button class="nav-btn" data-nav="shorts" onclick="showToast('Shorts (simulasi)')">
+              <span>⚡</span><span>Shorts</span>
+            </button>
+            <button class="nav-btn" data-nav="subs" onclick="showToast('Subscriptions (simulasi)')">
+              <span>▤</span><span>Subs</span>
+            </button>
+            <button class="nav-btn active" data-nav="me" onclick="goScreen('me')">
+              <span>☺</span><span>Me</span>
+            </button>
+            <button class="nav-btn" id="bottomDualBtn" style="display:none; color:var(--blue);" data-nav="dual" onclick="goScreen('dual')">
+              <span class="nav-badge">2</span>
+              <span>⧉</span><span>Dual</span>
+            </button>
+          </nav>
+
+          <div class="toast" id="toast"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const VIDEOS = [
+      {
+        id: 'v1',
+        title: 'Lo-Fi Coding Radio 24/7 — Focus Beats',
+        channel: 'ChilledBeats',
+        views: '18K watching',
+        duration: 'LIVE',
+        bg: 'linear-gradient(135deg, #102a43, #0b1623)',
+        icon: '🎧',
+        progress: 45
+      },
+      {
+        id: 'v2',
+        title: 'Android Media3 & ExoPlayer Deep Dive',
+        channel: 'AndroidDev ID',
+        views: '84K views · 2 days ago',
+        duration: '24:18',
+        bg: 'linear-gradient(135deg, #123524, #091a12)',
+        icon: '📱',
+        progress: 38
+      },
+      {
+        id: 'v3',
+        title: 'F1 Pitlane Telemetry & Live Timing Stream',
+        channel: 'Motorsport Hub',
+        views: '42K watching',
+        duration: 'LIVE',
+        bg: 'linear-gradient(135deg, #3b1219, #19090c)',
+        icon: '🏎',
+        progress: 68
+      },
+      {
+        id: 'v4',
+        title: 'Kotlin Compose Performance Tips in 2026',
+        channel: 'Compose Craft',
+        views: '31K views · 1 week ago',
+        duration: '16:40',
+        bg: 'linear-gradient(135deg, #2d1b4e, #120b21)',
+        icon: '⚡',
+        progress: 22
+      },
+      {
+        id: 'v5',
+        title: 'Podcast Tech Nusantara #112 — Browser vs Native',
+        channel: 'TechTalks ID',
+        views: '12K views · 5 hours ago',
+        duration: '52:10',
+        bg: 'linear-gradient(135deg, #3a2611, #191007)',
+        icon: '🎙',
+        progress: 14
+      },
+      {
+        id: 'v6',
+        title: 'Rain & Thunder Ambience for Study (4K)',
+        channel: 'NatureLoop',
+        views: '210K views · 1 month ago',
+        duration: '3:00:00',
+        bg: 'linear-gradient(135deg, #18303b, #0c171d)',
+        icon: '🌧',
+        progress: 55
+      }
+    ];
+
+    const state = {
+      device: 'mobile',
+      dualMode: false,
+      screen: 'me',
+      browseTarget: 1,
+      focusedSlot: 1,
+      audioPolicy: 'focus', // 'focus' | 'mix'
+      singleVideo: VIDEOS[0],
+      singlePlaying: true,
+      singleSec: 134,
+      slots: {
+        1: { video: VIDEOS[0], playing: true, muted: false, sec: 252 },
+        2: { video: VIDEOS[1], playing: true, muted: true, sec: 698 }
+      }
+    };
+
+    function formatTime(sec, dur) {
+      if (dur === 'LIVE') {
+        const m = String(Math.floor(sec / 60)).padStart(2, '0');
+        const s = String(sec % 60).padStart(2, '0');
+        return `${m}:${s} · LIVE`;
+      }
+      const m = String(Math.floor(sec / 60)).padStart(2, '0');
+      const s = String(sec % 60).padStart(2, '0');
+      return `${m}:${s} / ${dur}`;
+    }
+
+    function setDevice(dev) {
+      state.device = dev;
+      const frame = document.getElementById('deviceFrame');
+      frame.classList.toggle('mobile', dev === 'mobile');
+      frame.classList.toggle('tablet', dev === 'tablet');
+      document.getElementById('btnMobile').classList.toggle('active', dev === 'mobile');
+      document.getElementById('btnTablet').classList.toggle('active', dev === 'tablet');
+      render();
+    }
+
+    function toggleDualMode() {
+      state.dualMode = !state.dualMode;
+      if (state.dualMode) {
+        state.slots[1].playing = true;
+        state.slots[2].playing = true;
+        applyAudioPolicy();
+        showToast('Dual Tab Mode AKTIF — UI beralih ke mode 2 media');
+      } else {
+        if (state.screen === 'dual') state.screen = 'me';
+        showToast('Kembali ke Mode Normal (1 media)');
+      }
+      render();
+    }
+
+    function applyAudioPolicy() {
+      const sel = document.getElementById('audioPolicySelect');
+      state.audioPolicy = sel.value;
+      if (state.audioPolicy === 'focus') {
+        state.slots[1].muted = state.focusedSlot !== 1;
+        state.slots[2].muted = state.focusedSlot !== 2;
+      } else {
+        state.slots[1].muted = false;
+        state.slots[2].muted = false;
+      }
+      renderDual();
+    }
+
+    function cycleAudioMode() {
+      const sel = document.getElementById('audioPolicySelect');
+      sel.value = state.audioPolicy === 'focus' ? 'mix' : 'focus';
+      applyAudioPolicy();
+      showToast(state.audioPolicy === 'mix' ? 'Audio Mix: kedua suara aktif' : 'Focus Audio: 1 suara aktif');
+    }
+
+    function goScreen(name) {
+      if (name === 'dual' && !state.dualMode) {
+        showToast('Aktifkan Dual Tab Mode dulu di menu Me');
+        state.screen = 'me';
+      } else {
+        state.screen = name;
+      }
+      render();
+    }
+
+    function openActiveWatch() {
+      goScreen(state.dualMode ? 'dual' : 'single');
+    }
+
+    function setBrowseTarget(slotId) {
+      state.browseTarget = slotId;
+      render();
+      showToast(`Pilih video di bawah untuk mengisi Tab ${slotId}`);
+    }
+
+    function replaceSlot(slotId) {
+      state.browseTarget = slotId;
+      state.screen = 'home';
+      render();
+      showToast(`Pilih video pengganti untuk Tab ${slotId}`);
+    }
+
+    function focusSlot(slotId) {
+      state.focusedSlot = slotId;
+      if (state.audioPolicy === 'focus') {
+        state.slots[1].muted = slotId !== 1;
+        state.slots[2].muted = slotId !== 2;
+      }
+      renderDual();
+    }
+
+    function toggleSlotPlay(slotId) {
+      state.slots[slotId].playing = !state.slots[slotId].playing;
+      renderDual();
+    }
+
+    function toggleSlotMute(slotId) {
+      state.slots[slotId].muted = !state.slots[slotId].muted;
+      renderDual();
+    }
+
+    function swapTabs() {
+      const temp = state.slots[1];
+      state.slots[1] = state.slots[2];
+      state.slots[2] = temp;
+      renderDual();
+      showToast('Posisi Tab 1 & Tab 2 ditukar');
+    }
+
+    function toggleSinglePlay() {
+      state.singlePlaying = !state.singlePlaying;
+      renderSingle();
+    }
+
+    function openVideoFromFeed(video) {
+      if (!state.dualMode) {
+        state.singleVideo = video;
+        state.singlePlaying = true;
+        state.screen = 'single';
+        render();
+        return;
+      }
+      const t = state.browseTarget;
+      state.slots[t].video = video;
+      state.slots[t].playing = true;
+      state.slots[t].sec = 15;
+      state.focusedSlot = t;
+      if (state.audioPolicy === 'focus') {
+        state.slots[1].muted = t !== 1;
+        state.slots[2].muted = t !== 2;
+      }
+      state.screen = 'dual';
+      render();
+      showToast(`Video dimuat ke Tab ${t}`);
+    }
+
+    function renderFeed() {
+      const grid = document.getElementById('homeFeedGrid');
+      const hint = document.getElementById('homeHintText');
+      if (state.dualMode) {
+        hint.innerHTML = `Dual Mode AKTIF — Ketuk video untuk memuat ke <b style="color:${state.browseTarget === 1 ? 'var(--tab1)' : 'var(--tab2)'}">Tab ${state.browseTarget}</b> (atau ganti target di strip atas).`;
+      } else {
+        hint.textContent = 'Mode Normal — Ketuk video untuk memutar 1 video penuh.';
+      }
+
+      grid.innerHTML = VIDEOS.map(v => {
+        let tag = '';
+        if (state.dualMode) {
+          if (state.slots[1].video.id === v.id) {
+            tag = `<span class="slot-assigned-tag" style="background:var(--tab1)">TAB 1</span>`;
+          } else if (state.slots[2].video.id === v.id) {
+            tag = `<span class="slot-assigned-tag" style="background:var(--tab2)">TAB 2</span>`;
+          }
+        }
+        return `
+          <div class="video-card" onclick="openVideoFromFeedById('${v.id}')">
+            <div class="thumb-box">
+              <div class="thumb-art" style="background:${v.bg}">${v.icon}${tag}<span class="duration-tag">${v.duration}</span></div>
+            </div>
+            <div class="card-meta">
+              <div class="avatar">${v.channel[0]}</div>
+              <div>
+                <div class="card-title">${v.title}</div>
+                <div class="card-sub">${v.channel} · ${v.views}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('meHistoryRow').innerHTML = VIDEOS.slice(0, 4).map(v => `
+        <div class="history-card" onclick="openVideoFromFeedById('${v.id}')" style="cursor:pointer;">
+          <div class="thumb-box" style="border-radius:10px;">
+            <div class="thumb-art" style="background:${v.bg}; font-size:22px;">${v.icon}<span class="duration-tag">${v.duration}</span></div>
+          </div>
+          <div style="font-size:12px; font-weight:600; margin-top:6px;" class="truncate">${v.title}</div>
+          <div style="font-size:11px; color:var(--text-sec);" class="truncate">${v.channel}</div>
+        </div>
+      `).join('');
+    }
+
+    function openVideoFromFeedById(id) {
+      const v = VIDEOS.find(x => x.id === id);
+      if (v) openVideoFromFeed(v);
+    }
+
+    function renderSingle() {
+      const v = state.singleVideo;
+      const canvas = document.getElementById('singleCanvas');
+      canvas.style.background = v.bg;
+      canvas.classList.toggle('paused', !state.singlePlaying);
+      document.getElementById('singleCanvasTitle').textContent = v.title;
+      document.getElementById('singleTitleText').textContent = v.title;
+      document.getElementById('singleChannelText').textContent = `${v.channel} · ${v.views}`;
+      document.getElementById('singleTime').textContent = formatTime(state.singleSec, v.duration);
+      document.getElementById('singleProg').style.width = `${(state.singleSec % 100)}%`;
+
+      document.getElementById('singleRelatedList').innerHTML = VIDEOS.filter(x => x.id !== v.id).slice(0, 4).map(x => `
+        <div class="related-mini" onclick="openVideoFromFeedById('${x.id}')">
+          <div class="related-thumb" style="background:${x.bg}">${x.icon}</div>
+          <div style="min-width:0;">
+            <div style="font-size:12px; font-weight:600;" class="truncate">${x.title}</div>
+            <div style="font-size:11px; color:var(--text-sec);">${x.channel}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function buildSlotDetailHtml(slotId) {
+      const s = state.slots[slotId];
+      const v = s.video;
+      const others = VIDEOS.filter(x => x.id !== v.id).slice(0, 3);
+      return `
+        <div>
+          <div style="font-size:14px; font-weight:700; line-height:1.3;">${v.title}</div>
+          <div style="font-size:11px; color:var(--text-sec); margin-top:3px;">${v.channel} · ${v.views}</div>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="yt-pill" onclick="replaceSlot(${slotId})">Ganti video Tab ${slotId}</button>
+          <button class="yt-pill" onclick="toggleSlotMute(${slotId})">${s.muted ? '🔇 Unmute' : '🔊 Mute'}</button>
+        </div>
+        <div style="font-size:12px; font-weight:700; color:var(--text-sec); margin-top:2px;">Up Next untuk Tab ${slotId}</div>
+        ${others.map(o => `
+          <div class="related-mini" onclick="loadIntoSlot(${slotId}, '${o.id}')">
+            <div class="related-thumb" style="background:${o.bg}">${o.icon}</div>
+            <div style="min-width:0; flex:1;">
+              <div style="font-size:12px; font-weight:600;" class="truncate">${o.title}</div>
+              <div style="font-size:11px; color:var(--text-sec);">${o.channel} · ${o.duration}</div>
+            </div>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    function loadIntoSlot(slotId, videoId) {
+      const v = VIDEOS.find(x => x.id === videoId);
+      if (!v) return;
+      state.slots[slotId].video = v;
+      state.slots[slotId].playing = true;
+      state.slots[slotId].sec = 10;
+      renderDual();
+      showToast(`Tab ${slotId} memutar: ${v.channel}`);
+    }
+
+    function renderDual() {
+      [1, 2].forEach(id => {
+        const s = state.slots[id];
+        const v = s.video;
+        const card = document.getElementById(`slotCard${id}`);
+        card.classList.toggle('focused', state.focusedSlot === id);
+
+        document.getElementById(`slotTitle${id}`).textContent = v.title;
+        const canvas = document.getElementById(`canvas${id}`);
+        canvas.style.background = v.bg;
+        canvas.classList.toggle('paused', !s.playing);
+        document.getElementById(`canvasTitle${id}`).textContent = v.title;
+        document.getElementById(`canvasStatus${id}`).textContent =
+          `${s.playing ? '▶ Playing' : '⏸ Paused'} · 720p${s.muted ? ' (Muted)' : ' (Audio ON)'}`;
+
+        document.getElementById(`time${id}`).textContent = formatTime(s.sec, v.duration);
+        document.getElementById(`prog${id}`).style.width = `${(s.sec % 95) + 5}%`;
+
+        document.getElementById(`playBtn${id}`).textContent = s.playing ? '⏸ Pause' : '▶ Play';
+        const muteBtn = document.getElementById(`muteBtn${id}`);
+        muteBtn.textContent = s.muted ? '🔇 Muted' : '🔊 Audio';
+        muteBtn.classList.toggle('muted', s.muted);
+
+        document.getElementById(`tabletDetail${id}`).innerHTML = buildSlotDetailHtml(id);
+      });
+
+      document.getElementById('mobFocusBtn1').classList.toggle('active', state.focusedSlot === 1);
+      document.getElementById('mobFocusBtn2').classList.toggle('active', state.focusedSlot === 2);
+      document.getElementById('mobileFocusBody').innerHTML = buildSlotDetailHtml(state.focusedSlot);
+
+      const mixBtn = document.getElementById('audioMixBtn');
+      mixBtn.textContent = state.audioPolicy === 'mix' ? '🔊 Mix Audio' : '🔊 Focus Audio';
+      mixBtn.classList.toggle('active', state.audioPolicy === 'mix');
+    }
+
+    function render() {
+      // Screens
+      ['home', 'me', 'single', 'dual'].forEach(sc => {
+        document.getElementById(`screen-${sc}`).classList.toggle('active', state.screen === sc);
+      });
+
+      // Nav active state
+      document.querySelectorAll('.nav-btn, .rail-item').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.nav === state.screen);
+      });
+
+      // Dual Mode UI mutations
+      document.getElementById('meDualCard').classList.toggle('enabled', state.dualMode);
+      document.getElementById('dualModeSwitch').classList.toggle('on', state.dualMode);
+      document.getElementById('bottomDualBtn').style.display = state.dualMode ? 'flex' : 'none';
+      document.getElementById('railDualBtn').style.display = state.dualMode ? 'flex' : 'none';
+      document.getElementById('topModeChip').style.display = (state.dualMode && state.screen !== 'dual') ? 'inline-flex' : 'none';
+
+      const browsing = state.screen === 'home' || state.screen === 'me';
+      document.getElementById('dualBrowseStrip').classList.toggle('show', state.dualMode && browsing);
+      document.getElementById('dualMiniBar').classList.toggle('show', state.dualMode && state.device === 'mobile' && browsing);
+
+      document.getElementById('targetBtn1').classList.toggle('active', state.browseTarget === 1);
+      document.getElementById('targetBtn2').classList.toggle('active', state.browseTarget === 2);
+      document.getElementById('targetLabel1').textContent = `Tab 1: ${state.slots[1].video.channel}`;
+      document.getElementById('targetLabel2').textContent = `Tab 2: ${state.slots[2].video.channel}`;
+      document.getElementById('miniLabel1').textContent = `${state.slots[1].playing ? '▶' : '⏸'} ${state.slots[1].video.title}`;
+      document.getElementById('miniLabel2').textContent = `${state.slots[2].playing ? '▶' : '⏸'} ${state.slots[2].video.title}`;
+
+      // Outer Simulator Badges
+      const badge = document.getElementById('simModeBadge');
+      badge.textContent = state.dualMode ? 'DUAL MODE ON' : 'NORMAL MODE';
+      badge.style.background = state.dualMode ? 'rgba(62,166,255,0.2)' : 'rgba(52,199,123,0.18)';
+      badge.style.color = state.dualMode ? '#8fd0ff' : '#34c77b';
+
+      document.getElementById('statusModeText').textContent =
+        state.dualMode ? 'FlufPlay · Dual Mode (2x)' : 'FlufPlay · Normal';
+
+      const ram = document.getElementById('ramIndicator');
+      if (state.dualMode) {
+        ram.classList.add('warn');
+        ram.innerHTML = '<span>RAM ~155 MB (2 ExoPlayer) vs Brave ~710 MB</span>';
+      } else {
+        ram.classList.remove('warn');
+        ram.innerHTML = '<span>RAM ~115 MB (1 ExoPlayer)</span>';
+      }
+
+      renderFeed();
+      renderSingle();
+      renderDual();
+    }
+
+    let toastTimer = null;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    // Simulasi kedua video berjalan bersamaan secara real-time
+    setInterval(() => {
+      if (!state.dualMode && state.singlePlaying) {
+        state.singleSec += 1;
+        if (state.screen === 'single') {
+          document.getElementById('singleTime').textContent = formatTime(state.singleSec, state.singleVideo.duration);
+          document.getElementById('singleProg').style.width = `${(state.singleSec % 95) + 5}%`;
+        }
+      }
+      if (state.dualMode) {
+        [1, 2].forEach(id => {
+          if (state.slots[id].playing) {
+            state.slots[id].sec += 1;
+            if (state.screen === 'dual') {
+              document.getElementById(`time${id}`).textContent = formatTime(state.slots[id].sec, state.slots[id].video.duration);
+              document.getElementById(`prog${id}`).style.width = `${(state.slots[id].sec % 95) + 5}%`;
+            }
+          }
+        });
+      }
+    }, 1000);
+
+    render();
+  </script>
+</body>
+</html>

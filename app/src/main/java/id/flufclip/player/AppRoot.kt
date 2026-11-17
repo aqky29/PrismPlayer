@@ -440,6 +440,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     var qualityInitialPage by remember { mutableStateOf("menu") }
     var playerLocked by remember { mutableStateOf(false) }
     val trackState = remember { PlaybackTrackState() }
+    val dualController = remember { DualTabController() }
+    var dualWatchOpen by remember { mutableStateOf(false) }
     /** Panel "Bab" terbuka: di halaman tonton sebagai panel bawah, di layar penuh menempel di samping seperti komentar. */
     var chaptersOpen by remember { mutableStateOf(false) }
     val player = remember { PlaybackSessionHost.obtainOnlinePlayer(context.applicationContext) }
@@ -506,12 +508,26 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         activity?.pipPlayer = player
         onlinePlayerForDownloads = java.lang.ref.WeakReference(player)
         activity?.pipEligible = {
-            val state = player.playbackState
-            selected != null && player.playWhenReady && (state == Player.STATE_BUFFERING || state == Player.STATE_READY)
+            val dualActive = PlayerSettings.dualModeEnabled && !shortsMode && dualWatchOpen
+            val targetPlayer = if (dualActive && dualController.model.focusedSlot == 2) {
+                PlaybackSessionHost.currentSecondaryPlayer() ?: player
+            } else player
+            val hasMedia = if (dualActive) {
+                dualController.model.slotOf(dualController.model.focusedSlot).info != null
+            } else selected != null
+            val state = targetPlayer.playbackState
+            hasMedia && targetPlayer.playWhenReady && (state == Player.STATE_BUFFERING || state == Player.STATE_READY)
         }
         activity?.backgroundPlaybackEligible = {
-            val state = player.playbackState
-            selected != null && !shortsMode && player.playWhenReady && (state == Player.STATE_BUFFERING || state == Player.STATE_READY)
+            if (PlayerSettings.dualModeEnabled) {
+                val state = player.playbackState
+                !shortsMode && dualController.model.slot1.info != null &&
+                    dualController.model.focusedSlot == 1 &&
+                    player.playWhenReady && (state == Player.STATE_BUFFERING || state == Player.STATE_READY)
+            } else {
+                val state = player.playbackState
+                selected != null && !shortsMode && player.playWhenReady && (state == Player.STATE_BUFFERING || state == Player.STATE_READY)
+            }
         }
         val listener = object : Player.Listener {
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) { activity?.refreshPipParams() }
@@ -523,6 +539,20 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             activity?.backgroundPlaybackEligible = { false }
             activity?.pipPlayer = null
             if (onlinePlayerForDownloads.get() === player) onlinePlayerForDownloads.clear()
+        }
+    }
+    LaunchedEffect(
+        PlayerSettings.dualModeEnabled,
+        dualWatchOpen,
+        shortsMode,
+        dualController.model.focusedSlot,
+        dualController.secondaryAllocated,
+    ) {
+        val activity = context as? MainActivity ?: return@LaunchedEffect
+        activity.pipPlayer = if (PlayerSettings.dualModeEnabled && !shortsMode && dualWatchOpen && dualController.model.focusedSlot == 2) {
+            PlaybackSessionHost.currentSecondaryPlayer() ?: player
+        } else {
+            player
         }
     }
     // Seperti YouTube 21.43.523 (apby.aA -> apcs.o -> View.setKeepScreenOn): layar ditahan selama niat main aktif
@@ -652,6 +682,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         searchFilter = searchState.filter,
         hasBrowseChannel = browse.channel != null,
         hasBrowsePlaylist = browse.playlist != null,
+        dualModeEnabled = PlayerSettings.dualModeEnabled,
     )
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, inlineEligible) {
@@ -705,6 +736,12 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
         }
     }
+    fun prepareShortsForDualMode() {
+        if (PlayerSettings.dualModeEnabled && !shortsMode) {
+            dualController.saveSlot1BeforeShorts(player.currentPosition.coerceAtLeast(0L))
+            dualWatchOpen = false
+        }
+    }
     fun closePlayer() {
         openJob?.cancel(); openJob = null; playlistQueueJob?.cancel(); playlistQueueJob = null; pendingVideo = null; dragProgress = null
         PlaybackSessionHost.keepForegroundDuringTransition = false
@@ -728,12 +765,19 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         trackState.manualAudioOverride = false
         trackState.attemptedAudioFallback = null
         chaptersOpen = false
+        if (PlayerSettings.dualModeEnabled && dualController.hasSavedSlot1ForShorts()) {
+            dualController.restoreSlot1AfterShorts(context, scope, maxVideoHeight, player)
+        }
     }
     fun back() {
         when {
             fullscreen -> setFullscreen(false)
             shortsMode && !minimized -> { closePlayer(); if (shorts.tabQueue && mainTab == "shorts") mainTab = "home" }
             searchState.active -> { searchState.active = false; keyboard?.hide() }
+            PlayerSettings.dualModeEnabled && dualController.model.pickingSlot != null -> {
+                dualController.model.clearPicking()
+                dualWatchOpen = true
+            }
             showHistory -> showHistory = false
             selected != null && !minimized -> minimized = true
             accountPlaylist != null -> accountPlaylist = null
@@ -747,7 +791,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
         error = null
     }
-    BackHandler(shortsMode || showHistory || fullscreen || searchState.active || (selected != null && !minimized) || accountPlaylist != null || browse.playlist != null || browse.channel != null || searchState.mode || mainTab != "home") { back() }
+    BackHandler(shortsMode || showHistory || fullscreen || searchState.active || (PlayerSettings.dualModeEnabled && dualController.model.pickingSlot != null) || (selected != null && !minimized) || accountPlaylist != null || browse.playlist != null || browse.channel != null || searchState.mode || mainTab != "home") { back() }
     LaunchedEffect(YouTubeAuth.sessionRevision, YouTubeAuth.isLoggedIn) {
         val loggedIn = YouTubeAuth.isLoggedIn
         if (feedState.homeSessionRevision != YouTubeAuth.sessionRevision || (feedState.lastAccountState && !loggedIn)) {
@@ -1195,6 +1239,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     fun openHistoryEntry(entry: WatchedVideo) {
         showHistory = false
         if (entry.isShort) {
+            prepareShortsForDualMode()
             if (pendingVideo != null) closePlayer()
             val id = videoKey(entry.url)
             val item = StreamInfoItem(org.schabi.newpipe.extractor.ServiceList.YouTube.serviceId, "https://www.youtube.com/shorts/$id", entry.title, org.schabi.newpipe.extractor.stream.StreamType.VIDEO_STREAM).apply {
@@ -1384,6 +1429,29 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
     )
     fun open(item: StreamInfoItem) {
+        val short = item.isShortFormContent || (browse.channel != null && browse.channelTab == ChannelTabs.SHORTS)
+        if (!short && PlayerSettings.dualModeEnabled) {
+            val targetSlot = dualController.model.pickingSlot ?: when {
+                dualController.model.slot1.item == null && dualController.model.slot1.info == null -> 1
+                dualController.model.slot2.item == null && dualController.model.slot2.info == null -> 2
+                else -> dualController.model.focusedSlot
+            }
+            dualController.model.clearPicking()
+            dualController.focusSlot(targetSlot, player, PlaybackSessionHost.currentSecondaryPlayer())
+            dualController.loadIntoSlot(
+                slotId = targetSlot,
+                item = item,
+                context = context,
+                scope = scope,
+                maxVideoHeight = maxVideoHeight,
+                primary = player,
+                secondaryProvider = { PlaybackSessionHost.obtainSecondaryPlayer(context) },
+            )
+            searchState.active = false
+            keyboard?.hide()
+            dualWatchOpen = true
+            return
+        }
         val meta = HomeFeed.metaOf(item.url)
         val listParam = runCatching { Uri.parse(item.url).getQueryParameter("list") }.getOrNull()?.takeIf { it.isNotBlank() }
         if (meta?.isPlaylist == true || listParam != null) {
@@ -1416,6 +1484,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             else if (short) (if (browse.channel != null) browse.channelItems else searchState.results).filterIsInstance<StreamInfoItem>().filter { it.isShortFormContent || (browse.channel != null && browse.channelTab == ChannelTabs.SHORTS) }
             else emptyList()
         if (short) {
+            prepareShortsForDualMode()
             if (pendingVideo != null) closePlayer()
             playlistQueueJob?.cancel()
             activePlaylistId = null; activePlaylistTitle = null; activePlaylistCount = null
@@ -1502,6 +1571,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             }
         }
         if (items.isEmpty()) return
+        prepareShortsForDualMode()
         if (pendingVideo != null) closePlayer()
         val seedSeq = cards.getOrNull(index)?.sequenceParams?.takeIf { it.isNotBlank() }
             ?: cards.firstOrNull { it.sequenceParams.isNotBlank() }?.sequenceParams
@@ -1765,8 +1835,26 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         player.addListener(listener)
         onDispose { playbackRefreshJob?.cancel(); player.removeListener(listener) }
     }
-    LaunchedEffect(selected?.url, shortsMode, queue, autoplay, PlayerSettings.backgroundPlayback) {
-        val info = selected
+    LaunchedEffect(
+        selected?.url,
+        shortsMode,
+        queue,
+        autoplay,
+        PlayerSettings.backgroundPlayback,
+        PlayerSettings.dualModeEnabled,
+        dualController.model.focusedSlot,
+        dualController.model.slot1.info?.url,
+        dualController.model.slot2.info?.url,
+        dualController.secondaryAllocated,
+    ) {
+        val dualSlotInfo = if (PlayerSettings.dualModeEnabled) {
+            dualController.model.slotOf(dualController.model.focusedSlot).info
+        } else null
+        val dualSlotPlayer = if (PlayerSettings.dualModeEnabled && dualController.model.focusedSlot == 2) {
+            PlaybackSessionHost.currentSecondaryPlayer() ?: player
+        } else player
+        val info = if (PlayerSettings.dualModeEnabled) dualSlotInfo else selected
+        val activeTargetPlayer = if (PlayerSettings.dualModeEnabled) dualSlotPlayer else player
         if (info != null && !shortsMode) {
             if (PlayerSettings.backgroundPlayback &&
                 android.os.Build.VERSION.SDK_INT >= 33 &&
@@ -1780,8 +1868,9 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             PlaybackSessionHost.setTarget(
                 PlaybackSessionHost.Target(
                     tag = "online",
-                    player = player,
+                    player = activeTargetPlayer,
                     hasNext = {
+                        if (PlayerSettings.dualModeEnabled) return@Target false
                         val active = currentSelected.value ?: return@Target false
                         val list = currentQueue.value
                         val index = list.indexOfFirst { videoKey(it.url) == videoKey(active.url) }
@@ -1789,10 +1878,12 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         else currentAutoplay.value && active.relatedItems.filterIsInstance<StreamInfoItem>().any { it.url != active.url }
                     },
                     hasPrevious = {
+                        if (PlayerSettings.dualModeEnabled) return@Target false
                         val active = currentSelected.value ?: return@Target false
                         currentQueue.value.indexOfFirst { videoKey(it.url) == videoKey(active.url) } > 0
                     },
                     onNext = {
+                        if (PlayerSettings.dualModeEnabled) return@Target
                         val active = currentSelected.value ?: return@Target
                         val list = currentQueue.value
                         val index = list.indexOfFirst { videoKey(it.url) == videoKey(active.url) }
@@ -1804,6 +1895,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         }
                     },
                     onPrevious = {
+                        if (PlayerSettings.dualModeEnabled) return@Target
                         val active = currentSelected.value ?: return@Target
                         val list = currentQueue.value
                         val index = list.indexOfFirst { videoKey(it.url) == videoKey(active.url) }
@@ -1813,7 +1905,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                             currentOpen.value(prev.url)
                         }
                     },
-                    onClose = { player.pause() },
+                    onClose = { activeTargetPlayer.pause() },
                     contentIntent = { ctx ->
                         Intent(ctx, MainActivity::class.java)
                             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -1884,6 +1976,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         } else {
             if (tab != "shorts" && shortsMode && !minimized) closePlayer()
             if (tab == "shorts" && mainTab != "shorts") {
+                prepareShortsForDualMode()
                 if (pendingVideo != null) closePlayer()
                 // Masuk ke layar Shorts seketika (hitam + spinner); antrean diisi oleh efek pemuatan feed.
                 if (selected != null && !shortsMode) { savePosition(); player.stop(); player.clearMediaItems(); selected = null; trackState.quality = null; trackState.selectedAudio = null }
@@ -1929,7 +2022,10 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     }
     if (inPip) AndroidView(
         factory = { ctx -> PlayerView(ctx).apply { useController = false } },
-        update = { it.player = player },
+        update = {
+            val pipTarget = ((context as? MainActivity)?.pipPlayer as? ExoPlayer) ?: player
+            if (it.player !== pipTarget) it.player = pipTarget
+        },
         onRelease = { it.player = null },
         modifier = Modifier.fillMaxSize().background(Color.Black)
     ) else Surface(modifier = Modifier.fillMaxSize(), color = Background) {
@@ -2052,6 +2148,35 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 { feedState.selectChip(it, false, scope, relatedCachePrefs, watchHistory, hidden, loading, { home }, { loading = it }, { error = it }) }
             )
             if (loading && showFeed && (browse.channel != null || browse.playlist != null || searchState.active)) LinearProgressIndicator(Modifier.fillMaxWidth())
+            val activePickingSlot = dualController.model.pickingSlot
+            if (PlayerSettings.dualModeEnabled && activePickingSlot != null && showFeed) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF171B22))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = "Pilih video untuk Tab $activePickingSlot",
+                        color = TextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "Kembali",
+                        color = CallToActionBlue,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable {
+                            dualController.model.clearPicking()
+                            dualWatchOpen = true
+                        },
+                    )
+                }
+            }
             val cardInlineOverlayFor: (StreamInfoItem) -> (@Composable BoxScope.() -> Unit)? = { cardItem ->
                 val activeInline = inlineInfo
                 val activeKey = activeInline?.let { videoKey(it.url) }
@@ -2115,6 +2240,42 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                     shortsLoading = shorts.loading || (mainTab == "shorts" && loading),
                     shortsError = shorts.error ?: if (mainTab == "shorts") error else null,
                     onSearchShorts = { error = null; shorts.request++ },
+                    onToggleDualMode = { enabled ->
+                        PlayerSettings.updateDualModeEnabled(enabled)
+                        if (enabled) {
+                            stopInlinePlayback()
+                            val activeSingle = selected
+                            if (activeSingle != null) {
+                                dualController.adoptSingleToSlot1(activeSingle, trackState)
+                                selected = null
+                                pendingVideo = null
+                                minimized = false
+                                if (fullscreen) setFullscreen(false)
+                                chaptersOpen = false
+                            }
+                            dualController.syncAudio(player, PlaybackSessionHost.currentSecondaryPlayer())
+                        } else {
+                            dualWatchOpen = false
+                            dualController.model.clearPicking()
+                            val keepInfo = dualController.model.slot1.info
+                            val hadError = dualController.model.slot1.error != null
+                            if (keepInfo != null && !hadError) {
+                                trackState.copyFrom(dualController.trackState1)
+                                dualController.releaseAll(player, stopPrimary = false)
+                                selected = keepInfo
+                                minimized = true
+                            } else {
+                                dualController.releaseAll(player, stopPrimary = true)
+                            }
+                        }
+                    },
+                    onSelectDualAudioPolicy = { policy ->
+                        dualController.setAudioPolicy(policy, player, PlaybackSessionHost.currentSecondaryPlayer())
+                    },
+                    onOpenDualPlayer = {
+                        dualController.model.clearPicking()
+                        dualWatchOpen = true
+                    },
                     subscriptionsContent = {
                         SubscriptionsScreen(
                             entries = subs.entries,
@@ -2466,6 +2627,22 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
         Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             OfflineMiniOverlay(bottomBar = if (searchState.active) 0.dp else 57.dp)
+        }
+        if (PlayerSettings.dualModeEnabled && dualWatchOpen && !shortsMode) {
+            val sec = if (dualController.secondaryAllocated) PlaybackSessionHost.currentSecondaryPlayer() else null
+            DualWatchScreen(
+                controller = dualController,
+                primaryPlayer = player,
+                secondaryPlayer = sec,
+                maxVideoHeight = maxVideoHeight,
+                scope = scope,
+                onPickVideoForSlot = { slotId ->
+                    dualController.model.startPicking(slotId)
+                    dualWatchOpen = false
+                    mainTab = "home"
+                },
+                onClose = { dualWatchOpen = false },
+            )
         }
       }
     }
