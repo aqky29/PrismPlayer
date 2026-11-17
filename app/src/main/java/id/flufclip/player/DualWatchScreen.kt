@@ -79,7 +79,12 @@ internal fun DualWatchScreen(
             }
         }
         val secondaryListener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                PlaybackSessionHost.syncService(context)
+            }
+
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                PlaybackSessionHost.syncService(context)
                 if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS && model.focusedSlot == 2) {
                     primaryPlayer.pause()
                 }

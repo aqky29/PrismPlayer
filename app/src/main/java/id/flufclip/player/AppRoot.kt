@@ -520,10 +520,14 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
         activity?.backgroundPlaybackEligible = {
             if (PlayerSettings.dualModeEnabled) {
-                val state = player.playbackState
-                !shortsMode && dualController.model.slot1.info != null &&
-                    dualController.model.focusedSlot == 1 &&
-                    player.playWhenReady && (state == Player.STATE_BUFFERING || state == Player.STATE_READY)
+                val focused = dualController.model.focusedSlot
+                val targetPlayer = if (focused == 2) {
+                    PlaybackSessionHost.currentSecondaryPlayer() ?: player
+                } else player
+                val hasInfo = dualController.model.slotOf(focused).info != null
+                val state = targetPlayer.playbackState
+                !shortsMode && dualWatchOpen && hasInfo && targetPlayer.playWhenReady &&
+                    (state == Player.STATE_BUFFERING || state == Player.STATE_READY)
             } else {
                 val state = player.playbackState
                 selected != null && !shortsMode && player.playWhenReady && (state == Player.STATE_BUFFERING || state == Player.STATE_READY)
@@ -767,6 +771,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         chaptersOpen = false
         if (PlayerSettings.dualModeEnabled && dualController.hasSavedSlot1ForShorts()) {
             dualController.restoreSlot1AfterShorts(context, scope, maxVideoHeight, player)
+            dualWatchOpen = true
         }
     }
     fun back() {
@@ -1429,6 +1434,20 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         }
     )
     fun open(item: StreamInfoItem) {
+        val meta = HomeFeed.metaOf(item.url)
+        val listParam = runCatching { Uri.parse(item.url).getQueryParameter("list") }.getOrNull()?.takeIf { it.isNotBlank() }
+        if (meta?.isPlaylist == true || listParam != null) {
+            val pid = (meta?.playlistId ?: listParam.orEmpty()).removePrefix("VL")
+            val vid = InnerTubePlayer.videoIdOf(item.url)
+            playPlaylistContext(
+                playlistId = pid,
+                initialVideoUrl = vid?.let { "https://www.youtube.com/watch?v=$it" },
+                fallbackTitle = meta?.playlistTitle?.takeIf { it.isNotBlank() } ?: item.name,
+                fallbackUploader = item.uploaderName,
+                fallbackThumb = item.thumbnails.maxByOrNull { it.width }?.url
+            )
+            return
+        }
         val short = item.isShortFormContent || (browse.channel != null && browse.channelTab == ChannelTabs.SHORTS)
         if (!short && PlayerSettings.dualModeEnabled) {
             val targetSlot = dualController.model.pickingSlot ?: when {
@@ -1450,20 +1469,6 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
             searchState.active = false
             keyboard?.hide()
             dualWatchOpen = true
-            return
-        }
-        val meta = HomeFeed.metaOf(item.url)
-        val listParam = runCatching { Uri.parse(item.url).getQueryParameter("list") }.getOrNull()?.takeIf { it.isNotBlank() }
-        if (meta?.isPlaylist == true || listParam != null) {
-            val pid = (meta?.playlistId ?: listParam.orEmpty()).removePrefix("VL")
-            val vid = InnerTubePlayer.videoIdOf(item.url)
-            playPlaylistContext(
-                playlistId = pid,
-                initialVideoUrl = vid?.let { "https://www.youtube.com/watch?v=$it" },
-                fallbackTitle = meta?.playlistTitle?.takeIf { it.isNotBlank() } ?: item.name,
-                fallbackUploader = item.uploaderName,
-                fallbackThumb = item.thumbnails.maxByOrNull { it.width }?.url
-            )
             return
         }
         val knownRef = if (!short && browse.playlist == null) {
@@ -2636,11 +2641,17 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 maxVideoHeight = maxVideoHeight,
                 scope = scope,
                 onPickVideoForSlot = { slotId ->
+                    player.pause()
+                    PlaybackSessionHost.currentSecondaryPlayer()?.pause()
                     dualController.model.startPicking(slotId)
                     dualWatchOpen = false
                     mainTab = "home"
                 },
-                onClose = { dualWatchOpen = false },
+                onClose = {
+                    player.pause()
+                    PlaybackSessionHost.currentSecondaryPlayer()?.pause()
+                    dualWatchOpen = false
+                },
             )
         }
       }

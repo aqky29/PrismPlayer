@@ -6,6 +6,20 @@ Dokumen ini adalah rencana implementasi **Dual Tab Mode** di **FlufPlay / PrismP
 
 ---
 
+## Status Revisi Implementasi
+
+Hasil review kode branch `feat/dual-tab-mode`. Seluruh item revisi R1–R5 telah diselesaikan dan diverifikasi ulang:
+
+| ID | Status | Fase | Masalah | Keputusan / Perbaikan | File |
+|---|---|---|---|---|---|
+| R1 | ✅ Selesai | 1 | `applyDualAudioRouting` menyalakan `handleAudioFocus` di player baru sebelum mematikannya di player lama. | Matikan `handleAudioFocus` di player non-fokus dulu, baru nyalakan di player fokus. | `PlaybackService.kt` |
+| R2 | ✅ Selesai | 5 | Cabang Dual Mode di `open()` dijalankan sebelum deteksi playlist. | Dipindahkan setelah deteksi playlist (`meta?.isPlaylist` / param `list`) agar kartu playlist tetap membuka playlist. | `AppRoot.kt` |
+| R3 | ✅ Selesai | 4–5 | Menutup `DualWatchScreen` atau keluar Shorts meninggalkan audio tanpa UI. | Kedua slot di-pause saat `onClose` / `onPickVideoForSlot`; keluar Shorts otomatis membuka kembali `DualWatchScreen`. | `AppRoot.kt` |
+| R4 | ✅ Selesai (b) | 5 | Tap video saat Dual Mode ON dan `pickingSlot == null`. | Dipertahankan: semua tap video non-short/non-playlist saat Dual Mode ON masuk ke slot Dual (slot kosong, atau menimpa slot fokus). | `AppRoot.kt` |
+| R5 | ✅ Selesai (a) | 5 | Background playback & notifikasi media saat aplikasi masuk background. | Slot fokus (Slot 1 atau Slot 2) boleh lanjut di background sesuai `PlayerSettings.backgroundPlayback` dan terikat ke notifikasi; slot non-fokus selalu di-pause. | `AppRoot.kt`, `MainActivity.kt`, `DualWatchScreen.kt` |
+
+---
+
 ## 0. Prinsip Desain & Ruang Lingkup
 
 1. **Masuk lewat tab `You / Me` (`LibraryTab.kt`)**:
@@ -67,7 +81,7 @@ Dokumen ini adalah rencana implementasi **Dual Tab Mode** di **FlufPlay / PrismP
    - Tambah `releaseSecondaryPlayer()` yang wajib dipanggil saat `dualModeEnabled` dimatikan atau aplikasi keluar.
 4. **Aturan Audio Focus (wajib)**
    - **Tepat 1 player** yang memegang `setAudioAttributes(AudioAttributes.DEFAULT, true)`: player milik `focusedSlot`. Player lain memakai `handleAudioFocus = false`.
-   - Saat `focusedSlot` berganti, tukar flag `handleAudioFocus` di kedua player.
+   - Saat `focusedSlot` berganti, matikan `handleAudioFocus` di player non-fokus terlebih dahulu, baru nyalakan di player fokus (`✅ R1`).
    - Suara diatur lewat `player.volume`:
      - Policy `"focus"`: slot fokus `1f`, slot lain `0f`.
      - Policy `"mix"`: kedua slot `1f` (hanya slot fokus yang tetap memegang audio focus).
@@ -129,7 +143,8 @@ Dokumen ini adalah rencana implementasi **Dual Tab Mode** di **FlufPlay / PrismP
 1. **Workspace Bar (Atas)**
    - Tombol `Swap` (tukar posisi tampilan Slot 1 ↔ Slot 2 — cukup tukar mapping UI, player tidak dipindah antar slot).
    - Toggle cepat `Focus Audio` ↔ `Mix Audio`.
-   - Tombol `Ganti Video` → set `pickingSlot`, lalu buka Home/Search (lihat Fase 5).
+   - Tombol `Ganti Video` → pause kedua slot, set `pickingSlot`, lalu buka Home/Search (lihat Fase 5).
+   - Back / tutup layar Dual mem-pause kedua slot karena V1 belum punya `DualMiniBar` (`✅ R3`).
 2. **Layout Mobile Portrait (`!isWideWatchLayout(maxWidth, maxHeight)`)**
    - **Area Atas (Stacked Vertikal):** `Slot 1` dan `Slot 2`, masing-masing header mini + viewport player + kontrol Play/Pause & Mute/Unmute. Tinggi viewport proporsional (~180–210dp tergantung tinggi layar) agar dua video + drawer muat.
    - **Area Bawah (Focused Detail Drawer):** switcher `Tab 1` / `Tab 2`, judul, channel, tombol `Ganti video Tab X`, dan daftar *Up Next / Related* slot tersebut.
@@ -148,20 +163,20 @@ Dokumen ini adalah rencana implementasi **Dual Tab Mode** di **FlufPlay / PrismP
 
 **Tujuan:** Alur memilih video untuk slot dan mencegah konflik player, dengan perubahan sesedikit mungkin di `AppRoot.kt`.
 
-1. **Mode Pilih Video (`pickingSlot`)**
-   - Saat `Ganti Video` / slot kosong ditekan di `DualWatchScreen`: set `dualController.pickingSlot = slotId`, lalu pindah ke Home/Search.
-   - Di `open(item)` (`AppRoot.kt:1386`): jika `pickingSlot != null`, panggil `loadIntoSlot(pickingSlot, item, ...)`, reset `pickingSlot = null`, lalu kembali ke `DualWatchScreen`. Selain itu, `open()` berjalan seperti biasa.
+1. **Mode Pilih & Routing Video di Dual Mode**
+   - Saat `Ganti Video` / slot kosong ditekan di `DualWatchScreen`: pause kedua slot, set `dualController.pickingSlot = slotId`, lalu pindah ke Home/Search.
+   - Di `open(item)` (`AppRoot.kt`): deteksi playlist (`meta?.isPlaylist` / param `list`) dijalankan terlebih dahulu (`✅ R2`). Untuk video non-short/non-playlist saat Dual Mode ON, tap video masuk ke `pickingSlot` jika aktif, atau otomatis mengisi slot kosong / menimpa `focusedSlot` lalu membuka `DualWatchScreen` (`✅ R4`).
    - Tombol Back saat mode pilih → batal (`pickingSlot = null`) dan kembali ke `DualWatchScreen`.
 2. **Inline Feed Playback**
    - Tambah parameter `dualModeEnabled` di `isInlinePlaybackEligible(...)` (`InlineFeedPlayback.kt:99`) → `false` saat Dual Mode aktif, karena inline memakai `onlinePlayer` yang sama dengan Slot 1. Perbarui semua call-site.
 3. **Shorts (keputusan final)**
-   - Shorts memakai `onlinePlayer` yang sama dengan Slot 1 (`AppRoot.kt:2302`). Saat user membuka Shorts dalam Dual Mode:
+   - Shorts memakai `onlinePlayer` yang sama dengan Slot 1 (`AppRoot.kt`). Saat user membuka Shorts dalam Dual Mode:
      1. Simpan `item` + posisi Slot 1, pause Slot 2.
      2. Shorts berjalan normal memakai `onlinePlayer`.
-     3. Saat keluar dari Shorts, muat ulang Slot 1 dari posisi tersimpan. Slot 2 tetap pause sampai user menekan play.
+     3. Saat keluar dari Shorts, muat ulang Slot 1 dari posisi tersimpan dan buka kembali `DualWatchScreen` (`✅ R3`). Slot 2 tetap pause sampai user menekan play.
 4. **Background, PiP & Lifecycle (`MainActivity.kt`)**
-   - `onStop()`: Slot 2 **selalu di-pause**. Slot 1 / slot fokus mengikuti aturan `PlayerSettings.backgroundPlayback` yang sudah ada.
-   - PiP: hanya `focusedSlot` yang ditampilkan, slot lain di-pause.
+   - `onStop()`: slot non-fokus selalu di-pause; `focusedSlot` (Slot 1 atau Slot 2) mengikuti `PlayerSettings.backgroundPlayback` dan terikat ke `MediaSession` (`✅ R5`).
+   - PiP: hanya `focusedSlot` yang ditampilkan, slot non-fokus di-pause.
 
 **Verifikasi Fase 5:**
 - Build & unit test via CI (`:app:compileDebugKotlin :app:testDebugUnitTest`).
@@ -190,4 +205,7 @@ Baru dikerjakan setelah V1 stabil dan memang dibutuhkan:
 - [ ] **Lifecycle Background**: Slot 2 selalu pause di `onStop`; Slot 1 mengikuti `PlayerSettings.backgroundPlayback`.
 - [ ] **Matikan Dual Mode**: `releaseSecondaryPlayer()` terpanggil, Slot 1 tetap berjalan normal.
 - [ ] **Hardware Decoder Limit**: decoder fallback aktif; jika tetap gagal, turunkan Slot 2 ke `480p`/`360p` atau tampilkan pesan yang jelas.
+- [ ] **Pindah Fokus Saat Keduanya Play** (R1): fokus Slot 2 → Slot 1 dan sebaliknya, kedua video tetap berjalan.
+- [ ] **Kartu Playlist di Dual Mode** (R2): tap kartu playlist tidak membuat slot error.
+- [ ] **Tutup Layar Dual** (R3): Back dari `DualWatchScreen` tidak meninggalkan audio tanpa UI.
 - [ ] **Memory Footprint**: ukur dengan `tdev sh "dumpsys meminfo id.flufclip.player"` saat 1 video vs 2 video 720p diputar 2–3 menit; tambahan target ≤ ~50 MB, tanpa kebocoran memori atau crash OOM.

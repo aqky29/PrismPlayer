@@ -85,8 +85,14 @@ internal object PlaybackSessionHost {
         slot2Muted: Boolean,
     ) {
         val focusPrimary = focusedSlot != 2 || secondary == null
-        primary.setAudioAttributes(AudioAttributes.DEFAULT, focusPrimary)
-        secondary?.setAudioAttributes(AudioAttributes.DEFAULT, !focusPrimary)
+        // Release audio focus on the non-focused player first so switching focus never triggers AUDIOFOCUS_LOSS on it.
+        if (focusPrimary) {
+            secondary?.setAudioAttributes(AudioAttributes.DEFAULT, false)
+            primary.setAudioAttributes(AudioAttributes.DEFAULT, true)
+        } else {
+            primary.setAudioAttributes(AudioAttributes.DEFAULT, false)
+            secondary?.setAudioAttributes(AudioAttributes.DEFAULT, true)
+        }
         val pVol = when {
             slot1Muted -> 0f
             audioPolicy == "mix" -> 1f

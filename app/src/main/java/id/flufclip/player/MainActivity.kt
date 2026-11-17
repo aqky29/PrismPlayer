@@ -176,9 +176,17 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         if (pipSupported && pipEligible()) runCatching { enterPictureInPictureMode(pipParams()) }
     }
+    private fun pauseNonFocusedDualPlayer() {
+        if (!PlayerSettings.dualModeEnabled) return
+        val primary = PlaybackSessionHost.currentOnlinePlayer()
+        val secondary = PlaybackSessionHost.currentSecondaryPlayer()
+        if (pipPlayer === secondary) primary?.pause() else secondary?.pause()
+    }
     override fun onStart() {
         super.onStart()
         PlaybackSessionHost.setVideoTrackDisabled(pipPlayer, false)
+        PlaybackSessionHost.setVideoTrackDisabled(PlaybackSessionHost.currentOnlinePlayer(), false)
+        PlaybackSessionHost.setVideoTrackDisabled(PlaybackSessionHost.currentSecondaryPlayer(), false)
         OfflinePlaybackBridge.session?.let { PlaybackSessionHost.setVideoTrackDisabled(it.player, false) }
     }
     override fun onResume() {
@@ -198,9 +206,7 @@ class MainActivity : ComponentActivity() {
             OfflinePlaybackBridge.pause()
         }
         super.onStop()
-        if (PlayerSettings.dualModeEnabled) {
-            PlaybackSessionHost.currentSecondaryPlayer()?.pause()
-        }
+        pauseNonFocusedDualPlayer()
         val keepOnline = PlayerSettings.backgroundPlayback &&
             (backgroundPlaybackEligible() || PlaybackSessionHost.keepForegroundDuringTransition)
         if (keepOnline) {
@@ -213,11 +219,7 @@ class MainActivity : ComponentActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
         if (isInPictureInPictureMode) {
-            if (PlayerSettings.dualModeEnabled) {
-                val primary = PlaybackSessionHost.currentOnlinePlayer()
-                val secondary = PlaybackSessionHost.currentSecondaryPlayer()
-                if (pipPlayer === secondary) primary?.pause() else secondary?.pause()
-            }
+            pauseNonFocusedDualPlayer()
             PlaybackSessionHost.setVideoTrackDisabled(pipPlayer, false)
         }
     }
