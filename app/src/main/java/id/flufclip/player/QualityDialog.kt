@@ -195,14 +195,19 @@ internal fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List
         playerTracks = player.currentTracks
         onDispose { player.removeListener(listener) }
     }
-    val hlsTracks = if (selected == null && !info.hlsUrl.isNullOrBlank()) {
+    val hasAdaptiveManifest = !info.hlsUrl.isNullOrBlank() || !info.dashMpdUrl.isNullOrBlank()
+    val adaptiveTracks = if (selected == null && hasAdaptiveManifest) {
         playerTracks.groups.filter { it.type == C.TRACK_TYPE_VIDEO }.flatMap { group ->
             (0 until group.length).filter { group.isTrackSupported(it) && group.getTrackFormat(it).height > 0 }
                 .map { index -> group to index }
-        }.sortedByDescending { (group, index) -> group.getTrackFormat(index).height }
+        }.sortedWith(
+            compareByDescending<Pair<Tracks.Group, Int>> { (group, index) -> group.getTrackFormat(index).height }
+                .thenByDescending { (group, index) -> group.getTrackFormat(index).frameRate }
+                .thenByDescending { (group, index) -> group.getTrackFormat(index).bitrate }
+        )
     } else emptyList()
     val qualityLabel = selected?.resolution ?: if (qualityMode == "advanced") {
-        hlsTracks.firstOrNull { (group, index) -> group.isTrackSelected(index) }
+        adaptiveTracks.firstOrNull { (group, index) -> group.isTrackSelected(index) }
             ?.let { (group, index) -> "${group.getTrackFormat(index).height}p" } ?: "Selected"
     } else "Auto"
     val tracks = remember(info) { audioTracks(info) }
@@ -276,7 +281,7 @@ internal fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List
                         SettingsRow(R.drawable.yt_menu_audio, "Background play", if (PlayerSettings.backgroundPlayback) "On" else "Off") { PlayerSettings.updateBackgroundPlayback(!PlayerSettings.backgroundPlayback) }
                         SettingsRow(R.drawable.yt_menu_speed, "Double-tap to seek", "${PlayerSettings.doubleTapSeconds} seconds") { page = "doubletap" }
                     }
-                    "data" -> listOf(144, 240, 360, 480, 720, 1080, 2160).forEach { height ->
+                    "data" -> listOf(144, 240, 360, 480, 720, 1080, 1440, 2160).forEach { height ->
                         PlayerChoiceRow("${height}p", selected = height == maxHeight) { onMaxHeight(height); page = "menu" }
                     }
                     "subtitle" -> {
@@ -298,7 +303,7 @@ internal fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List
                     "quality" -> {
                         fun choosePreset(mode: String, height: Int) {
                             onQualityMode(mode)
-                            if (!info.hlsUrl.isNullOrBlank()) {
+                            if (hasAdaptiveManifest) {
                                 onSelect(null)
                                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_VIDEO).setMaxVideoSize(Int.MAX_VALUE, height).build()
                             } else {
@@ -306,7 +311,7 @@ internal fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List
                                 if (target != null) onSelect(target) else onDismiss()
                             }
                         }
-                        QualityOption("Auto (recommended)", if (!info.hlsUrl.isNullOrBlank()) "Adjusts to your conditions" else "Selects an available quality", qualityMode == "auto") { choosePreset("auto", maxHeight) }
+                        QualityOption("Auto (recommended)", if (hasAdaptiveManifest) "Adjusts to your conditions" else "Selects an available quality", qualityMode == "auto") { choosePreset("auto", maxHeight) }
                         QualityOption("Higher picture quality", "Uses more data", qualityMode == "high") { choosePreset("high", Int.MAX_VALUE) }
                         QualityOption("Data saver", "Lower picture quality", qualityMode == "data") { choosePreset("data", 480) }
                         QualityOption("Advanced", "Choose a specific resolution", false) { page = "advanced" }
@@ -314,8 +319,8 @@ internal fun qualityOptions(info: StreamInfo, embeddedKey: String? = null): List
                         Text("This setting only applies to the current video.", Modifier.padding(horizontal = 20.dp, vertical = 4.dp), color = Color.LightGray, style = MaterialTheme.typography.bodyMedium)
                     }
                     "advanced" -> {
-                        if (options.isEmpty() && hlsTracks.isEmpty()) Text("Custom resolutions are unavailable for this stream.", Modifier.padding(20.dp), color = Color.LightGray)
-                        hlsTracks.forEach { (group, index) ->
+                        if (options.isEmpty() && adaptiveTracks.isEmpty()) Text("Custom resolutions are unavailable for this stream.", Modifier.padding(20.dp), color = Color.LightGray)
+                        adaptiveTracks.forEach { (group, index) ->
                             val format = group.getTrackFormat(index)
                             val detail = listOfNotNull(format.frameRate.takeIf { it > 30f }?.let { "${Math.round(it)} fps" }, format.sampleMimeType?.substringAfter('/')).joinToString(" · ")
                             QualityOption("${format.height}p", detail, qualityMode == "advanced" && group.isTrackSelected(index)) {

@@ -63,7 +63,6 @@ object VideoRepository {
     private val resolveCache = LinkedHashMap<String, CachedInfo>(16, .75f, true)
     private val resolveJobs = ConcurrentHashMap<String, CompletableDeferred<StreamInfo>>()
     private val embeddedAudio = java.util.Collections.synchronizedMap(java.util.WeakHashMap<StreamInfo, List<EmbeddedAudioTrack>>())
-    private val liveDashDvr = java.util.Collections.synchronizedMap(java.util.WeakHashMap<StreamInfo, Boolean>())
     private val resolveScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private data class LiveInfo(val liveNow: Boolean, val wasLive: Boolean)
     private val liveInfoCache = object : LinkedHashMap<String, LiveInfo>(8, .75f, true) {
@@ -480,8 +479,7 @@ object VideoRepository {
                 // Prefetch tidak masuk resolveJobs: klik user tidak boleh menunggu job latar belakang yang macet.
                 val info = withTimeoutOrNull(45_000) { resolveUncached(url, context) }
                 if (info != null && revision == YouTubeAuth.sessionRevision) {
-                    inspectLiveManifests(info, revision)
-                    if (revision == YouTubeAuth.sessionRevision) storeResolve(key, info)
+                    storeResolve(key, info)
                 }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { }
@@ -503,12 +501,6 @@ object VideoRepository {
                 if (!pending.isCancelled) {
                     storeResolve(key, info)
                     pending.complete(info)
-                    // Probe live DVR asynchronously so initial playback does not wait on extra manifest roundtrips.
-                    if (info.isOngoingLive()) {
-                        resolveScope.launch {
-                            runCatching { inspectLiveManifests(info, revision) }
-                        }
-                    }
                 }
             } catch (e: CancellationException) {
                 pending.cancel(e)
@@ -520,17 +512,6 @@ object VideoRepository {
             }
         }
         return pending.await()
-    }
-
-    internal fun preferLiveDash(info: StreamInfo): Boolean = liveDashDvr[info] == true
-
-    private fun inspectLiveManifests(info: StreamInfo, revision: Int) {
-        if (!info.isOngoingLive() || revision != YouTubeAuth.sessionRevision) return
-        val hls = info.hlsUrl?.takeIf { it.isNotBlank() } ?: return
-        val dash = info.dashMpdUrl?.takeIf { it.isNotBlank() } ?: return
-        val cookies = YouTubeAuth.getCookies()
-        val prefer = inspectLiveDvr(hls, dash, cookies)
-        if (revision == YouTubeAuth.sessionRevision) liveDashDvr[info] = prefer
     }
 
     private suspend fun resolveUncached(url: String, context: android.content.Context?): StreamInfo {

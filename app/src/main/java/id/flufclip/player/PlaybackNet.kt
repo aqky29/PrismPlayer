@@ -15,7 +15,6 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.util.concurrent.TimeUnit
 import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -23,6 +22,8 @@ import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import okhttp3.ConnectionPool
 
 private val clientParamRegex = Regex("(?:[?&]c=|/c/)([^/&?#]+)")
@@ -55,32 +56,6 @@ private val playbackHttpClient = OkHttpClient.Builder()
     .connectionPool(ConnectionPool(8, 5, TimeUnit.MINUTES))
     .addNetworkInterceptor(accountHeaderInterceptor)
     .build()
-
-/** Probe only manifests, using the same per-hop header policy as playback. */
-internal fun inspectLiveDvr(hlsUrl: String, dashUrl: String, cookies: String): Boolean {
-    val client = playbackHttpClient.newBuilder().callTimeout(1_500, TimeUnit.MILLISECONDS).build()
-    fun read(url: String): String? {
-        val target = url.toHttpUrlOrNull() ?: return null
-        if (target.scheme != "https") return null
-        val builder = Request.Builder().url(target)
-        playbackRequestHeaders(url, cookies).forEach { (key, value) -> builder.header(key, value) }
-        return client.newCall(builder.build()).execute().use { response ->
-            if (!response.isSuccessful) null else response.peekBody(256 * 1024L).string()
-        }
-    }
-    return try {
-        val master = read(hlsUrl) ?: return false
-        val child = master.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith('#') }
-        val playlist = if (master.contains("#EXT-X-STREAM-INF") && child != null) {
-            val url = hlsUrl.toHttpUrlOrNull()?.resolve(child)?.toString() ?: return false
-            read(url) ?: return false
-        } else master
-        val hls = hlsWindowSeconds(playlist) ?: return false
-        if (hls > 15) return false
-        val dash = dashWindowSeconds(read(dashUrl) ?: return false)
-        preferDashForDvr(hls, dash)
-    } catch (_: Exception) { false }
-}
 
 /** A forbidden signed URL must reach the error handler instead of cycling through tracks forever. */
 private class YouTubeLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
@@ -137,6 +112,24 @@ internal fun youTubeHlsSource(context: Context, url: String, mediaId: String? = 
     return HlsMediaSource.Factory(DefaultDataSource.Factory(context, youTubeHttpDataSourceFactory(context)))
         .setLoadErrorHandlingPolicy(YouTubeLoadErrorPolicy())
         .createMediaSource(item)
+}
+
+/** Live DASH uses a wall-clock re-anchoring parser so YouTube's drifted MPD timestamps stay near live. */
+internal fun youTubeLiveDashSource(context: Context, item: MediaItem): MediaSource {
+    val dataSourceFactory = DefaultDataSource.Factory(context, youTubeHttpDataSourceFactory(context))
+    val dashSource = DashMediaSource.Factory(dataSourceFactory)
+        .setLoadErrorHandlingPolicy(YouTubeLoadErrorPolicy())
+        .setManifestParser(YouTubeLiveDashManifestParser())
+        .createMediaSource(item)
+    val subtitles = item.localConfiguration?.subtitleConfigurations.orEmpty()
+    if (subtitles.isEmpty()) return dashSource
+    val subtitleFactory = SingleSampleMediaSource.Factory(dataSourceFactory)
+        .setLoadErrorHandlingPolicy(YouTubeLoadErrorPolicy())
+    val sources = buildList<MediaSource> {
+        add(dashSource)
+        subtitles.forEach { add(subtitleFactory.createMediaSource(it, C.TIME_UNSET)) }
+    }
+    return MergingMediaSource(*sources.toTypedArray())
 }
 
 /** DASH remains available when live HLS is missing, and for ordinary videos/replays. */

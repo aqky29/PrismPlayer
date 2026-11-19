@@ -689,6 +689,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 trackState.qualityMode = "auto"
                 trackState.manualAudioOverride = false
                 trackState.attemptedAudioFallback = null
+                trackState.liveDashFallbackVideoKey = null
                 configurePreferredAudio(player, resolved, PlayerSettings.audioPreference)
                 player.pauseAtEndOfMediaItems = false
                 player.setPlaybackSpeed(1f)
@@ -727,6 +728,8 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         trackState.forceDirectPlayback = false
         trackState.manualAudioOverride = false
         trackState.attemptedAudioFallback = null
+        trackState.activeManifest = PlaybackManifest.NONE
+        trackState.liveDashFallbackVideoKey = null
         chaptersOpen = false
     }
     fun back() {
@@ -926,6 +929,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
         val (initial, audio) = pickStreams(info, maxVideoHeight)
         trackState.manualAudioOverride = false
         trackState.attemptedAudioFallback = null
+        trackState.liveDashFallbackVideoKey = null
         configurePreferredAudio(player, info, PlayerSettings.audioPreference)
         // Reset playback speed so new videos and autoplay don't retain 2.0x boost
         player.setPlaybackSpeed(1f)
@@ -1659,6 +1663,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
     val currentAutoplay = rememberUpdatedState(autoplay)
     val currentShortsMode = rememberUpdatedState(shortsMode)
     val currentPending = rememberUpdatedState(pendingVideo)
+    val currentMaxVideoHeight = rememberUpdatedState(maxVideoHeight)
     val currentQueue = rememberUpdatedState(queue)
     val currentRecover = rememberUpdatedState<(StreamInfo) -> Unit> { recoverShort(it) }
     val currentRefreshForbidden = rememberUpdatedState<suspend (StreamInfo, Long, Boolean) -> Unit> { old, position, play ->
@@ -1722,11 +1727,7 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                 val forbidden = generateSequence<Throwable>(error) { it.cause }.take(8).any {
                     (it as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode == 403
                 }
-                if (info != null && info.isOngoingLive() && !currentShortsMode.value && forbidden) {
-                    refreshPlayback(info, player.currentPosition.coerceAtLeast(0L), player.playWhenReady)
-                    return
-                }
-                // Window DVR HLS bergeser. Jika posisi jatuh di belakang window, ExoPlayer melempar
+                // Window DVR bergeser. Jika posisi jatuh di belakang window, ExoPlayer melempar
                 // BehindLiveWindowException; pulihkan ke live edge, jangan biarkan pemutar mati.
                 if (liveInfo != null && (player.isCurrentMediaItemLive || liveInfo.isOngoingLive()) && error.causedByBehindLiveWindow()) {
                     val key = videoKey(liveInfo.url)
@@ -1740,6 +1741,23 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
                         if (wasPlaying) player.play()
                         return
                     }
+                }
+                // Bila live DASH gagal diputar sedangkan HLS tersedia, segera fallback ke HLS tanpa resolve ulang.
+                if (liveInfo != null && liveInfo.isOngoingLive() && !currentShortsMode.value &&
+                    trackState.activeManifest == PlaybackManifest.DASH && !liveInfo.hlsUrl.isNullOrBlank()
+                ) {
+                    val key = videoKey(liveInfo.url)
+                    if (trackState.liveDashFallbackVideoKey != key) {
+                        trackState.liveDashFallbackVideoKey = key
+                        val targetMaxHeight = if (info != null) currentMaxVideoHeight.value else currentMaxVideoHeight.value.coerceAtMost(720)
+                        android.util.Log.w("FlufPlayback", "live DASH error (${error.errorCodeName}); falling back to HLS")
+                        trackState.playQuality(player, context, targetMaxHeight, liveInfo, null, trackState.selectedAudio, 0L, player.playWhenReady)
+                        return
+                    }
+                }
+                if (info != null && info.isOngoingLive() && !currentShortsMode.value && forbidden) {
+                    refreshPlayback(info, player.currentPosition.coerceAtLeast(0L), player.playWhenReady)
+                    return
                 }
                 // URL stream di cache bisa ditolak server; buang agar percobaan berikutnya resolve ulang.
                 liveInfo?.let { VideoRepository.evict(it.url) }
