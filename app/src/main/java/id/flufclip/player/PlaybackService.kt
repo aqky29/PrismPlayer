@@ -69,6 +69,11 @@ internal object PlaybackSessionHost {
 
     fun currentSecondaryPlayer(): ExoPlayer? = secondaryPlayer
 
+    fun pauseAllOnlinePlayers() {
+        onlinePlayer?.pause()
+        secondaryPlayer?.pause()
+    }
+
     fun releaseSecondaryPlayer() {
         secondaryPlayer?.stop()
         secondaryPlayer?.clearMediaItems()
@@ -283,6 +288,7 @@ class PlaybackService : MediaSessionService() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         PlaybackSessionHost.keepForegroundDuringTransition = false
         PlaybackSessionHost.activeTarget?.player?.pause()
+        PlaybackSessionHost.pauseAllOnlinePlayers()
         stopFromHost()
         super.onTaskRemoved(rootIntent)
     }

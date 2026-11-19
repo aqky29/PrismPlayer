@@ -13,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
@@ -63,6 +64,28 @@ internal class DualTabModel(initialAudioPolicy: String = "focus") {
         updateSlot(slotId) { it.copy(muted = !it.muted) }
     }
 
+    /**
+     * Handles tapping the audio/mute button on a slot card:
+     * in "focus" policy, tapping a non-focused muted slot switches focus and unmutes it
+     * in one tap instead of unmuting and immediately re-muting it.
+     */
+    fun toggleAudioForSlot(slotId: Int) {
+        val target = if (slotId == 2) 2 else 1
+        val wasFocused = focusedSlot == target
+        val wasMuted = slotOf(target).muted
+        focusSlot(target)
+        if (audioPolicy == "focus" && !wasFocused && wasMuted) {
+            return
+        }
+        toggleMute(target)
+    }
+
+    fun resolveTargetSlot(): Int = pickingSlot ?: when {
+        slot1.item == null && slot1.info == null -> 1
+        slot2.item == null && slot2.info == null -> 2
+        else -> focusedSlot
+    }
+
     fun applyAudioPolicy(policy: String) {
         val normalized = if (policy == "mix") "mix" else "focus"
         audioPolicy = normalized
@@ -97,8 +120,10 @@ internal class DualTabModel(initialAudioPolicy: String = "focus") {
 }
 
 internal data class DualShortsBackup(
-    val item: StreamInfoItem,
+    val item: StreamInfoItem?,
     val positionMs: Long,
+    val slot1WasPlaying: Boolean,
+    val slot2WasPlaying: Boolean,
 )
 
 @Stable
@@ -112,6 +137,8 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
     private var slot1Job: Job? = null
     private var slot2Job: Job? = null
     private var shortsBackup: DualShortsBackup? = null
+    private var pausedSlot1WasPlaying: Boolean = false
+    private var pausedSlot2WasPlaying: Boolean = false
 
     fun trackStateFor(slotId: Int): PlaybackTrackState = if (slotId == 2) trackState2 else trackState1
 
@@ -136,6 +163,37 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
 
     fun toggleMute(slotId: Int, primary: ExoPlayer, secondary: ExoPlayer?) {
         model.toggleMute(slotId)
+        syncAudio(primary, secondary)
+    }
+
+    fun toggleAudioForSlot(slotId: Int, primary: ExoPlayer, secondary: ExoPlayer?) {
+        model.toggleAudioForSlot(slotId)
+        syncAudio(primary, secondary)
+    }
+
+    fun pauseForOverlay(primary: ExoPlayer, secondary: ExoPlayer?) {
+        pausedSlot1WasPlaying = model.slot1.info != null &&
+            primary.mediaItemCount > 0 &&
+            primary.playWhenReady &&
+            primary.playbackState != Player.STATE_ENDED
+        pausedSlot2WasPlaying = model.slot2.info != null &&
+            secondary != null &&
+            secondary.mediaItemCount > 0 &&
+            secondary.playWhenReady &&
+            secondary.playbackState != Player.STATE_ENDED
+        primary.pause()
+        secondary?.pause()
+    }
+
+    fun resumeUnchangedSlots(primary: ExoPlayer, secondary: ExoPlayer?, excludeSlot: Int? = null) {
+        val resume1 = excludeSlot != 1 && pausedSlot1WasPlaying &&
+            model.slot1.info != null && model.slot1.error == null && primary.mediaItemCount > 0
+        val resume2 = excludeSlot != 2 && pausedSlot2WasPlaying &&
+            model.slot2.info != null && model.slot2.error == null && (secondary?.mediaItemCount ?: 0) > 0
+        pausedSlot1WasPlaying = false
+        pausedSlot2WasPlaying = false
+        if (resume1) primary.play()
+        if (resume2) secondary?.play()
         syncAudio(primary, secondary)
     }
 
@@ -177,6 +235,7 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
         secondaryProvider: () -> ExoPlayer,
         resumeMs: Long = 0L,
         autoPlay: Boolean = true,
+        forceRefresh: Boolean = false,
     ) {
         val targetSlot = if (slotId == 2) 2 else 1
         if (targetSlot == 1) slot1Job?.cancel() else slot2Job?.cancel()
@@ -185,7 +244,13 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
         }
         val job = scope.launch {
             try {
-                val resolved = VideoRepository.resolve(item.url, context)
+                if (forceRefresh) VideoRepository.evict(item.url)
+                val resolved = withTimeoutOrNull(45_000L) {
+                    VideoRepository.resolve(item.url, context)
+                } ?: run {
+                    VideoRepository.evict(item.url)
+                    throw IllegalStateException("Timed out loading video")
+                }
                 val targetPlayer = if (targetSlot == 2) {
                     secondaryProvider().also { secondaryAllocated = true }
                 } else {
@@ -220,12 +285,36 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                VideoRepository.evict(item.url)
                 model.updateSlot(targetSlot) {
                     it.copy(loading = false, error = e.message ?: "Failed to load video")
                 }
             }
         }
         if (targetSlot == 1) slot1Job = job else slot2Job = job
+    }
+
+    fun handlePlayerError(
+        slotId: Int,
+        error: PlaybackException,
+        context: Context,
+        maxVideoHeight: Int,
+        player: ExoPlayer,
+    ) {
+        val targetSlot = if (slotId == 2) 2 else 1
+        val info = model.slotOf(targetSlot).info
+        if (info != null && (player.isCurrentMediaItemLive || info.isOngoingLive()) && error.causedByBehindLiveWindow()) {
+            val wasPlaying = player.playWhenReady
+            player.seekToDefaultPosition()
+            player.prepare()
+            if (wasPlaying) player.play()
+            return
+        }
+        if (handlePlayerErrorForFallback(targetSlot, error, context, maxVideoHeight, player)) return
+        info?.let { VideoRepository.evict(it.url) }
+        model.updateSlot(targetSlot) {
+            it.copy(loading = false, error = error.message ?: "Playback failed")
+        }
     }
 
     fun handlePlayerErrorForFallback(
@@ -262,7 +351,8 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
         }.getOrDefault(false)
     }
 
-    fun saveSlot1BeforeShorts(positionMs: Long) {
+    fun saveSlot1BeforeShorts(primary: ExoPlayer) {
+        val secondary = PlaybackSessionHost.currentSecondaryPlayer()
         val currentItem = model.slot1.item ?: model.slot1.info?.let { info ->
             StreamInfoItem(
                 ServiceList.YouTube.serviceId,
@@ -275,10 +365,24 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
                 thumbnails = info.thumbnails
             }
         }
-        if (currentItem != null) {
-            shortsBackup = DualShortsBackup(currentItem, positionMs.coerceAtLeast(0L))
+        val slot1Playing = model.slot1.info != null &&
+            primary.mediaItemCount > 0 &&
+            primary.playWhenReady &&
+            primary.playbackState != Player.STATE_ENDED
+        val slot2Playing = model.slot2.info != null &&
+            secondary != null &&
+            secondary.mediaItemCount > 0 &&
+            secondary.playWhenReady &&
+            secondary.playbackState != Player.STATE_ENDED
+        if (currentItem != null || model.slot2.info != null || model.slot2.item != null) {
+            shortsBackup = DualShortsBackup(
+                item = currentItem,
+                positionMs = primary.currentPosition.coerceAtLeast(0L),
+                slot1WasPlaying = slot1Playing,
+                slot2WasPlaying = slot2Playing,
+            )
         }
-        PlaybackSessionHost.currentSecondaryPlayer()?.pause()
+        secondary?.pause()
     }
 
     fun hasSavedSlot1ForShorts(): Boolean = shortsBackup != null
@@ -291,23 +395,32 @@ internal class DualTabController(initialAudioPolicy: String = PlayerSettings.dua
     ) {
         val backup = shortsBackup ?: return
         shortsBackup = null
-        loadIntoSlot(
-            slotId = 1,
-            item = backup.item,
-            context = context,
-            scope = scope,
-            maxVideoHeight = maxVideoHeight,
-            primary = primary,
-            secondaryProvider = { PlaybackSessionHost.obtainSecondaryPlayer(context) },
-            resumeMs = backup.positionMs,
-            autoPlay = true,
-        )
+        val secondary = PlaybackSessionHost.currentSecondaryPlayer()
+        if (backup.item != null) {
+            loadIntoSlot(
+                slotId = 1,
+                item = backup.item,
+                context = context,
+                scope = scope,
+                maxVideoHeight = maxVideoHeight,
+                primary = primary,
+                secondaryProvider = { PlaybackSessionHost.obtainSecondaryPlayer(context) },
+                resumeMs = backup.positionMs,
+                autoPlay = backup.slot1WasPlaying,
+            )
+        }
+        if (backup.slot2WasPlaying && model.slot2.info != null && model.slot2.error == null && (secondary?.mediaItemCount ?: 0) > 0) {
+            secondary?.play()
+        }
+        syncAudio(primary, secondary)
     }
 
     fun releaseAll(primary: ExoPlayer, stopPrimary: Boolean) {
         slot1Job?.cancel()
         slot2Job?.cancel()
         shortsBackup = null
+        pausedSlot1WasPlaying = false
+        pausedSlot2WasPlaying = false
         if (stopPrimary) {
             primary.stop()
             primary.clearMediaItems()

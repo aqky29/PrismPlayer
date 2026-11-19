@@ -51,4 +51,68 @@ class DualTabModelTest {
         model.clearPicking()
         assertNull(model.pickingSlot)
     }
+
+    @Test
+    fun toggleAudioForSlotInFocusPolicyUnmutesNonFocusedSlotInSingleTap() {
+        val model = DualTabModel(initialAudioPolicy = "focus")
+        assertEquals(1, model.focusedSlot)
+        assertFalse(model.slot1.muted)
+        assertTrue(model.slot2.muted)
+
+        // Single tap on muted non-focused Slot 2 focuses and unmutes it (no double-toggle)
+        model.toggleAudioForSlot(2)
+        assertEquals(2, model.focusedSlot)
+        assertTrue(model.slot1.muted)
+        assertFalse(model.slot2.muted)
+
+        // Tapping again on focused Slot 2 mutes it
+        model.toggleAudioForSlot(2)
+        assertEquals(2, model.focusedSlot)
+        assertTrue(model.slot2.muted)
+
+        // Tapping again unmutes it
+        model.toggleAudioForSlot(2)
+        assertFalse(model.slot2.muted)
+    }
+
+    @Test
+    fun toggleAudioForSlotInMixPolicyTogglesIndependently() {
+        val model = DualTabModel(initialAudioPolicy = "mix")
+        assertFalse(model.slot1.muted)
+        assertFalse(model.slot2.muted)
+
+        model.toggleAudioForSlot(2)
+        assertEquals(2, model.focusedSlot)
+        assertFalse(model.slot1.muted)
+        assertTrue(model.slot2.muted)
+
+        model.toggleAudioForSlot(2)
+        assertFalse(model.slot1.muted)
+        assertFalse(model.slot2.muted)
+    }
+
+    @Test
+    fun resolveTargetSlotPrioritizesPickingThenEmptyThenFocused() {
+        val model = DualTabModel()
+        assertEquals(1, model.resolveTargetSlot())
+
+        model.startPicking(2)
+        assertEquals(2, model.resolveTargetSlot())
+        model.clearPicking()
+
+        val fakeItem = org.schabi.newpipe.extractor.stream.StreamInfoItem(
+            0,
+            "https://www.youtube.com/watch?v=abc12345678",
+            "Video 1",
+            org.schabi.newpipe.extractor.stream.StreamType.VIDEO_STREAM,
+        )
+        model.updateSlot(1) { it.copy(item = fakeItem) }
+        assertEquals(2, model.resolveTargetSlot())
+
+        model.updateSlot(2) { it.copy(item = fakeItem) }
+        model.focusSlot(1)
+        assertEquals(1, model.resolveTargetSlot())
+        model.focusSlot(2)
+        assertEquals(2, model.resolveTargetSlot())
+    }
 }

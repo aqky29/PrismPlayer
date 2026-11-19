@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -69,48 +68,15 @@ internal fun DualWatchScreen(
 
     BackHandler { onClose() }
 
-    // Pause both slots if system audio focus is lost by the focused slot, and apply decoder fallback on Slot 2.
-    DisposableEffect(primaryPlayer, secondaryPlayer, model.focusedSlot, maxVideoHeight) {
-        val primaryListener = object : Player.Listener {
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS && model.focusedSlot == 1) {
-                    secondaryPlayer?.pause()
-                }
-            }
-        }
-        val secondaryListener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                PlaybackSessionHost.syncService(context)
-            }
-
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                PlaybackSessionHost.syncService(context)
-                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS && model.focusedSlot == 2) {
-                    primaryPlayer.pause()
-                }
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                val sec = secondaryPlayer ?: return
-                if (!controller.handlePlayerErrorForFallback(2, error, context, maxVideoHeight, sec)) {
-                    model.updateSlot(2) { it.copy(error = error.message ?: "Playback failed") }
-                }
-            }
-        }
-        primaryPlayer.addListener(primaryListener)
-        secondaryPlayer?.addListener(secondaryListener)
+    LaunchedEffect(primaryPlayer, secondaryPlayer) {
         controller.syncAudio(primaryPlayer, secondaryPlayer)
-        onDispose {
-            primaryPlayer.removeListener(primaryListener)
-            secondaryPlayer?.removeListener(secondaryListener)
-        }
     }
 
     val orderedIds = if (model.swappedDisplay) listOf(2, 1) else listOf(1, 2)
 
     fun playerFor(slotId: Int): ExoPlayer? = if (slotId == 2) secondaryPlayer else primaryPlayer
 
-    fun loadRelated(slotId: Int, item: StreamInfoItem) {
+    fun loadRelated(slotId: Int, item: StreamInfoItem, forceRefresh: Boolean = false) {
         controller.focusSlot(slotId, primaryPlayer, PlaybackSessionHost.currentSecondaryPlayer())
         controller.loadIntoSlot(
             slotId = slotId,
@@ -120,6 +86,7 @@ internal fun DualWatchScreen(
             maxVideoHeight = maxVideoHeight,
             primary = primaryPlayer,
             secondaryProvider = { PlaybackSessionHost.obtainSecondaryPlayer(context) },
+            forceRefresh = forceRefresh,
         )
     }
 
@@ -156,38 +123,40 @@ internal fun DualWatchScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     orderedIds.forEach { slotId ->
-                        val slot = model.slotOf(slotId)
-                        val slotPlayer = playerFor(slotId)
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFF141416))
-                                .border(
-                                    width = if (model.focusedSlot == slotId) 1.5.dp else 1.dp,
-                                    color = if (model.focusedSlot == slotId) slotAccent(slotId) else Color(0xFF272727),
-                                    shape = RoundedCornerShape(14.dp),
-                                ),
-                        ) {
-                            DualSlotViewportCard(
-                                slot = slot,
-                                player = slotPlayer,
-                                focused = model.focusedSlot == slotId,
-                                viewportHeight = null,
-                                onFocus = { controller.focusSlot(slotId, primaryPlayer, PlaybackSessionHost.currentSecondaryPlayer()) },
-                                onToggleMute = { controller.toggleMute(slotId, primaryPlayer, PlaybackSessionHost.currentSecondaryPlayer()) },
-                                onPickVideo = { onPickVideoForSlot(slotId) },
-                                onRetry = {
-                                    slot.item?.let { loadRelated(slotId, it) } ?: onPickVideoForSlot(slotId)
-                                },
-                            )
-                            DualSlotDetailColumn(
-                                slot = slot,
-                                modifier = Modifier.weight(1f),
-                                onPickVideo = { onPickVideoForSlot(slotId) },
-                                onSelectRelated = { related -> loadRelated(slotId, related) },
-                            )
+                        key(slotId) {
+                            val slot = model.slotOf(slotId)
+                            val slotPlayer = playerFor(slotId)
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0xFF141416))
+                                    .border(
+                                        width = if (model.focusedSlot == slotId) 1.5.dp else 1.dp,
+                                        color = if (model.focusedSlot == slotId) slotAccent(slotId) else Color(0xFF272727),
+                                        shape = RoundedCornerShape(14.dp),
+                                    ),
+                            ) {
+                                DualSlotViewportCard(
+                                    slot = slot,
+                                    player = slotPlayer,
+                                    focused = model.focusedSlot == slotId,
+                                    viewportHeight = null,
+                                    onFocus = { controller.focusSlot(slotId, primaryPlayer, PlaybackSessionHost.currentSecondaryPlayer()) },
+                                    onToggleMute = { controller.toggleAudioForSlot(slotId, primaryPlayer, PlaybackSessionHost.currentSecondaryPlayer()) },
+                                    onPickVideo = { onPickVideoForSlot(slotId) },
+                                    onRetry = {
+                                        slot.item?.let { loadRelated(slotId, it, forceRefresh = true) } ?: onPickVideoForSlot(slotId)
+                                    },
+                                )
+                                DualSlotDetailColumn(
+                                    slot = slot,
+                                    modifier = Modifier.weight(1f),
+                                    onPickVideo = { onPickVideoForSlot(slotId) },
+                                    onSelectRelated = { related -> loadRelated(slotId, related) },
+                                )
+                            }
                         }
                     }
                 }
@@ -201,20 +170,22 @@ internal fun DualWatchScreen(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     orderedIds.forEach { slotId ->
-                        val slot = model.slotOf(slotId)
-                        val slotPlayer = playerFor(slotId)
-                        DualSlotViewportCard(
-                            slot = slot,
-                            player = slotPlayer,
-                            focused = model.focusedSlot == slotId,
-                            viewportHeight = playerHeight,
-                            onFocus = { controller.focusSlot(slotId, primaryPlayer, PlaybackSessionHost.currentSecondaryPlayer()) },
-                            onToggleMute = { controller.toggleMute(slotId, primaryPlayer, PlaybackSessionHost.currentSecondaryPlayer()) },
-                            onPickVideo = { onPickVideoForSlot(slotId) },
-                            onRetry = {
-                                slot.item?.let { loadRelated(slotId, it) } ?: onPickVideoForSlot(slotId)
-                            },
-                        )
+                        key(slotId) {
+                            val slot = model.slotOf(slotId)
+                            val slotPlayer = playerFor(slotId)
+                            DualSlotViewportCard(
+                                slot = slot,
+                                player = slotPlayer,
+                                focused = model.focusedSlot == slotId,
+                                viewportHeight = playerHeight,
+                                onFocus = { controller.focusSlot(slotId, primaryPlayer, PlaybackSessionHost.currentSecondaryPlayer()) },
+                                onToggleMute = { controller.toggleAudioForSlot(slotId, primaryPlayer, PlaybackSessionHost.currentSecondaryPlayer()) },
+                                onPickVideo = { onPickVideoForSlot(slotId) },
+                                onRetry = {
+                                    slot.item?.let { loadRelated(slotId, it, forceRefresh = true) } ?: onPickVideoForSlot(slotId)
+                                },
+                            )
+                        }
                     }
                 }
                 HorizontalDivider(thickness = 1.dp, color = Surface)
@@ -442,6 +413,8 @@ private fun DualSlotViewportCard(
             val hasMedia = slot.info != null || slot.item != null
             if (hasMedia && player != null) {
                 var isPlaying by remember(player) { mutableStateOf(player.isPlaying) }
+                var playWhenReady by remember(player) { mutableStateOf(player.playWhenReady) }
+                var playbackState by remember(player) { mutableIntStateOf(player.playbackState) }
                 var positionMs by remember(player) { mutableLongStateOf(player.currentPosition.coerceAtLeast(0L)) }
                 var durationMs by remember(player) { mutableLongStateOf(player.duration.coerceAtLeast(0L)) }
 
@@ -451,21 +424,28 @@ private fun DualSlotViewportCard(
                             isPlaying = playing
                         }
 
-                        override fun onPlaybackStateChanged(playbackState: Int) {
+                        override fun onPlayWhenReadyChanged(pwr: Boolean, reason: Int) {
+                            playWhenReady = pwr
+                        }
+
+                        override fun onPlaybackStateChanged(state: Int) {
+                            playbackState = state
                             durationMs = player.duration.coerceAtLeast(0L)
                         }
                     }
                     player.addListener(listener)
                     isPlaying = player.isPlaying
+                    playWhenReady = player.playWhenReady
+                    playbackState = player.playbackState
                     durationMs = player.duration.coerceAtLeast(0L)
                     onDispose { player.removeListener(listener) }
                 }
 
-                LaunchedEffect(player, isPlaying) {
+                LaunchedEffect(player, isPlaying, playWhenReady) {
                     while (true) {
                         positionMs = player.currentPosition.coerceAtLeast(0L)
                         durationMs = player.duration.coerceAtLeast(0L)
-                        delay(if (isPlaying) 500L else 1000L)
+                        delay(if (isPlaying || playWhenReady) 500L else 1000L)
                     }
                 }
 
@@ -521,23 +501,29 @@ private fun DualSlotViewportCard(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                val showPause = playWhenReady && playbackState != Player.STATE_ENDED && playbackState != Player.STATE_IDLE
                                 SlotMiniOverlayButton(
-                                    icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    label = if (isPlaying) "Pause" else "Play",
+                                    icon = if (showPause) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    label = if (showPause) "Pause" else "Play",
                                     mutedStyle = false,
                                     onClick = {
                                         onFocus()
-                                        if (player.isPlaying) player.pause() else player.play()
+                                        when {
+                                            player.playbackState == Player.STATE_ENDED -> {
+                                                player.seekTo(0L)
+                                                player.play()
+                                            }
+                                            player.mediaItemCount == 0 && slot.item != null -> onRetry()
+                                            player.playWhenReady -> player.pause()
+                                            else -> player.play()
+                                        }
                                     },
                                 )
                                 SlotMiniOverlayButton(
                                     icon = if (slot.muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                                     label = if (slot.muted) "Muted" else "Audio",
                                     mutedStyle = slot.muted,
-                                    onClick = {
-                                        onFocus()
-                                        onToggleMute()
-                                    },
+                                    onClick = onToggleMute,
                                 )
                             }
                         }
