@@ -72,12 +72,16 @@ internal class DualTabModel(initialAudioPolicy: String = "focus") {
     fun toggleAudioForSlot(slotId: Int) {
         val target = if (slotId == 2) 2 else 1
         val wasFocused = focusedSlot == target
-        val wasMuted = slotOf(target).muted
-        focusSlot(target)
-        if (audioPolicy == "focus" && !wasFocused && wasMuted) {
-            return
+        if (audioPolicy == "focus") {
+            if (!wasFocused) {
+                focusSlot(target)
+            } else {
+                toggleMute(target)
+            }
+        } else {
+            focusSlot(target)
+            toggleMute(target)
         }
-        toggleMute(target)
     }
 
     fun resolveTargetSlot(): Int = pickingSlot ?: when {
