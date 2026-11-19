@@ -57,7 +57,7 @@ class PlaybackManifestTest {
 
     private fun unboundedRep(id: String, mime: String): Representation {
         val template = SegmentBase.SegmentTemplate(
-            null,
+            RangedUri("init", 0L, C.LENGTH_UNSET.toLong()),
             1_000L,
             0L,
             1L,
