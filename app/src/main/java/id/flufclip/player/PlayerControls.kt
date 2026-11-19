@@ -99,6 +99,10 @@ internal object PlayerSettings {
         private set
     var backgroundPlayback by mutableStateOf(true)
         private set
+    var dualModeEnabled by mutableStateOf(false)
+        private set
+    var dualAudioPolicy by mutableStateOf("focus")
+        private set
     private var preferences: SharedPreferences? = null
     fun load(context: Context) {
         if (preferences != null) return
@@ -106,6 +110,10 @@ internal object PlayerSettings {
             doubleTapSeconds = it.getInt("double_tap_seconds", 10)
             audioPreference = AudioPreference.fromKey(it.getString("audio_preference", null))
             backgroundPlayback = it.getBoolean("background_playback", true)
+            dualModeEnabled = it.getBoolean("dual_mode_enabled", false)
+            dualAudioPolicy = it.getString("dual_audio_policy", "focus")
+                ?.takeIf { policy -> policy == "focus" || policy == "mix" }
+                ?: "focus"
         }
     }
     fun updateDoubleTap(seconds: Int) { doubleTapSeconds = seconds; preferences?.edit()?.putInt("double_tap_seconds", seconds)?.apply() }
@@ -116,6 +124,15 @@ internal object PlayerSettings {
     fun updateBackgroundPlayback(enabled: Boolean) {
         backgroundPlayback = enabled
         preferences?.edit()?.putBoolean("background_playback", enabled)?.apply()
+    }
+    fun updateDualModeEnabled(enabled: Boolean) {
+        dualModeEnabled = enabled
+        preferences?.edit()?.putBoolean("dual_mode_enabled", enabled)?.apply()
+    }
+    fun updateDualAudioPolicy(policy: String) {
+        val normalized = if (policy == "mix") "mix" else "focus"
+        dualAudioPolicy = normalized
+        preferences?.edit()?.putString("dual_audio_policy", normalized)?.apply()
     }
 }
 

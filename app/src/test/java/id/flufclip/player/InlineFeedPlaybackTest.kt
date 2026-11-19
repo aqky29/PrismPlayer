@@ -132,6 +132,7 @@ class InlineFeedPlaybackTest {
             searchFilter: String = "all",
             hasBrowseChannel: Boolean = false,
             hasBrowsePlaylist: Boolean = false,
+            dualModeEnabled: Boolean = false,
         ) = isInlinePlaybackEligible(
             hasSelectedVideo = hasSelectedVideo,
             hasPendingVideo = hasPendingVideo,
@@ -149,11 +150,14 @@ class InlineFeedPlaybackTest {
             searchFilter = searchFilter,
             hasBrowseChannel = hasBrowseChannel,
             hasBrowsePlaylist = hasBrowsePlaylist,
+            dualModeEnabled = dualModeEnabled,
         )
 
         assertTrue(eligible(mainTab = "home"))
         assertTrue(eligible(mainTab = "subscriptions"))
         assertTrue(eligible(searchMode = true, searchFilter = "videos"))
+
+        assertFalse(eligible(dualModeEnabled = true))
 
         assertFalse(eligible(mainTab = "you"))
         assertFalse(eligible(mainTab = "shorts"))

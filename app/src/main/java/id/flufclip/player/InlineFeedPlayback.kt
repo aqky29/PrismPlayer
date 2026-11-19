@@ -113,8 +113,10 @@ internal fun isInlinePlaybackEligible(
     searchFilter: String,
     hasBrowseChannel: Boolean,
     hasBrowsePlaylist: Boolean,
+    dualModeEnabled: Boolean = false,
 ): Boolean =
-    !hasSelectedVideo &&
+    !dualModeEnabled &&
+        !hasSelectedVideo &&
         !hasPendingVideo &&
         !shortsMode &&
         !inPip &&

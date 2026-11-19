@@ -55,6 +55,9 @@ internal fun LibraryTab(
     shortsLoading: Boolean,
     shortsError: String?,
     onSearchShorts: () -> Unit,
+    onToggleDualMode: (Boolean) -> Unit = {},
+    onSelectDualAudioPolicy: (String) -> Unit = {},
+    onOpenDualPlayer: () -> Unit = {},
     subscriptionsContent: (@Composable () -> Unit)? = null
 ) {
     when (tab) {
@@ -77,6 +80,16 @@ internal fun LibraryTab(
                         onAccount = onAccount,
                         onHistory = onHistory,
                         onDownloads = onDownloads
+                    )
+                }
+
+                item {
+                    DualModeCard(
+                        enabled = PlayerSettings.dualModeEnabled,
+                        audioPolicy = PlayerSettings.dualAudioPolicy,
+                        onToggle = onToggleDualMode,
+                        onSelectAudioPolicy = onSelectDualAudioPolicy,
+                        onOpenDualPlayer = onOpenDualPlayer,
                     )
                 }
 
@@ -406,6 +419,146 @@ internal fun LibraryTab(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DualModeCard(
+    enabled: Boolean,
+    audioPolicy: String,
+    onToggle: (Boolean) -> Unit,
+    onSelectAudioPolicy: (String) -> Unit,
+    onOpenDualPlayer: () -> Unit,
+) {
+    val containerColor = if (enabled) Color(0xFF161C24) else Color(0xFF181A1F)
+    val borderColor = if (enabled) CallToActionBlue.copy(alpha = 0.55f) else Color(0xFF272727)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(containerColor)
+            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "Dual Tab Mode",
+                        color = TextPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "2 MEDIA",
+                        color = MembershipSelectedTint,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MembershipSelectedTint.copy(alpha = 0.16f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = "Putar 2 video bersamaan dalam 1 aplikasi dengan konsumsi RAM lebih hemat.",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = CallToActionBlue,
+                    uncheckedThumbColor = TextSecondary,
+                    uncheckedTrackColor = Surface,
+                ),
+            )
+        }
+
+        if (enabled) {
+            HorizontalDivider(thickness = 1.dp, color = Color(0xFF272727))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Audio saat 2 video play",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DualPolicyChip(
+                        label = "Focus",
+                        selected = audioPolicy == "focus",
+                        onClick = { onSelectAudioPolicy("focus") },
+                    )
+                    DualPolicyChip(
+                        label = "Mix",
+                        selected = audioPolicy == "mix",
+                        onClick = { onSelectAudioPolicy("mix") },
+                    )
+                }
+            }
+            Button(
+                onClick = onOpenDualPlayer,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = CallToActionBlue,
+                    contentColor = Color(0xFF06131E),
+                ),
+            ) {
+                Text(
+                    text = "Buka Dual Player",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DualPolicyChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (selected) CallToActionBlue.copy(alpha = 0.22f) else Surface)
+            .border(
+                width = 1.dp,
+                color = if (selected) CallToActionBlue else Color.Transparent,
+                shape = RoundedCornerShape(999.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color.White else TextSecondary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 
