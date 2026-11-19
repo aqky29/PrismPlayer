@@ -38,19 +38,23 @@ internal class PlaybackTrackState {
     var lastSubtitle by mutableStateOf<SubtitlesStream?>(null)
     var attachedSubtitle by mutableStateOf<SubtitlesStream?>(null)
     var attachedSubtitleVideo by mutableStateOf<String?>(null)
+    var activeManifest by mutableStateOf(PlaybackManifest.NONE)
+    var liveDashFallbackVideoKey by mutableStateOf<String?>(null)
 
     /** True bila audio diputar lewat manifest/stream adaptif (bukan mode langsung). */
     fun usesAdaptiveAudio(info: StreamInfo): Boolean = !forceDirectPlayback && (
-        playbackManifest(info.isOngoingLive(), info.hlsUrl, info.dashMpdUrl) != PlaybackManifest.NONE ||
+        playbackManifest(info.isOngoingLive(), info.hlsUrl, info.dashMpdUrl, liveDashFallbackVideoKey != videoKey(info.url)) != PlaybackManifest.NONE ||
             quality?.deliveryMethod == DeliveryMethod.HLS || (quality == null && !info.hlsUrl.isNullOrBlank())
     )
     fun playQuality(player: ExoPlayer, context: Context, maxVideoHeight: Int, info: StreamInfo, stream: VideoStream?, audio: AudioStream?, position: Long, play: Boolean, forceDirect: Boolean = false) {
         OfflinePlaybackBridge.close()
         val isLive = info.isOngoingLive()
+        val mediaKey = videoKey(info.url)
         val dashUrl = info.dashMpdUrl?.takeIf { it.isNotBlank() }
         val hlsUrl = info.hlsUrl?.takeIf { it.isNotBlank() }
             ?: stream?.takeIf { it.deliveryMethod == DeliveryMethod.HLS }?.content
-        val manifest = if (forceDirect) PlaybackManifest.NONE else playbackManifest(isLive, hlsUrl, dashUrl, VideoRepository.preferLiveDash(info))
+        val allowLiveDash = liveDashFallbackVideoKey != mediaKey
+        val manifest = if (forceDirect) PlaybackManifest.NONE else playbackManifest(isLive, hlsUrl, dashUrl, allowLiveDash)
         val adaptive = manifest != PlaybackManifest.NONE
         android.util.Log.d("FlufMedia", "type=${info.streamType} dur=${info.duration} hls=${hlsUrl?.length ?: -1} dash=${dashUrl?.length ?: -1} manifest=$manifest live=$isLive")
         val wantedHeight = when {
@@ -63,7 +67,6 @@ internal class PlaybackTrackState {
         if (stream != null) parameters.clearOverridesOfType(C.TRACK_TYPE_VIDEO)
         player.trackSelectionParameters = parameters.build()
         val factory = youTubeMediaSourceFactory(context)
-        val mediaKey = videoKey(info.url)
         val artwork = info.thumbnails.lastOrNull()?.url?.takeIf { it.isNotBlank() }?.let(Uri::parse)
         val metadata = MediaMetadata.Builder()
             .setTitle(info.name)
@@ -84,17 +87,20 @@ internal class PlaybackTrackState {
         val effectiveAudio = audio ?: audioTracks(info).firstOrNull()
         val source = when {
             manifest == PlaybackManifest.HLS -> factory.createMediaSource(media(hlsUrl!!, MimeTypes.APPLICATION_M3U8))
+            manifest == PlaybackManifest.DASH && isLive -> youTubeLiveDashSource(context, media(dashUrl!!, MimeTypes.APPLICATION_MPD))
             manifest == PlaybackManifest.DASH -> factory.createMediaSource(media(dashUrl!!, MimeTypes.APPLICATION_MPD))
             stream != null && stream.deliveryMethod == DeliveryMethod.HLS -> factory.createMediaSource(media(stream.content, MimeTypes.APPLICATION_M3U8))
             stream != null && stream.isVideoOnly && effectiveAudio != null -> MergingMediaSource(factory.createMediaSource(media(stream.content)), factory.createMediaSource(plain(effectiveAudio.content)))
             stream != null -> factory.createMediaSource(media(stream.content))
             stream == null && hlsUrl != null -> factory.createMediaSource(media(hlsUrl, MimeTypes.APPLICATION_M3U8))
+            dashUrl != null && isLive -> youTubeLiveDashSource(context, media(dashUrl, MimeTypes.APPLICATION_MPD))
             dashUrl != null -> factory.createMediaSource(media(dashUrl, MimeTypes.APPLICATION_MPD))
             else -> error("No playable video format is available.")
         }
         if (position > 0) player.setMediaSource(source, position) else player.setMediaSource(source)
         attachedSubtitle = selectedSubtitle
         attachedSubtitleVideo = mediaKey
+        activeManifest = manifest
         quality = stream
         forceDirectPlayback = forceDirect
         player.prepare()
